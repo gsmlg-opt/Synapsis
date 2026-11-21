@@ -107,7 +107,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
         refute has_element?(view, "[data-mcp-source='#{ignored_source}']")
         refute has_element?(view, "input[value='ignored::raw']")
-        view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+        view |> element("button[phx-click='refresh_mcp_tools']") |> render_click()
         render_async(view)
         refute_receive :legacy_discovery_requested
         assert_receive {:agent_display_snapshot, _}
@@ -172,7 +172,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       end)
 
       render_hook(view, "switch_config_tab", %{"tab" => "tools"})
-      view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+      view |> element("button[phx-click='refresh_mcp_tools']") |> render_click()
       render_async(view)
 
       native_agent_event(
@@ -225,7 +225,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
         end)
 
         render_hook(view, "switch_config_tab", %{"tab" => "tools"})
-        view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+        view |> element("button[phx-click='refresh_mcp_tools']") |> render_click()
         render_async(view)
 
         native_agent_event(
@@ -421,7 +421,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       original_mount = agent_form_mount(view)
       render_hook(view, "switch_config_tab", %{"tab" => "tools"})
       assert agent_form_mount(view) != original_mount
-      view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+      view |> element("button[phx-click='refresh_mcp_tools']") |> render_click()
       render_async(view)
       render_hook(view, "switch_config_tab", %{"tab" => "overview"})
       assert agent_managed_values(view)["agent"]["label"] == "Draft label"
@@ -472,7 +472,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       |> put_native_value("mcp_selection[sources][#{removed_source}][mode]", "inherit")
     end)
 
-    view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+    view |> element("button[phx-click='refresh_mcp_tools']") |> render_click()
     render_async(view)
     render_hook(view, "switch_config_tab", %{"tab" => "runtime"})
     native_agent_event(view, "save_agent")
@@ -678,7 +678,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       })
 
     on_exit(fn -> Synapsis.MCPConfigs.delete(source) end)
-    view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+    view |> element("button[phx-click='refresh_mcp_tools']") |> render_click()
     render_async(view)
 
     values =
@@ -759,7 +759,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       "mcp_selection" => policy
     })
 
-    view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+    view |> element("button[phx-click='refresh_mcp_tools']") |> render_click()
     render_async(view)
     react_form_submit(view, "agent-config-form", %{})
     saved = AgentConfigs.get(agent.id)
@@ -925,7 +925,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       |> render_click()
 
       view
-      |> element("el-dm-button[phx-click='set_agent_enabled'][phx-value-enabled='false']")
+      |> element("button[phx-click='set_agent_enabled'][phx-value-enabled='false']")
       |> render_click()
 
       view
@@ -954,9 +954,11 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
           |> LazyHTML.query("[data-form-id]")
           |> LazyHTML.attribute("id")
 
+        assert has_element?(view, "form[id='#{mount_id}-controls'][data-dm-react-form]")
+
         assert has_element?(
                  view,
-                 "button[type='submit'][form='#{mount_id}-native']",
+                 "button[type='submit'][form='#{mount_id}-controls']",
                  "Save Agent"
                )
 
@@ -1239,7 +1241,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
              )
 
       refute has_element?(view, "button[phx-click='switch_config_tab'][phx-value-tab='delete']")
-      assert has_element?(view, "el-dm-button[phx-click='start_wizard']", "Start Wizard")
+      assert has_element?(view, "button[phx-click='start_wizard']", "Start Wizard")
       assert has_element?(view, "#agent-provider-model-picker[phx-hook='AgentModelPicker']")
       assert has_element?(view, "#agent-backup-model-picker[phx-hook='AgentBackupModelPicker']")
       assert has_element?(view, "input[name='agent[provider]']")
@@ -1261,7 +1263,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
 
       assert has_element?(
                view,
-               "[data-form-id='agent-config-form'] el-dm-button[type='submit']",
+               "[data-form-id='agent-config-form'] button[type='submit']",
                "Save"
              )
     end
@@ -1505,7 +1507,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       |> render_click()
 
       view
-      |> element("el-dm-button[phx-click='start_wizard']")
+      |> element("button[phx-click='start_wizard']")
       |> render_click()
 
       html = render(view)
@@ -1523,13 +1525,13 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       |> render_click()
 
       view
-      |> element("el-dm-button[phx-click='set_agent_enabled'][phx-value-enabled='false']")
+      |> element("button[phx-click='set_agent_enabled'][phx-value-enabled='false']")
       |> render_click()
 
       refute AgentConfigs.get(agent.id).enabled
 
       view
-      |> element("el-dm-button[phx-click='set_agent_enabled'][phx-value-enabled='true']")
+      |> element("button[phx-click='set_agent_enabled'][phx-value-enabled='true']")
       |> render_click()
 
       assert AgentConfigs.get(agent.id).enabled

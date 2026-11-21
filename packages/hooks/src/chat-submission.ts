@@ -7,7 +7,7 @@ type SubmissionProps = {
 }
 
 // WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#198
-// The published submission helper requires secure-context crypto.randomUUID.
+// The Phoenix helper uses Web Crypto. Synapsis also generates request IDs when Crypto is absent.
 export function useSynapsisChatSubmission({ bridge, canSubmit }: SubmissionProps) {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')

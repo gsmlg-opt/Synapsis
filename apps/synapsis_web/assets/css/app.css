@@ -1,9 +1,11 @@
 @import "tailwindcss";
+@import "@duskmoon-dev/core/base.css";
 @plugin "@duskmoon-dev/core/plugin";
 @import "@duskmoon-dev/core/themes/sunshine";
 @import "@duskmoon-dev/core/themes/moonlight";
 @import "@duskmoon-dev/core/components";
-@import "@duskmoon-dev/components/styles.css";
+@import "duskmoon_phoenix/react.css";
+@import "duskmoon_phoenix/elements.css";
 
 /* Custom font stack using CSS variables for consistent typography */
 :root {
@@ -25,7 +27,6 @@ code, pre, kbd, samp {
 }
 
 @layer components {
-  /* WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#195 */
   .synapsis-react-form {
     display: contents;
   }

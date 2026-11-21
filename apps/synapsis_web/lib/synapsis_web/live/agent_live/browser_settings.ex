@@ -1,7 +1,7 @@
 defmodule SynapsisWeb.AgentLive.BrowserSettings do
   @moduledoc false
   use Phoenix.Component
-  use PhoenixDuskmoon.Component
+  use DuskmoonPhoenix.Component
 
   @fields ~w(default_profile node_executable helper_path)
   @profile_fields ~w(executable data_dir timeout_ms max_image_bytes)

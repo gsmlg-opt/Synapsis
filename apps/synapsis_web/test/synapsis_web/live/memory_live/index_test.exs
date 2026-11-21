@@ -29,7 +29,7 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
 
   defp knowledge(conn) do
     {:ok, view, _} = live(conn, ~p"/agent/memory")
-    html = view |> element("el-dm-button", "Knowledge") |> render_click()
+    html = view |> element("button", "Knowledge") |> render_click()
     {:ok, view, html}
   end
 
@@ -142,7 +142,7 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
 
     assert {:ok, _} = Settings.save(config)
     {:ok, view, _} = live(conn, ~p"/agent/memory")
-    view |> element("el-dm-button", "Host agent") |> render_click()
+    view |> element("button", "Host agent") |> render_click()
     assert has_element?(view, "#host-memory-query")
     refute_receive :unexpected_recall
     assert {:ok, _} = Settings.save(put_in(config, ["host_agent", "enabled"], false))
@@ -235,14 +235,14 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
 
     test "clicking New Memory shows create form", %{conn: conn} do
       {:ok, view, _html} = knowledge(conn)
-      view |> element("el-dm-button", "New Memory") |> render_click()
+      view |> element("button", "New Memory") |> render_click()
       assert has_element?(view, "#create-memory-form")
       assert_unique_form_ids(render(view))
     end
 
     test "create form can save a new memory", %{conn: conn} do
       {:ok, view, _html} = knowledge(conn)
-      view |> element("el-dm-button", "New Memory") |> render_click()
+      view |> element("button", "New Memory") |> render_click()
 
       view
       |> react_form_submit("create-memory-form", %{
@@ -260,7 +260,7 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
 
     test "switching to Events tab shows events section", %{conn: conn} do
       {:ok, view, _html} = knowledge(conn)
-      view |> element("el-dm-button", "Events") |> render_click()
+      view |> element("button", "Events") |> render_click()
       html = render(view)
       assert html =~ "No events yet"
       assert has_element?(view, "#memory-event-type-filter")
@@ -269,7 +269,7 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
 
     test "switching to Checkpoints tab shows checkpoints section", %{conn: conn} do
       {:ok, view, _html} = knowledge(conn)
-      view |> element("el-dm-button", "Checkpoints") |> render_click()
+      view |> element("button", "Checkpoints") |> render_click()
       html = render(view)
       assert html =~ "No checkpoints yet"
     end

@@ -58,7 +58,7 @@ defmodule SynapsisWeb.SkillLive.ShowTest do
 
     test "shows save button", %{conn: conn, skill: skill} do
       {:ok, view, _html} = live(conn, ~p"/settings/skills/#{skill.id}")
-      assert has_element?(view, "el-dm-button[type='submit']", "Save Changes")
+      assert has_element?(view, "button[type='submit']", "Save Changes")
     end
 
     test "shows Settings / Skills breadcrumb", %{conn: conn, skill: skill} do

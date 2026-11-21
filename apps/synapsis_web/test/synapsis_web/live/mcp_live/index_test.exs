@@ -102,7 +102,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
     refute has_element?(view, "[data-form-id='mcp-create-form']")
     refute has_element?(view, "[data-form-id='mcp-import-form']")
 
-    view |> element("el-dm-button[phx-click='show_import']") |> render_click()
+    view |> element("button[phx-click='show_import']") |> render_click()
     assert has_element?(view, "#mcp-import-modal [data-form-id='mcp-import-form']")
     refute has_element?(view, "[data-form-id='mcp-create-form']")
     refute has_element?(view, "[data-form-id='mcp-provider-form']")
@@ -270,7 +270,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
 
     test "imports JSON through React and preserves validation feedback", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/mcp")
-      view |> element("el-dm-button[phx-click='show_import']") |> render_click()
+      view |> element("button[phx-click='show_import']") |> render_click()
 
       html = react_form_submit(view, "mcp-import-form", %{"json" => "invalid-json"})
       assert html =~ "Invalid JSON format"
@@ -318,7 +318,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       refute has_element?(view, "#mcp-import-modal")
 
       view
-      |> element("#mcp-create-modal el-dm-button[phx-click='hide_create']", "Cancel")
+      |> element("#mcp-create-modal button[phx-click='hide_create']", "Cancel")
       |> render_click()
 
       assert_patch(view, ~p"/settings/mcp")
@@ -346,7 +346,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
 
     test "import modal closes on Cancel and native dialog notifications", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/settings/mcp")
-      view |> element("el-dm-button[phx-click='show_import']") |> render_click()
+      view |> element("button[phx-click='show_import']") |> render_click()
 
       assert has_element?(
                view,
@@ -356,13 +356,13 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       assert has_element?(view, "#mcp-import-modal #mcp-import-json[autofocus]")
 
       view
-      |> element("#mcp-import-modal el-dm-button[phx-click='hide_import']", "Cancel")
+      |> element("#mcp-import-modal button[phx-click='hide_import']", "Cancel")
       |> render_click()
 
       refute has_element?(view, "#mcp-import-modal")
 
       for reason <- ["escape", "backdrop", "close"] do
-        view |> element("el-dm-button[phx-click='show_import']") |> render_click()
+        view |> element("button[phx-click='show_import']") |> render_click()
         render_hook(view, "hide_import", %{"reason" => reason})
         refute has_element?(view, "#mcp-import-modal")
       end
@@ -381,7 +381,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       assert has_element?(view, "#mcp-import-modal [role='alert']")
 
       view
-      |> element("#mcp-import-modal el-dm-button[phx-click='hide_import']", "Cancel")
+      |> element("#mcp-import-modal button[phx-click='hide_import']", "Cancel")
       |> render_click()
 
       view |> element("a[href='/settings/mcp/new']") |> render_click()
@@ -391,7 +391,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
 
       render_hook(view, "hide_create", %{})
       assert_patch(view, ~p"/settings/mcp")
-      view |> element("el-dm-button[phx-click='show_import']") |> render_click()
+      view |> element("button[phx-click='show_import']") |> render_click()
       refute has_element?(view, "#mcp-import-modal [role='alert']")
       assert has_element?(view, "#mcp-import-json", "")
     end

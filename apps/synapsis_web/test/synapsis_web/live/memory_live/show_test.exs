@@ -116,7 +116,7 @@ defmodule SynapsisWeb.MemoryLive.ShowTest do
 
       assert has_element?(
                view,
-               "el-dm-button[type='submit'][form='edit-memory-form-native']",
+               "button[type='submit'][form='edit-memory-form-controls']",
                "Save"
              )
 

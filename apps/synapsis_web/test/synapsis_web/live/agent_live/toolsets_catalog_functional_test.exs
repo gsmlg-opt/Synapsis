@@ -199,6 +199,12 @@ defmodule SynapsisWeb.AgentLive.ToolsetsCatalogFunctionalTest do
     render_click(view, "select_tool_source", %{"source" => second.id})
     render_click(view, "select_tool_group", %{"category" => "uncategorized"})
     expected = Enum.map([first, second], &"mcp::#{&1.id}::read::nested::docs")
+
+    assert has_element?(
+             view,
+             "input[type='checkbox'][name='tool_names[]'][value='#{hd(expected)}'][hidden][checked]"
+           )
+
     assert Enum.sort(browser_names(view)) == Enum.sort(expected)
 
     react_form_submit(view, "toolset-form", %{
@@ -219,7 +225,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsCatalogFunctionalTest do
       selected = "mcp::#{source.id}::read::nested"
       raw = legacy([selected, "send_message", selected, "unknown-old"], version)
       {:ok, view, _} = live(conn, ~p"/agent/tools/#{raw["id"]}/edit")
-      assert has_element?(view, "[phx-value-source='#{source.id}'][variant='primary']")
+      assert has_element?(view, "button.btn-primary[phx-value-source='#{source.id}']")
 
       react_form_change(view, "toolset-form", %{
         "toolset" => %{"description" => "Draft #{version}"},
@@ -338,7 +344,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsCatalogFunctionalTest do
   end
 
   defp refresh(view),
-    do: view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+    do: view |> element("button[phx-click='refresh_mcp_tools']") |> render_click()
 
   defp controls(view, selector) do
     view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query(selector) |> LazyHTML.to_tree()

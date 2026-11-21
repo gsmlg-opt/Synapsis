@@ -23,7 +23,7 @@ ADR-005 misled readers into believing a hybrid architecture existed.
 
 ## Decision
 
-The web UI is **pure Phoenix LiveView** (with `phoenix_duskmoon` components and
+The web UI is **pure Phoenix LiveView** (with `duskmoon_phoenix` components and
 small TypeScript hooks). No React.
 
 Removed:

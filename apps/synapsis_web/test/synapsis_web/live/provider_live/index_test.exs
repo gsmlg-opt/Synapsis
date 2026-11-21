@@ -253,7 +253,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
 
       html =
         view
-        |> element(~s(el-dm-button[phx-click="back_to_presets"]))
+        |> element(~s(button[phx-click="back_to_presets"]))
         |> render_click()
 
       assert html =~ "Select a Provider"

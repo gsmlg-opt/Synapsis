@@ -42,8 +42,7 @@ defmodule SynapsisWeb do
       import Plug.CSRFProtection, only: [get_csrf_token: 0]
 
       use Gettext, backend: SynapsisWeb.Gettext
-      use PhoenixDuskmoon.Component
-      use PhoenixDuskmoon.ArtComponent
+      use DuskmoonPhoenix.Component
 
       import SynapsisWeb.ReactForms
       import SynapsisWeb.CoreComponents

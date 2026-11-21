@@ -14,7 +14,7 @@ This is an Elixir umbrella project with a Phoenix server/web surface, OTP-backed
 - `apps/synapsis_sandbox`: JSON-RPC stdio bridge for sandbox runtimes; sandbox-initiated calls go through a host-injected dispatcher.
 - `apps/synapsis_workspace`: workspace resource model, local blob store, projections, path resolution, search, permissions, and workspace tools.
 - `apps/synapsis_cli`: escript CLI and HTTP/SSE client code.
-- `packages/*`: npm workspaces (via `duskmoon_npm`) for TypeScript packages — only `@synapsis/hooks` (LiveView DOM hooks; the UI is pure LiveView per ADR-007).
+- `packages/*` contains npm workspaces managed by `duskmoon_npm`. The `@synapsis/hooks` package provides LiveView DOM hooks and the React Form and Chat integrations (ADR-010 and ADR-011).
 - `docs/`: `design.md` (product scope and phases), ADRs, and guardrails. Read them before changing behavior.
 
 ## Architecture Boundaries
@@ -90,7 +90,7 @@ Use scoped tests for scoped changes. For PRD work, modify only files in the stat
 
 ## Web And UI Rules
 
-- This project uses Phoenix LiveView plus TypeScript hooks and DuskMoon UI. Prefer `phoenix_duskmoon` components and DuskMoon packages for new UI work.
+- For Phoenix LiveView and TypeScript UI work, follow the `duskmoon-phoenix` skill. Pin `duskmoon_phoenix` on Hex and npm and the imported DuskMoon Web packages to the same [upstream release](https://github.com/duskmoon-dev/duskmoon-web).
 - Assets are built with `duskmoon_bundler` / `duskmoon_npm` (not esbuild, Tailwind CLI, or bun). Use `mix npm.install` for JS packages and `mix assets.build` / `mix assets.deploy` for builds.
 - Do not add DaisyUI or another CSS component library.
 - Treat `SynapsisWeb.CoreComponents` as legacy/local glue. Do not expand it when a DuskMoon component fits the job.

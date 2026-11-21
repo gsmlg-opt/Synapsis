@@ -168,7 +168,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
 
       old_mount = toolset_form_mount(view)
       {:ok, _} = MCPConfigs.update(source, %{name: "single-renamed-label"})
-      view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+      view |> element("button[phx-click='refresh_mcp_tools']") |> render_click()
       assert toolset_form_mount(view) != old_mount
       assert has_element?(view, "[phx-value-source='#{source.id}']", "single-renamed-label")
       assert has_element?(view, "input[value='#{selected}'][checked]")
@@ -198,7 +198,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
 
       initial_mount = toolset_form_mount(view)
       {:ok, empty} = MCPConfigs.create(%{name: "mount-empty", command: "false", enabled: false})
-      view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+      view |> element("button[phx-click='refresh_mcp_tools']") |> render_click()
       added_mount = toolset_form_mount(view)
       assert added_mount != initial_mount
       assert has_element?(view, "[phx-value-source='#{empty.id}']", "0 tools")
@@ -206,7 +206,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
       assert has_element?(view, "input[value='#{unavailable}'][checked]")
 
       {:ok, _} = MCPConfigs.update(offline, %{enabled: false})
-      view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+      view |> element("button[phx-click='refresh_mcp_tools']") |> render_click()
       disabled_mount = toolset_form_mount(view)
       assert disabled_mount != added_mount
       assert has_element?(view, "[phx-value-source='#{offline.id}']", "disabled")
@@ -214,7 +214,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
       assert has_element?(view, "input[value='#{unavailable}'][checked]")
 
       {:ok, _} = MCPConfigs.delete(empty)
-      view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+      view |> element("button[phx-click='refresh_mcp_tools']") |> render_click()
       assert toolset_form_mount(view) != disabled_mount
       refute has_element?(view, "[phx-value-source='#{empty.id}']")
       assert toolset_initial_values(view)["toolset"]["description"] == "Retained status draft"
@@ -246,7 +246,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
         "tool_names" => ["send_message", "synapsis::swarm_message"]
       })
 
-      view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+      view |> element("button[phx-click='refresh_mcp_tools']") |> render_click()
       render_async(view)
 
       react_form_submit(view, "toolset-form", %{
@@ -297,7 +297,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
           "tool_names" => browser_tool_names(view)
         })
 
-        view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+        view |> element("button[phx-click='refresh_mcp_tools']") |> render_click()
         render_async(view)
 
         react_form_submit(view, "toolset-form", %{
@@ -341,7 +341,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
       })
 
       {:ok, _} = MCPConfigs.update(first, %{name: "renamed-label"})
-      view |> element("el-dm-button[phx-click='refresh_mcp_tools']") |> render_click()
+      view |> element("button[phx-click='refresh_mcp_tools']") |> render_click()
       render_async(view)
       assert has_element?(view, "[phx-value-source='#{first.id}']", "renamed-label")
       assert has_element?(view, "input[value='#{first_name}'][checked]")
@@ -431,7 +431,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
       {:ok, view, _html} = live(conn, ~p"/agent/tools/new")
 
       view
-      |> element("el-dm-button[phx-click='select_all_tools']", "Select all from source")
+      |> element("button[phx-click='select_all_tools']", "Select all from source")
       |> render_click()
 
       assert has_element?(
@@ -469,7 +469,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
       {:ok, view, _html} = legacy_editor(conn)
 
       view
-      |> element("[data-testid='tool-source-selector'] el-dm-button", "MCP: empty")
+      |> element("[data-testid='tool-source-selector'] button", "MCP: empty")
       |> render_click()
 
       html = render(view)
@@ -483,7 +483,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
 
       view
       |> element(
-        "[data-tool-category='web'] el-dm-button[phx-click='select_tool_group']",
+        "[data-tool-category='web'] button[phx-click='select_tool_group']",
         "Select all"
       )
       |> render_click()

@@ -16,7 +16,7 @@ apps/
 |-- synapsis_mcp/        # MCP client (backplane_mcp_protocol)
 |-- synapsis_sandbox/    # JSON-RPC stdio bridge for sandbox runtimes
 |-- synapsis_server/     # Phoenix endpoint, channels, REST/SSE
-|-- synapsis_web/        # Phoenix LiveView UI (phoenix_duskmoon)
+|-- synapsis_web/        # Phoenix LiveView UI (duskmoon_phoenix)
 `-- synapsis_cli/        # escript CLI (HTTP + SSE)
 ```
 
@@ -34,7 +34,7 @@ synapsis_data
 
 `synapsis_cli` is a standalone escript and does not depend on other umbrella apps.
 
-TypeScript lives under `packages/*` as Bun workspaces — currently only `@synapsis/hooks` (LiveView DOM hooks). The UI is pure LiveView (ADR-007); there is no React.
+Phoenix LiveView owns the pages. The `@synapsis/hooks` workspace connects DuskMoon React forms and chat to LiveView. Install workspace dependencies with `mix npm.install`. See [ADR-010](docs/decisions/ADR-010-react-form-islands.md) and [ADR-011](docs/decisions/ADR-011-react-chat-islands.md).
 
 ### Key Design Decisions
 
@@ -45,7 +45,7 @@ TypeScript lives under `packages/*` as Bun workspaces — currently only `@synap
 - **Storage without a database** (ADR-006): session transcripts as per-turn snapshots in an embedded Concord 3.x (node-local Turso) KV store, configs as TOML files with watchers, memory as Markdown files — no PostgreSQL, no migrations.
 - **Heartbeat agents**: node-local cron-scheduled recurring agent runs for autonomous background work.
 - **MCP**: dedicated `synapsis_mcp` app over stdio, Streamable HTTP, or SSE. MCP server config uses `mcp.toml` (`Synapsis.MCPConfigs`), not the `.opencode.json` MCP contract. Agents and providers remain `.opencode.json`-compatible.
-- **Phoenix LiveView UI**: real-time web interface using `phoenix_duskmoon` and DuskMoon packages.
+- **Phoenix LiveView UI**: real-time web interface using `duskmoon_phoenix` and DuskMoon packages.
 
 ## Tech Stack
 
@@ -53,7 +53,7 @@ TypeScript lives under `packages/*` as Bun workspaces — currently only `@synap
 |-------|-----------|
 | Language / Runtime | Elixir 1.18+ / OTP 28+ |
 | Web framework | Phoenix 1.8+ (Gaoxy), Phoenix LiveView 1.0+ |
-| UI components | `phoenix_duskmoon` 10.x, `@duskmoon-dev/core` |
+| UI components | [`duskmoon_phoenix`](https://github.com/duskmoon-dev/duskmoon-web) 2.0 RC, `@duskmoon-dev/core` |
 | Storage | Embedded Concord 3.x (Turso KV) + TOML/Markdown files (UUID IDs) |
 | HTTP client | Req + Finch (SSE streaming) |
 | Background work | Supervised Tasks + node-local cron scheduler |

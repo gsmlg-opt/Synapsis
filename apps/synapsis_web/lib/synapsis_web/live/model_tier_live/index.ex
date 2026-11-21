@@ -451,8 +451,7 @@ defmodule SynapsisWeb.ModelTierLive.Index do
             />
             <.dm_react_field name="enabled" type="checkbox" label="Enabled" />
             <:actions>
-              <%!-- # WORKAROUND(upstream): duskmoon-dev/duskmoon-elements#88 --%>
-              <.dm_btn native_submit variant="primary">Save Model</.dm_btn>
+              <.dm_btn type="submit" variant="primary">Save Model</.dm_btn>
               <.dm_btn type="button" variant="ghost" phx-click="cancel_edit">Cancel</.dm_btn>
             </:actions>
           </.react_form>
@@ -492,8 +491,7 @@ defmodule SynapsisWeb.ModelTierLive.Index do
                 value="256000"
                 options={@context_presets}
               />
-              <%!-- # WORKAROUND(upstream): duskmoon-dev/duskmoon-elements#88 --%>
-              <.dm_btn native_submit variant="secondary" size="sm">Apply to selected</.dm_btn>
+              <.dm_btn type="submit" variant="secondary" size="sm">Apply to selected</.dm_btn>
             </div>
           </.react_form>
           <.dm_btn variant="ghost" size="sm" phx-click="bulk_status" phx-value-enabled="true">

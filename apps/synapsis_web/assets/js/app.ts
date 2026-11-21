@@ -1,15 +1,13 @@
 import 'phoenix_html'
 import { Socket } from 'phoenix'
 import { LiveSocket } from 'phoenix_live_view'
-// Register the newer markdown-input (with bottom-start/end slot support)
-// BEFORE the elements umbrella, which otherwise registers an older version
-// that lacks slots. customElements.define only honors the first registration.
-import '@duskmoon-dev/el-markdown-input/register'
+import '@duskmoon-dev/el-alert/register'
+import '@duskmoon-dev/el-chat/register'
 import '@duskmoon-dev/el-markdown/register'
-import '@duskmoon-dev/elements/register'
-import * as DuskmoonHooks from 'phoenix_duskmoon/hooks'
-import { DuskmoonReactForm } from 'phoenix_duskmoon/react-form'
-import { createDuskmoonReactChat } from 'phoenix_duskmoon/react-chat'
+import * as DuskmoonHooks from 'duskmoon_phoenix/hooks'
+import { WebComponentHook as ElementHook } from 'duskmoon_phoenix/elements'
+import { DuskmoonReactForm } from 'duskmoon_phoenix/react-form'
+import { createDuskmoonReactChat } from 'duskmoon_phoenix/react-chat'
 import {
   ChatImageInputHook,
   Hooks,
@@ -21,7 +19,7 @@ import {
 // WORKAROUND(upstream): duskmoon-dev/duskmoon-elements#73
 // Preserve the upstream bridge while propagating field identity into the
 // nested shadow-DOM textarea used by el-dm-chat-input.
-const DuskmoonWebComponentHook = DuskmoonHooks.WebComponentHook as any
+const DuskmoonWebComponentHook = ElementHook as any
 const SynapsisChatImageInputHook = ChatImageInputHook as any
 const WebComponentHook = {
   ...DuskmoonWebComponentHook,

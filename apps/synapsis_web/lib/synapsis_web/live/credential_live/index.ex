@@ -254,8 +254,7 @@ defmodule SynapsisWeb.CredentialLive.Index do
               required={is_nil(@editing)}
             />
             <:actions>
-              <%!-- # WORKAROUND(upstream): duskmoon-dev/duskmoon-elements#88 - native submission avoids duplicate requests after modal reconnect. --%>
-              <.dm_btn type="submit" native_submit variant="primary">
+              <.dm_btn type="submit" variant="primary">
                 {if @editing, do: "Save Changes", else: "Add Credential"}
               </.dm_btn>
               <.dm_btn type="button" variant="ghost" phx-click="cancel_credential">Cancel</.dm_btn>

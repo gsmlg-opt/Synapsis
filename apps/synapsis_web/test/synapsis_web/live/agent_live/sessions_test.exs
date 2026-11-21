@@ -27,17 +27,17 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       })
 
     {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.name}/sessions")
-    refute has_element?(view, "aside el-dm-button[phx-click='create_session']:not([disabled])")
+    refute has_element?(view, "aside button[phx-click='create_session']:not([disabled])")
 
     assert render_hook(view, "create_session", %{}) =~
              "Configure an available model in agent settings"
 
     {:ok, _} = Synapsis.Models.create(%{provider_id: provider.id, model: agent.model})
     Phoenix.PubSub.broadcast(Synapsis.PubSub, "providers:catalog", {:provider_catalog_changed})
-    assert has_element?(view, "aside el-dm-button[phx-click='create_session']:not([disabled])")
+    assert has_element?(view, "aside button[phx-click='create_session']:not([disabled])")
     assert {:ok, _} = Synapsis.Providers.delete(provider.id)
     Phoenix.PubSub.broadcast(Synapsis.PubSub, "providers:catalog", {:provider_catalog_changed})
-    refute has_element?(view, "aside el-dm-button[phx-click='create_session']:not([disabled])")
+    refute has_element?(view, "aside button[phx-click='create_session']:not([disabled])")
     assert {:ok, []} = Sessions.list(agent.name)
   end
 
@@ -99,7 +99,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
     refute has_element?(
              sessions_view,
-             "aside el-dm-button[phx-click='create_session']:not([disabled])"
+             "aside button[phx-click='create_session']:not([disabled])"
            )
 
     {:ok, editor, _} = live(conn, ~p"/agent/agents/#{agent.name}/config")
@@ -112,7 +112,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
     assert has_element?(
              sessions_view,
-             "aside el-dm-button[phx-click='create_session']:not([disabled])"
+             "aside button[phx-click='create_session']:not([disabled])"
            )
   end
 
@@ -463,13 +463,13 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       assert has_element?(
                view,
-               "aside el-dm-button[phx-click='create_session'][variant='primary']",
+               "aside button.btn-primary[phx-click='create_session']",
                "New Session"
              )
 
       view
       |> element(
-        "aside el-dm-button[phx-click='create_session'][variant='primary']",
+        "aside button.btn-primary[phx-click='create_session']",
         "New Session"
       )
       |> render_click()
@@ -500,8 +500,8 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       {:ok, view, html} = live(conn, ~p"/agent/agents/main/sessions/#{active_session.id}")
 
       refute html =~ "Delete session?"
-      refute has_element?(view, "el-dm-button[data-confirm]")
-      refute has_element?(view, "el-dm-button[onclick='event.stopPropagation()']")
+      refute has_element?(view, "button[data-confirm]")
+      refute has_element?(view, "button[onclick='event.stopPropagation()']")
 
       assert has_element?(
                view,
@@ -521,7 +521,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       view
       |> element(
-        "#delete-session-modal el-dm-button[phx-click='cancel_delete_session']",
+        "#delete-session-modal button[phx-click='cancel_delete_session']",
         "Cancel"
       )
       |> render_click()
@@ -536,7 +536,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       |> render_click()
 
       view
-      |> element("#delete-session-modal el-dm-button[phx-click='delete_session']", "Delete")
+      |> element("#delete-session-modal button[phx-click='delete_session']", "Delete")
       |> render_click()
 
       assert {:error, :not_found} = Sessions.get(doomed_session.id)
@@ -1082,7 +1082,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       assert html =~ "Failed to queue message"
       assert chat_snapshot(view).admission.sendLabel == "Queue"
-      refute has_element?(view, "el-dm-button[phx-click='retry']")
+      refute has_element?(view, "button[phx-click='retry']")
       assert chat_snapshot(view).admission.canSubmit
       assert Sessions.get_messages(session.id) == []
     end
@@ -1956,7 +1956,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
   end
 
   describe "chat_bubble component DuskMoon rendering" do
-    test "chat_bubble renders a phoenix_duskmoon chat element for user messages", _ctx do
+    test "chat_bubble renders a duskmoon_phoenix chat element for user messages", _ctx do
       html =
         render_component(
           fn assigns ->

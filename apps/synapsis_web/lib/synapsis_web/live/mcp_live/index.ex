@@ -581,9 +581,7 @@ defmodule SynapsisWeb.MCPLive.Index do
               label="JSON"
             />
             <div class="flex gap-2 mt-3">
-              <%!-- # TODO(upstream): duskmoon-dev/duskmoon-elements#88 - remove after reconnect-safe button listeners ship.
-                   # WORKAROUND(upstream): duskmoon-dev/duskmoon-elements#88 - native submission avoids duplicate requests after validation. --%>
-              <.dm_btn type="submit" native_submit variant="primary">Import</.dm_btn>
+              <.dm_btn type="submit" variant="primary">Import</.dm_btn>
               <.dm_btn type="button" variant="ghost" phx-click="hide_import">Cancel</.dm_btn>
             </div>
           </.react_form>
@@ -724,9 +722,7 @@ defmodule SynapsisWeb.MCPLive.Index do
             </div>
             <:actions>
               <.dm_btn type="button" variant="ghost" phx-click="hide_create">Cancel</.dm_btn>
-              <%!-- # TODO(upstream): duskmoon-dev/duskmoon-elements#88 - remove after reconnect-safe button listeners ship.
-                   # WORKAROUND(upstream): duskmoon-dev/duskmoon-elements#88 - native submission avoids duplicate requests after validation. --%>
-              <.dm_btn type="submit" native_submit variant="primary">
+              <.dm_btn type="submit" variant="primary">
                 Add MCP Server
               </.dm_btn>
             </:actions>

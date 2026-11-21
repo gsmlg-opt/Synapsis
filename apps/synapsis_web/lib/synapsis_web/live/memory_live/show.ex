@@ -179,7 +179,7 @@ defmodule SynapsisWeb.MemoryLive.Show do
         <:action>
           <%= if @editing do %>
             <.dm_btn variant="ghost" size="sm" phx-click="cancel_edit">Cancel</.dm_btn>
-            <.dm_btn type="submit" form="edit-memory-form-native" variant="primary" size="sm">
+            <.dm_btn type="submit" form="edit-memory-form-controls" variant="primary" size="sm">
               Save
             </.dm_btn>
           <% else %>

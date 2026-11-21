@@ -2,11 +2,11 @@ defmodule SynapsisWeb.CoreComponents do
   @moduledoc """
   Provides core UI components for the Synapsis web interface.
 
-  Most components come from `phoenix_duskmoon` via `use PhoenixDuskmoon.Component`.
+  Most components come from `duskmoon_phoenix` via `use DuskmoonPhoenix.Component`.
   This module holds app-specific components only.
   """
   use Phoenix.Component
-  use PhoenixDuskmoon.Component
+  use DuskmoonPhoenix.Component
 
   import SynapsisWeb.MessageHelpers
 

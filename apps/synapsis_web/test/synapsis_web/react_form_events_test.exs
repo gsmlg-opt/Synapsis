@@ -119,7 +119,7 @@ defmodule SynapsisWeb.ReactFormEventsTest do
     assert has_element?(view, "[id='#{new_id}'] input[name='name'][value='server']")
     assert has_element?(view, "[id='#{new_id}'] [data-dm-react-field]")
     assert has_element?(view, "[id='#{new_id}'] input[name='enabled']")
-    assert has_element?(view, "[id='#{new_id}'] el-dm-button[type='submit']", "Save Changes")
+    assert has_element?(view, "[id='#{new_id}'] button[type='submit']", "Save Changes")
     assert has_element?(view, "[id='#{new_id}'] input[name='url']")
     refute has_element?(view, "[id='#{new_id}'] input[name='command']")
     refute has_element?(view, "[id='#{new_id}'] [data-phx-skip]")
@@ -131,6 +131,10 @@ defmodule SynapsisWeb.ReactFormEventsTest do
 
     socket = ReactForms.reset_react_form(socket, "settings")
     refute Map.has_key?(socket.assigns.react_form_drafts, "settings")
+
+    assert [["dm:form:reset", payload]] = Phoenix.LiveView.Utils.get_push_events(socket)
+    assert payload == %{id: "settings--42", form_id: "settings"}
+
     socket = ReactForms.reset_react_form(socket, "settings", %{"name" => "Stored"})
     assert socket.assigns.react_form_drafts["settings"] == %{"name" => "Stored"}
   end

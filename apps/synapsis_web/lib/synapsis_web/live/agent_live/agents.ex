@@ -402,7 +402,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
             <button
               :if={@active_tab != "management"}
               type="submit"
-              form={form_mount_id("agent-config-form", @form_structure) <> "-native"}
+              form={form_mount_id("agent-config-form", @form_structure) <> "-controls"}
               class="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-content transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30"
             >
               <.dm_mdi name="content-save-outline" class="w-3.5 h-3.5" /> Save Agent
@@ -744,7 +744,8 @@ defmodule SynapsisWeb.AgentLive.Agents do
                   </.dm_link>
                 </div>
 
-                <input type="hidden" name="agent[toolset_ids][]" value="" />
+                <%!-- A native submission still includes the group when the last option is cleared. --%>
+                <input type="checkbox" name="agent[toolset_ids][]" value="" hidden checked />
 
                 <div
                   :if={@toolsets != [] or @missing_toolset_ids != []}
@@ -871,9 +872,11 @@ defmodule SynapsisWeb.AgentLive.Agents do
                   />
                   <div :if={group.mode == "selected"} class="space-y-2">
                     <input
-                      type="hidden"
+                      type="checkbox"
                       name={"mcp_selection[sources][#{group.id}][tools][]"}
                       value=""
+                      hidden
+                      checked
                     />
                     <label :for={tool <- group.tools} class="flex items-start gap-2 text-sm">
                       <input
@@ -893,9 +896,11 @@ defmodule SynapsisWeb.AgentLive.Agents do
                   </div>
                   <input
                     :for={name <- if(group.mode != "selected", do: group.selected, else: [])}
-                    type="hidden"
+                    type="checkbox"
                     name={"mcp_selection[sources][#{group.id}][tools][]"}
                     value={name}
+                    hidden
+                    checked
                   />
                 </div>
               </div>
@@ -907,7 +912,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
                     Selected tools listed here become available after tool search. Leave empty to show all selected tools immediately.
                   </p>
                 </div>
-                <input type="hidden" name="agent[deferred_tool_names][]" value="" />
+                <input type="checkbox" name="agent[deferred_tool_names][]" value="" hidden checked />
                 <label
                   :for={tool <- @deferred_tools}
                   data-unavailable-deferred-tool={if(!tool.available, do: tool.name)}
@@ -966,7 +971,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
                 </.dm_link>
               </div>
 
-              <input type="hidden" name="skill_ids[]" value="" />
+              <input type="checkbox" name="skill_ids[]" value="" hidden checked />
               <div
                 :for={group <- skill_source_groups(@skills)}
                 data-skill-source={group.id}

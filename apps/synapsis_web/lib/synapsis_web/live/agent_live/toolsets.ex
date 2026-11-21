@@ -361,7 +361,14 @@ defmodule SynapsisWeb.AgentLive.Toolsets do
           resize="none"
         />
 
-        <input :for={name <- @off_source_names} type="hidden" name="tool_names[]" value={name} />
+        <input
+          :for={name <- @off_source_names}
+          type="checkbox"
+          name="tool_names[]"
+          value={name}
+          hidden
+          checked
+        />
         <section
           :if={@legacy?}
           data-tool-category="legacy-selection"

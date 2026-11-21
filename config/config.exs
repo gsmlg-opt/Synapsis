@@ -102,13 +102,16 @@ config :duskmoon_bundler, :synapsis_web,
         pattern: "**/*.{css,js,ts,jsx,tsx}"
       },
       %{
-        base: Path.expand("../deps/phoenix_duskmoon/lib", __DIR__),
+        base: Path.expand("../packages/hooks/src", __DIR__),
+        pattern: "**/*.{ts,tsx}"
+      },
+      %{
+        base: Path.expand("../deps/duskmoon_phoenix/lib", __DIR__),
         pattern: "**/*.{ex,heex}"
       },
-      # Required by phoenix_duskmoon's setup guide: React Chat markup uses Tailwind
-      # utilities (e.g. `bottom-3 end-3`) and deps/ is never scanned automatically.
+      # React Form and Chat render utility classes from the Phoenix package.
       %{
-        base: Path.expand("../deps/phoenix_duskmoon/assets/js", __DIR__),
+        base: Path.expand("../deps/duskmoon_phoenix/assets/js", __DIR__),
         pattern: "**/*.js"
       }
     ]
@@ -118,8 +121,9 @@ config :duskmoon_bundler, :synapsis_web,
     watch_dirs: [
       Path.expand("../apps/synapsis_web/lib", __DIR__),
       Path.expand("../apps/synapsis_web/assets", __DIR__),
-      Path.expand("../deps/phoenix_duskmoon/lib", __DIR__),
-      Path.expand("../deps/phoenix_duskmoon/assets/js", __DIR__)
+      Path.expand("../packages/hooks/src", __DIR__),
+      Path.expand("../deps/duskmoon_phoenix/lib", __DIR__),
+      Path.expand("../deps/duskmoon_phoenix/assets/js", __DIR__)
     ]
   ]
 

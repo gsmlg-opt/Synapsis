@@ -12,11 +12,6 @@ export function createSynapsisReactFormHook(upstream: any) {
     ...upstream,
     mounted(this: any) {
       upstream.mounted.call(this)
-      this.form.id = `${this.el.id}-native`
-      // WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#195
-      // Layout belongs on the native form, which participates in the parent layout.
-      this.form.className = this.el.className
-      this.form.classList.remove('synapsis-react-form')
       this.values = { ...snapshotNativeFields(nativeFields(this.form), this.values), ...JSON.parse(this.el.dataset.initialValues || '{}') }
       restoreNativeFields(nativeFields(this.form), this.values)
       this.initialValues = structuredClone(this.values)
@@ -44,12 +39,10 @@ export function createSynapsisReactFormHook(upstream: any) {
       this.form.addEventListener('input', this.nativeHandler)
       this.form.addEventListener('change', this.nativeHandler)
     },
-    submit(this: any) {
-      // WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#194
-      if (!this.form.reportValidity()) return
+    submit(this: any, submitter?: HTMLElement) {
       this.nativeGeneration++
       this.values = snapshotNativeFields(nativeFields(this.form), this.values)
-      upstream.submit.call(this)
+      upstream.submit.call(this, submitter)
     },
     resetForm(this: any, values = this.initialValues) {
       this.nativeGeneration++

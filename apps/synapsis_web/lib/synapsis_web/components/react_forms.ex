@@ -2,7 +2,7 @@ defmodule SynapsisWeb.ReactForms do
   @moduledoc "Presentation helpers for the published DuskMoon React Form bridge."
   use Phoenix.Component
 
-  import PhoenixDuskmoon.Component.DataEntry.ReactForm, only: [dm_react_form: 1]
+  import DuskmoonPhoenix.Component.DataEntry.ReactForm, only: [dm_react_form: 1]
 
   attr :id, :string, required: true
   attr :for, :any, default: %{}
@@ -11,9 +11,10 @@ defmodule SynapsisWeb.ReactForms do
   attr :draft, :map, default: nil
   attr :structure, :any, default: nil
   attr :class, :any, default: nil
+  attr :novalidate, :boolean, default: false
 
   attr :rest, :global,
-    include: ~w(autocomplete name novalidate phx-change phx-submit phx-target phx-debounce)
+    include: ~w(autocomplete name phx-change phx-submit phx-target phx-debounce)
 
   slot :inner_block
   slot :actions
@@ -34,7 +35,9 @@ defmodule SynapsisWeb.ReactForms do
       :key={mount_id}
       id={mount_id}
       values={@initial_values}
-      class={["synapsis-react-form", @class]}
+      class="synapsis-react-form"
+      form_class={@class}
+      novalidate={@novalidate}
       data-form-id={@id}
       {@rest}
     >
@@ -54,14 +57,18 @@ defmodule SynapsisWeb.ReactForms do
   def reset_react_form(socket, id, values \\ nil) do
     mount_id = Map.get(socket.assigns.react_form_mounts, id, id)
 
-    drafts =
-      if is_nil(values),
-        do: Map.delete(socket.assigns.react_form_drafts, id),
-        else: Map.put(socket.assigns.react_form_drafts, id, values)
+    payload = %{id: mount_id, form_id: id}
+
+    {drafts, payload} =
+      if is_nil(values) do
+        {Map.delete(socket.assigns.react_form_drafts, id), payload}
+      else
+        {Map.put(socket.assigns.react_form_drafts, id, values), Map.put(payload, :values, values)}
+      end
 
     socket
     |> Phoenix.Component.assign(:react_form_drafts, drafts)
-    |> Phoenix.LiveView.push_event("dm:form:reset", %{id: mount_id, form_id: id, values: values})
+    |> Phoenix.LiveView.push_event("dm:form:reset", payload)
   end
 
   defp form_values(%Phoenix.HTML.Form{params: params, name: name}, as) do

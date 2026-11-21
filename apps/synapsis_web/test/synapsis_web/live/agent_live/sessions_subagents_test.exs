@@ -85,7 +85,7 @@ defmodule SynapsisWeb.AgentLive.SessionsSubagentsTest do
     assert chat_snapshot(view).admission.canSubmit
 
     send(view.pid, {"session_status", %{status: "error"}})
-    assert has_element?(view, "el-dm-button[phx-click='retry']")
+    assert has_element?(view, "button[phx-click='retry']")
     assert chat_snapshot(view).admission.canRetry
 
     send(view.pid, {"session_status", %{status: "idle"}})
@@ -103,7 +103,7 @@ defmodule SynapsisWeb.AgentLive.SessionsSubagentsTest do
              )
 
     send(view.pid, {"session_status", %{status: "error"}})
-    refute has_element?(view, "el-dm-button[phx-click='retry']")
+    refute has_element?(view, "button[phx-click='retry']")
     refute chat_snapshot(view).admission.canRetry
 
     assert {:reply, %{status: "error"}, _} =
@@ -147,7 +147,7 @@ defmodule SynapsisWeb.AgentLive.SessionsSubagentsTest do
     assert has_element?(view, "[data-runtime-permission='deny-this']", "/root/research")
 
     view
-    |> element("[data-runtime-permission='allow-this'] el-dm-button[phx-value-decision='allow']")
+    |> element("[data-runtime-permission='allow-this'] button[phx-value-decision='allow']")
     |> render_click()
 
     assert_receive {:runtime_decision, "allow-this", true}
@@ -155,7 +155,7 @@ defmodule SynapsisWeb.AgentLive.SessionsSubagentsTest do
     assert has_element?(view, "[data-runtime-permission='deny-this']")
 
     view
-    |> element("[data-runtime-permission='deny-this'] el-dm-button[phx-value-decision='deny']")
+    |> element("[data-runtime-permission='deny-this'] button[phx-value-decision='deny']")
     |> render_click()
 
     assert_receive {:runtime_decision, "deny-this", false}
