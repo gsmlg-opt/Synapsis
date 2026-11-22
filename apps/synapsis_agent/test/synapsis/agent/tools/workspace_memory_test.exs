@@ -136,16 +136,25 @@ defmodule Synapsis.Agent.Tools.WorkspaceMemoryTest do
     assert text =~ cursor
     refute text =~ "No matching workspace memory lines."
 
-    assert {:ok, %{structured: %{results: [], next_cursor: next}}} =
-             WorkspaceMemory.execute(
-               operation(ctx, @search, %{"query" => "absent", "cursor" => cursor})
-             )
+    assert {:complete, final_text} =
+             Enum.reduce_while(1..16, cursor, fn _, current ->
+               assert {:ok, %{content: page_text, structured: %{results: []} = page}} =
+                        WorkspaceMemory.execute(
+                          operation(ctx, @search, %{"query" => "absent", "cursor" => current})
+                        )
 
-    assert {:ok,
-            %{content: final_text, structured: %{results: [], complete: true, next_cursor: nil}}} =
-             WorkspaceMemory.execute(
-               operation(ctx, @search, %{"query" => "absent", "cursor" => next})
-             )
+               case page do
+                 %{complete: true, next_cursor: nil} ->
+                   {:halt, {:complete, page_text}}
+
+                 %{complete: false, next_cursor: next} when is_binary(next) ->
+                   refute next == current
+                   assert page_text =~ "No matches on this page"
+                   assert page_text =~ next
+                   refute page_text =~ "No matching workspace memory lines."
+                   {:cont, next}
+               end
+             end)
 
     assert final_text =~ "No matching workspace memory lines."
   end
