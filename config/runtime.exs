@@ -14,6 +14,10 @@ if concord_data_dir = System.get_env("SYNAPSIS_CONCORD_DATA_DIR") do
     turso: [database: Path.join(concord_data_dir, "turso.db")]
 end
 
+if blob_dir = System.get_env("SYNAPSIS_WORKSPACE_BLOB_DIR") do
+  config :synapsis_workspace, :blob_store_root, blob_dir
+end
+
 # Encryption key for provider API keys (AES-256-GCM)
 encryption_key =
   if config_env() == :prod do

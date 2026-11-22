@@ -85,6 +85,27 @@ MCP tool calls have a 300-second client timeout by default. To override it, set
 setting accepts whole seconds from 1 to 600 and applies to new calls after the
 config reloads. MCP initialization and tool discovery have separate timeouts.
 
+### Docker Compose state
+
+Compose mounts the named `app_data` volume at `/app/data`. The default
+Concord, configuration, file memory, workspace and workspace blob paths are
+`concord`, `config`, `memory`, `workspace` and `blobs` under that mount.
+Set the corresponding environment variables in `docker-compose.yml` to use an
+existing mount.
+
+Before recreating an older container, record its effective paths and mounts.
+Stop the old service to quiesce writes, then copy its full Concord directory
+(including any Turso/SQLite sidecar files), TOML config, memory, workspace and
+blobs from the old container or their mounts. Back up any existing destination
+first. Restore to the configured volume paths with the original encryption key,
+then read back a known session before retiring the old container. A new
+container starts with empty state wherever the configured paths contain no
+data.
+
+`bash scripts/test-compose-persistence.sh` builds the local checkout and
+checks session, TOML and file memory recovery using a separate Compose project
+and volume.
+
 Providers are registered from environment variables at startup. Set any of:
 
 ```bash

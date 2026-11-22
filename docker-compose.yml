@@ -10,6 +10,15 @@ services:
       PHX_HOST: localhost
       PORT: "4657"
       MIX_ENV: prod
+      SYNAPSIS_CONCORD_DATA_DIR: "${SYNAPSIS_CONCORD_DATA_DIR:-/app/data/concord}"
+      SYNAPSIS_CONFIG_DIR: "${SYNAPSIS_CONFIG_DIR:-/app/data/config}"
+      SYNAPSIS_MEMORY_DIR: "${SYNAPSIS_MEMORY_DIR:-/app/data/memory}"
+      SYNAPSIS_WORKSPACE_ROOT: "${SYNAPSIS_WORKSPACE_ROOT:-/app/data/workspace}"
+      SYNAPSIS_WORKSPACE_BLOB_DIR: "${SYNAPSIS_WORKSPACE_BLOB_DIR:-/app/data/blobs}"
+    command:
+      - /bin/sh
+      - -ec
+      - 'mkdir -p -- "$(printenv SYNAPSIS_WORKSPACE_ROOT)" && exec /app/bin/synapsis start'
     volumes:
       - app_data:/app/data
 
