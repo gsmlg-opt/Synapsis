@@ -2,10 +2,11 @@ defmodule Synapsis.LocalAgentConfigs do
   @moduledoc "Context for local agent definitions persisted in `local_agents.toml`."
 
   alias Synapsis.Config.Store
+  alias Synapsis.Encrypted.Binary, as: EncryptedBinary
   alias Synapsis.LocalAgentConfig
 
   @store_type :local_agent
-  @fields ~w(name kind executable args cwd codex_home autostart)a
+  @fields ~w(name kind executable args cwd codex_home url repository token_encrypted autostart)a
 
   @spec list() :: [LocalAgentConfig.t()]
   def list do
@@ -49,6 +50,42 @@ defmodule Synapsis.LocalAgentConfigs do
     with :ok <- Store.delete(@store_type, id), do: {:ok, config}
   end
 
+  @doc """
+  Generate a new Bearer token for a Sigma agent and store it encrypted. The
+  plaintext is returned only here, for the operator to copy into Sigma's
+  `SIGMA_PROTOCOL_TOKEN`; generating again invalidates the previous token.
+  """
+  @spec rotate_token(String.t()) :: {:ok, String.t()} | {:error, term()}
+  def rotate_token(id) do
+    token = Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
+
+    Store.with_write_lock(fn ->
+      with {:ok, current} <- Store.get(@store_type, id),
+           "sigma" <- current["kind"] || {:error, :unsupported_kind},
+           {:ok, _} <-
+             Store.replace_existing(
+               @store_type,
+               id,
+               Map.put(current, "token_encrypted", encrypt(token))
+             ) do
+        {:ok, token}
+      else
+        kind when is_binary(kind) -> {:error, :unsupported_kind}
+        {:error, _} = error -> error
+      end
+    end)
+  end
+
+  @doc "The plaintext token of agent `id`, for runtime use only."
+  @spec resolve_token(String.t()) ::
+          {:ok, String.t()} | {:error, :not_configured | :credential_unavailable}
+  def resolve_token(id) do
+    case get(id) do
+      %LocalAgentConfig{token_encrypted: encrypted} when is_binary(encrypted) -> decrypt(encrypted)
+      _ -> {:error, :not_configured}
+    end
+  end
+
   @doc "Create the default Codex entry when none exists and `codex` is on PATH."
   @spec ensure_default_codex() :: :ok
   def ensure_default_codex do
@@ -65,8 +102,25 @@ defmodule Synapsis.LocalAgentConfigs do
 
   defp to_struct(map) do
     record = %LocalAgentConfig{} |> LocalAgentConfig.changeset(map) |> Ecto.Changeset.apply_changes()
-    %{record | id: map["id"] || record.id}
+    %{record | id: map["id"] || record.id, token_encrypted: map["token_encrypted"]}
   end
+
+  defp encrypt(secret) do
+    {:ok, ciphertext} = EncryptedBinary.dump(secret)
+    "enc:v1:" <> Base.encode64(ciphertext)
+  end
+
+  defp decrypt("enc:v1:" <> encoded) do
+    with {:ok, ciphertext} <- Base.decode64(encoded),
+         {:ok, secret} when is_binary(secret) and byte_size(secret) > 0 <-
+           EncryptedBinary.load(ciphertext) do
+      {:ok, secret}
+    else
+      _ -> {:error, :credential_unavailable}
+    end
+  end
+
+  defp decrypt(_), do: {:error, :credential_unavailable}
 
   defp to_store_map(%LocalAgentConfig{} = r) do
     @fields

@@ -37,9 +37,14 @@ defmodule SynapsisWeb.LocalAgentLiveTest do
   end
 
   test "lists agents with status and starts one", %{conn: conn, id: id} do
+    first_render = conn |> get(~p"/local-agents") |> html_response(200)
+    assert first_render =~ "Codex"
+    assert first_render =~ "ws://127.0.0.1:4580/app-server"
+
     {:ok, view, _html} = live(conn, ~p"/local-agents")
     assert has_element?(view, "h1", "Local Agents")
     assert has_element?(view, "header.appbar a[href='/local-agents']")
+    assert has_element?(view, ~s(#sigma-url[value="ws://127.0.0.1:4580/app-server"]))
     assert has_element?(view, "#local-agent-#{id}", "Codex")
     assert has_element?(view, "#local-agent-#{id} [data-role=status]", "stopped")
 

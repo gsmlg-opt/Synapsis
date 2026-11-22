@@ -1,6 +1,6 @@
 defmodule SynapsisLocalAgents.Adapter do
   @moduledoc """
-  Contract between the local agent runtime and one kind of agent (Codex today).
+  Contract between the local agent runtime and one kind of agent (Codex, Sigma).
 
   An adapter is a process started by `SynapsisLocalAgents.Runner` with the Runner
   as `owner`. It sends `{:local_agent_event, %SynapsisLocalAgents.Event{}}` to the
@@ -29,7 +29,10 @@ defmodule SynapsisLocalAgents.Adapter do
   @doc "Adapter module for a config kind."
   def module_for(kind) do
     :synapsis_local_agents
-    |> Application.get_env(:adapters, %{"codex" => SynapsisLocalAgents.Codex})
+    |> Application.get_env(:adapters, %{
+      "codex" => SynapsisLocalAgents.Codex,
+      "sigma" => SynapsisLocalAgents.Sigma
+    })
     |> Map.fetch(kind)
   end
 end

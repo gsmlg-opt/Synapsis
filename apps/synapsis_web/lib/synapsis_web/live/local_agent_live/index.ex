@@ -2,12 +2,17 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
   @moduledoc """
   Local Agents page: process status and start/stop for each local agent, its
   threads, and a conversation view that streams `SynapsisLocalAgents.Event`s.
+  Sigma agents are added here (a running Sigma Synapsis connects to); their
+  token is generated here and shown once.
   Adapter requests run in `start_async`; the LiveView never blocks on an agent.
   """
   use SynapsisWeb, :live_view
   use SynapsisWeb.ReactFormEvents
 
+  alias Synapsis.LocalAgentConfigs
   alias SynapsisLocalAgents.Event
+
+  @sigma_url "ws://127.0.0.1:4580/app-server"
 
   @impl true
   def mount(_params, _session, socket) do
@@ -17,6 +22,7 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
      socket
      |> assign(
        page_title: "Local Agents",
+       sigma_url: @sigma_url,
        agent_id: nil,
        thread_id: nil,
        threads: [],
@@ -25,6 +31,7 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
        current_turn: nil,
        turn_status: nil,
        turn_error: nil,
+       revealed: nil,
        subscribed: nil
      )
      |> load_agents()}
@@ -67,6 +74,40 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
 
   def handle_event("stop_agent", %{"id" => id}, socket),
     do: {:noreply, start_async(socket, {:lifecycle, id}, fn -> SynapsisLocalAgents.stop(id) end)}
+
+  def handle_event("add_sigma", params, socket) do
+    attrs = %{
+      name: blank_to_nil(params["name"]) || "Sigma",
+      kind: "sigma",
+      url: blank_to_nil(params["url"]),
+      repository: blank_to_nil(params["repository"])
+    }
+
+    case LocalAgentConfigs.create(attrs) do
+      {:ok, config} ->
+        {:noreply,
+         socket
+         |> reset_react_form("sigma-agent-form")
+         |> load_agents()
+         |> push_patch(to: ~p"/local-agents/#{config.id}")}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply, put_flash(socket, :error, "Sigma not added: #{changeset_errors(changeset)}")}
+    end
+  end
+
+  def handle_event("rotate_token", %{"id" => id}, socket) do
+    case LocalAgentConfigs.rotate_token(id) do
+      {:ok, token} ->
+        {:noreply, socket |> assign(revealed: %{agent_id: id, token: token}) |> load_agents()}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Token not generated: #{inspect(reason)}")}
+    end
+  end
+
+  def handle_event("dismiss_token", _params, socket),
+    do: {:noreply, assign(socket, revealed: nil)}
 
   def handle_event("new_thread", _params, socket) do
     agent_id = socket.assigns.agent_id
@@ -270,6 +311,23 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
 
   defp load_agents(socket), do: assign(socket, agents: SynapsisLocalAgents.list())
 
+  defp blank_to_nil(value) when is_binary(value),
+    do: if(String.trim(value) == "", do: nil, else: String.trim(value))
+
+  defp blank_to_nil(_), do: nil
+
+  defp changeset_errors(changeset) do
+    changeset
+    |> Ecto.Changeset.traverse_errors(fn {message, _opts} -> message end)
+    |> Enum.map_join("; ", fn {field, messages} -> "#{field} #{Enum.join(messages, ", ")}" end)
+  end
+
+  # Sigma runs on its own; Synapsis only connects to it.
+  defp start_label("sigma"), do: "Connect"
+  defp start_label(_kind), do: "Start"
+  defp stop_label("sigma"), do: "Disconnect"
+  defp stop_label(_kind), do: "Stop"
+
   defp running?(socket, id),
     do: Enum.any?(socket.assigns.agents, &(&1.config.id == id and &1.status.state == :running))
 
@@ -295,7 +353,8 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
       <div class="grid gap-4 md:grid-cols-[18rem_1fr]">
         <div class="space-y-2">
           <p :if={@agents == []} class="text-sm text-on-surface-variant">
-            No local agents configured. Install <code>codex</code> and restart Synapsis.
+            No local agents configured. Install <code>codex</code> and restart Synapsis,
+            or add a Sigma below.
           </p>
           <div
             :for={agent <- @agents}
@@ -317,6 +376,41 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
               </.dm_badge>
             </div>
             <div class="text-xs text-on-surface-variant">{agent.config.kind}</div>
+            <div
+              :if={agent.config.kind == "sigma"}
+              class="text-xs text-on-surface-variant space-y-1 break-all"
+            >
+              <div>{agent.config.url}</div>
+              <div>{agent.config.repository}</div>
+              <div class="flex items-center justify-between gap-2">
+                <span data-role="token-status">
+                  token {if agent.config.token_encrypted, do: "configured", else: "not set"}
+                </span>
+                <.dm_btn
+                  variant="ghost"
+                  size="xs"
+                  phx-click="rotate_token"
+                  phx-value-id={agent.config.id}
+                  confirm="A new token replaces the current one; Sigma must be restarted with it. Continue?"
+                  confirm_title="Generate new token?"
+                  confirm_text="Generate"
+                >
+                  Generate token
+                </.dm_btn>
+              </div>
+            </div>
+            <div
+              :if={@revealed && @revealed.agent_id == agent.config.id}
+              role="status"
+              class="rounded border border-primary p-2 space-y-2 text-xs"
+            >
+              <div>
+                Set <code>SIGMA_PROTOCOL_TOKEN</code>
+                to this value in Sigma's environment and restart Sigma. It will not be shown again.
+              </div>
+              <code data-role="revealed-token" class="block break-all">{@revealed.token}</code>
+              <.dm_btn variant="ghost" size="xs" phx-click="dismiss_token">Done</.dm_btn>
+            </div>
             <div :if={agent.status.last_error} class="text-xs text-error break-all">
               {agent.status.last_error}
             </div>
@@ -328,7 +422,7 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
                 phx-click="start_agent"
                 phx-value-id={agent.config.id}
               >
-                Start
+                {start_label(agent.config.kind)}
               </.dm_btn>
               <.dm_btn
                 :if={agent.status.state in [:starting, :running, :busy]}
@@ -337,10 +431,33 @@ defmodule SynapsisWeb.LocalAgentLive.Index do
                 phx-click="stop_agent"
                 phx-value-id={agent.config.id}
               >
-                Stop
+                {stop_label(agent.config.kind)}
               </.dm_btn>
             </div>
           </div>
+          <.react_form
+            for={%{}}
+            id="sigma-agent-form"
+            values={%{"name" => "Sigma", "url" => @sigma_url, "repository" => ""}}
+            draft={react_form_draft(assigns, "sigma-agent-form")}
+            phx-submit="add_sigma"
+            class="rounded border border-outline-variant p-3 space-y-2"
+          >
+            <div class="text-sm font-medium">Add Sigma</div>
+            <.dm_input id="sigma-name" type="text" name="name" value="Sigma" label="Name" />
+            <.dm_input id="sigma-url" type="text" name="url" value={@sigma_url} label="URL" />
+            <.dm_input
+              id="sigma-repository"
+              type="text"
+              name="repository"
+              value=""
+              placeholder="/absolute/path/registered/in/sigma"
+              label="Repository"
+            />
+            <:actions>
+              <.dm_btn type="submit" native_submit variant="primary" size="sm">Add</.dm_btn>
+            </:actions>
+          </.react_form>
         </div>
 
         <div class="min-w-0">

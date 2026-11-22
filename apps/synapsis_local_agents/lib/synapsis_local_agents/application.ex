@@ -7,6 +7,7 @@ defmodule SynapsisLocalAgents.Application do
     children = [
       {Registry, keys: :unique, name: SynapsisLocalAgents.Registry},
       {DynamicSupervisor, name: SynapsisLocalAgents.RunnerSupervisor, strategy: :one_for_one},
+      {Task.Supervisor, name: SynapsisLocalAgents.TaskSupervisor},
       Supervisor.child_spec({Task, &boot/0}, restart: :temporary)
     ]
 
