@@ -131,7 +131,10 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     result =
       case Map.get(state.tool_contexts, key) do
         %{snapshot: _} = entry ->
-          project_skill_catalog(entry, identity, catalog)
+          case project_skill_catalog(entry, identity, catalog) do
+            {:ok, _snapshot} when is_map_key(identity, :tools) -> {:ok, :validated}
+            result -> result
+          end
 
         nil ->
           failure(:forbidden, "Tool catalog context is unavailable or stale")
@@ -1273,6 +1276,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
 
     with :ok <- RunInventory.retain(locator),
          {:ok, history} <- ProviderMessages.from_host(context.messages),
+         {history, content, image_payloads} = ProviderMessages.reference_images(history, content),
          {:ok, selection} <- Profiles.selection(context),
          {:ok, plan} <- Discovery.plan(context.agent, selection),
          {:ok, revisions} <-
@@ -1296,6 +1300,13 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
                  },
                  {:ok, opts, metadata} <-
                    options(runtime, context, run_id, 1, history, authority, false) do
+              opts =
+                Keyword.update!(
+                  opts,
+                  :provider_context,
+                  &Map.put(&1, :image_payloads, image_payloads)
+                )
+
               Enum.each([session, manager], &Process.unlink/1)
               if local_runtime, do: Process.unlink(local_runtime.server)
 
@@ -1656,8 +1667,11 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
                browser ++ resources,
              ceiling
            ) do
-      tool_context_resolver = fn invocation, catalog ->
-        GenServer.call(self_host(state), {:tool_context, invocation, catalog}, 5_000)
+      adapter = self_host(state)
+
+      tool_context_resolver = fn subject, catalog ->
+        identity = Map.take(subject, [:run_id, :incarnation, :catalog_revision, :caller, :tools])
+        GenServer.call(adapter, {:tool_context, identity, catalog}, 5_000)
       end
 
       provider_context = Map.put(provider_context, :tool_context_resolver, tool_context_resolver)

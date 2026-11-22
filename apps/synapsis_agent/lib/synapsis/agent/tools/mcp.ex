@@ -21,7 +21,6 @@ defmodule Synapsis.Agent.Tools.MCP do
   @source_keys [:source_id, :server_pid, :generation, :tools]
   @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
     request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
-  @timeout 30_000
 
   def descriptors(context) do
     with :ok <- context_valid(context),
@@ -235,7 +234,7 @@ defmodule Synapsis.Agent.Tools.MCP do
   end
 
   defp runtime_call(source, raw_name, arguments) do
-    Server.runtime_call(source, raw_name, arguments, @timeout)
+    Server.runtime_call(source, raw_name, arguments)
   rescue
     _ -> {:error, :unknown_outcome}
   catch

@@ -30,6 +30,27 @@ defmodule Synapsis.MCPConfigsTest do
     assert MCPConfigs.get_by_name(cfg.name).command == "uvx"
   end
 
+  test "each MCP server can override the five-minute tool timeout" do
+    attrs = %{name: "slow-mcp", transport: "stdio", command: "test"}
+
+    assert {:ok, config} = MCPConfigs.create(attrs)
+    assert MCPConfig.tool_timeout_ms(config) == 300_000
+
+    assert {:ok, _} = MCPConfigs.update(config, %{tool_timeout_sec: 480})
+    assert :ok = Store.reload(:mcp)
+    configured = MCPConfigs.get(config.id)
+    assert MCPConfig.tool_timeout_ms(configured) == 480_000
+
+    for invalid <- [0, -1, 601, "soon"] do
+      assert {:error, changeset} = MCPConfigs.update(configured, %{tool_timeout_sec: invalid})
+      assert errors_on(changeset).tool_timeout_sec == ["is invalid"]
+    end
+
+    assert {:ok, _} = MCPConfigs.update(configured, %{tool_timeout_sec: nil})
+    assert :ok = Store.reload(:mcp)
+    assert MCPConfig.tool_timeout_ms(MCPConfigs.get(config.id)) == 300_000
+  end
+
   test "Backplane tool JSON schemas preserve nulls through persistence and reload" do
     source_id = Ecto.UUID.generate()
     assert {:ok, _} = Store.put(:backplane, %{"id" => source_id, "enabled" => true})

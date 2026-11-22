@@ -242,7 +242,6 @@ defmodule Synapsis.Provider.Adapter do
               state = response_codec_state(response, codec_state)
               guard = response_stream_guard(response, stream_guard)
 
-              # TODO(upstream): gsmlg-opt/backplane#180 — decode gateway Responses events.
               case Backplane.AiProtocol.Codec.stream_feed(protocol, state, data) do
                 {:ok, state, events} ->
                   case emit_mapped_events(events, caller, guard, tool_aliases) do

@@ -65,6 +65,36 @@ defmodule Synapsis.Provider.MessageMapperTest do
              27_962_028
   end
 
+  test "encodes a Responses user image between its surrounding text" do
+    data =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVQI12P4z8AAAAACAAHiIbwzAAAAAElFTkSuQmCC"
+
+    messages = [
+      %{
+        role: "user",
+        parts: [
+          %Synapsis.Part.Text{content: "before"},
+          %Synapsis.Part.Image{media_type: "image/png", data: data},
+          %Synapsis.Part.Text{content: "after"}
+        ]
+      }
+    ]
+
+    url = "data:image/png;base64," <> data
+
+    assert {:ok, %{"input" => [message]}} =
+             MessageMapper.build_request(:openai_responses, messages, [], %{model: "fixture"})
+
+    assert %{
+             "role" => "user",
+             "content" => [
+               %{"type" => "input_text", "text" => "before"},
+               %{"type" => "input_image", "image_url" => ^url},
+               %{"type" => "input_text", "text" => "after"}
+             ]
+           } = message
+  end
+
   test "encodes OpenAI tool names and parallel tool results" do
     messages = [
       %{

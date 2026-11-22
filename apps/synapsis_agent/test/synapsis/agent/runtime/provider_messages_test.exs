@@ -4,6 +4,26 @@ defmodule Synapsis.Agent.Runtime.ProviderMessagesTest do
   alias Backplane.AgentRuntime.Error
   alias Synapsis.Part.{Image, Reasoning, Text, ToolResult, ToolUse}
 
+  test "uploaded image references resolve against the current run's original payloads" do
+    data = Base.encode64(<<137, 80, 255, 0>>)
+    image = %{type: :image, media_type: "image/png", data: data, path: "upload.png"}
+    message = %{role: :user, content: [image]}
+
+    assert {[referenced], [block], payloads} =
+             ProviderMessages.reference_images([message], [image])
+
+    assert %{content: [^block]} = referenced
+    assert %{image_ref: ref} = block
+    refute Map.has_key?(block, :data)
+    assert payloads == %{ref => data}
+
+    assert {:ok, expected} = ProviderMessages.to_host([message])
+    assert {:ok, ^expected} = ProviderMessages.to_host([referenced], payloads)
+
+    assert {:error, %Error{message: "Conversation image is unavailable"}} =
+             ProviderMessages.to_host([referenced])
+  end
+
   test "native view_image live summary preserves rich history and portable replay" do
     data = <<137, 80, 255, 0>>
 
@@ -279,6 +299,9 @@ defmodule Synapsis.Agent.Runtime.ProviderMessagesTest do
     for {error, expected} <- [
           {Error.new(:forbidden, "private message", details: %{secret: "private details"}),
            "Tool denied by capability policy"},
+          {Error.new(:forbidden, "tool preparation denied",
+             details: %{reason: :tool_context_unavailable, secret: "private details"}
+           ), "Tool context is unavailable. Try another tool or continue without this result."},
           {Error.new(:resource_conflict, "Tool registration changed", cause: "private cause"),
            "Tool registration changed"},
           {Error.new(:not_found, "tool is not registered", details: %{secret: "private details"}),

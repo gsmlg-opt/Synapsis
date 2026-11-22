@@ -154,6 +154,74 @@ defmodule Synapsis.Provider.AdapterTest do
   # ---------------------------------------------------------------------------
 
   describe "stream/2 OpenAI" do
+    test "completes a Responses stream with gateway reasoning and metadata", %{
+      bypass: bypass,
+      port: port
+    } do
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
+        reasoning = %{
+          "type" => "reasoning",
+          "content" => [%{"type" => "reasoning_text", "text" => "consider"}]
+        }
+
+        usage = %{
+          "input_tokens" => 1,
+          "output_tokens" => 3,
+          "total_tokens" => 4,
+          "output_tokens_details" => %{"reasoning_tokens" => 2}
+        }
+
+        ResponsesFixture.send_sse(conn, [
+          %{
+            "type" => "response.reasoning_text.delta",
+            "output_index" => 0,
+            "delta" => "consider"
+          },
+          %{"type" => "response.reasoning_text.done", "text" => "consider"},
+          ResponsesFixture.text_delta("answer"),
+          %{"type" => "response.metadata"},
+          ResponsesFixture.completed([reasoning, ResponsesFixture.message("answer")], %{
+            "usage" => usage
+          })
+        ])
+      end)
+
+      config = %{type: "openai_responses", base_url: "http://localhost:#{port}"}
+
+      assert {:ok, _stream} =
+               Adapter.stream(%{"model" => "MiniMax-M3.1-Flash", "input" => []}, config)
+
+      assert_receive {:provider_chunk, {:reasoning_delta, "consider"}}, 1_000
+      assert_receive {:provider_chunk, {:text_delta, "answer"}}
+
+      assert_receive {:provider_chunk,
+                      {:usage, %{input_tokens: 1, output_tokens: 3, reasoning_tokens: 2}}}
+
+      assert_receive :provider_done
+      refute_received {:provider_error, _}
+    end
+
+    for event <- [
+          %{"type" => "response.future"},
+          %{"type" => "response.reasoning_text.delta", "delta" => 1}
+        ] do
+      @invalid_event event
+      test "rejects invalid Responses event #{event["type"]}", %{bypass: bypass, port: port} do
+        Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
+          ResponsesFixture.send_sse(conn, [@invalid_event, ResponsesFixture.completed()])
+        end)
+
+        config = %{type: "openai_responses", base_url: "http://localhost:#{port}"}
+        assert {:ok, %{ref: ref}} = Adapter.stream(%{"model" => "fixture", "input" => []}, config)
+
+        assert_receive {:provider_error, %Backplane.AiProtocol.Error{kind: :invalid_request}},
+                       1_000
+
+        assert_receive {:DOWN, ^ref, :process, _pid, :normal}
+        refute_received :provider_done
+      end
+    end
+
     test "strips request-local alias metadata and restores long tool names", %{
       bypass: bypass,
       port: port

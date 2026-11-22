@@ -139,6 +139,41 @@ defmodule Synapsis.Agent.Tools.ProfilesTest do
     assert snapshot.scope.catalog_revision == ctx.identity.catalog_revision
   end
 
+  test "projecting a pinned catalog keeps its inter-process copy proportional to the registry",
+       ctx do
+    descriptors =
+      Map.new(1..32, fn index ->
+        name = "test::tool_#{index}"
+
+        descriptor = %{
+          tool_name: name,
+          tool_revision: 1,
+          backend: WorkspaceMemory,
+          backend_context: %{source: index},
+          schema: %{
+            "type" => "object",
+            "properties" => Map.new(1..12, &{"field_#{&1}", %{"type" => "string"}})
+          }
+        }
+
+        {name, descriptor}
+      end)
+
+    snapshot = %{
+      scope: ctx.identity,
+      issued_descriptors: descriptors,
+      selected: %{},
+      known_bindings: %{}
+    }
+
+    catalog = %{revision: 1, registry: %{tools: descriptors}, authority: ctx.ceiling, tools: []}
+
+    assert {:ok, projected} = Profiles.project_catalog(ctx.identity, snapshot, catalog)
+    assert Enum.sort(Map.keys(projected.selected)) == Enum.sort(Map.keys(descriptors))
+
+    assert :erts_debug.flat_size(projected) < 5 * :erts_debug.flat_size({snapshot, catalog})
+  end
+
   test "all unavailable names fail visibly before catalog admission", ctx do
     context = put_in(ctx.context, [:agent, :tools], [@get, "unknown::one", "unknown::two"])
 

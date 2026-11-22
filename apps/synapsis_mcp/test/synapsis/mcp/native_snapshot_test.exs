@@ -243,6 +243,21 @@ defmodule Synapsis.MCP.NativeSnapshotTest do
     assert {:ok, _} = Server.runtime_call(snapshot, "echo", %{"text" => "sibling"}, 2_000)
   end
 
+  test "new calls on an open source use its saved tool timeout", ctx do
+    assert {:ok, snapshot} = Server.runtime_snapshot(ctx.pid)
+    assert {:ok, _} = MCPConfigs.update(ctx.config, %{tool_timeout_sec: 1})
+
+    task = Task.async(fn -> Server.runtime_call(snapshot, "echo", %{"text" => "pending"}) end)
+
+    assert_receive {:native_mcp_pending, id}, 2_000
+    assert {:error, :timeout} = Task.await(task, 3_000)
+
+    assert_receive {:native_mcp_cancelled, %{"requestId" => ^id, "reason" => "tool_timeout"}},
+                   2_000
+
+    assert {:ok, _} = Server.runtime_call(snapshot, "echo", %{"text" => "sibling"})
+  end
+
   test "effect owner death cancels its request without stopping the shared server", ctx do
     assert {:ok, snapshot} = Server.runtime_snapshot(ctx.pid)
 

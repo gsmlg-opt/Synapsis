@@ -80,6 +80,11 @@ or terminal resize/attach controls.
 
 Configs default to `~/.config/synapsis/` (override with `SYNAPSIS_CONFIG_DIR`). Concord data defaults under the system temp dir.
 
+MCP tool calls have a 300-second client timeout by default. To override it, set
+`tool_timeout_sec = 480` in the server's `[[mcps]]` entry in `mcp.toml`. The
+setting accepts whole seconds from 1 to 600 and applies to new calls after the
+config reloads. MCP initialization and tool discovery have separate timeouts.
+
 Providers are registered from environment variables at startup. Set any of:
 
 ```bash

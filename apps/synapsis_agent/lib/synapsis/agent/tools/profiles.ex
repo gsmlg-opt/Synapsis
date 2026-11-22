@@ -309,16 +309,19 @@ defmodule Synapsis.Agent.Tools.Profiles do
 
       selected =
         Map.new(descriptors, fn {name, descriptor} ->
-          {name, descriptor_binding(descriptor, identity, catalog)}
+          {name, descriptor_binding(descriptor, identity)}
         end)
 
-      {:ok,
-       %{
-         snapshot
-         | scope: Map.put(scope, :catalog_revision, revision),
-           selected: selected,
-           known_bindings: Map.merge(snapshot.known_bindings, selected)
-       }}
+      projected = %{
+        snapshot
+        | scope: Map.put(scope, :catalog_revision, revision),
+          selected: selected,
+          known_bindings: Map.merge(snapshot.known_bindings, selected)
+      }
+
+      # The snapshot crosses a process boundary. Keep the pinned catalog once
+      # so copying a classifier for each tool does not copy the whole registry.
+      {:ok, Map.put(projected, :pinned_catalog, {identity, catalog})}
     else
       _ -> {:error, :scope_mismatch}
     end
@@ -436,7 +439,10 @@ defmodule Synapsis.Agent.Tools.Profiles do
 
   def prepare_context(invocation, %{scope: scope, selected: selected} = snapshot)
       when is_map(invocation) and is_map(scope) and is_map(selected) do
-    with {:ok, %{binding: binding}} <- preparation_binding(invocation, snapshot),
+    with {:ok, %{binding: binding, descriptor: descriptor}} <-
+           preparation_binding(invocation, snapshot),
+         true <- Map.get(snapshot.known_bindings, invocation.tool_name) === binding,
+         binding = invocation_binding(snapshot, descriptor, binding),
          {:ok, target} <- binding.classify.(invocation),
          target =
            Map.merge(target, %{
@@ -457,7 +463,7 @@ defmodule Synapsis.Agent.Tools.Profiles do
            PermissionSnapshot.compile_invocation(
              snapshot.permission,
              scope,
-             snapshot.known_bindings,
+             Map.put(snapshot.known_bindings, invocation.tool_name, binding),
              target
            ) do
       readiness = %{
@@ -469,12 +475,18 @@ defmodule Synapsis.Agent.Tools.Profiles do
 
       {:ok, %{tool_scope: scope, tool_policy: policy, tool_readiness: readiness}}
     else
+      false -> {:error, :invalid_or_ambiguous_target}
       {:needs_review, reason} -> {:error, reason}
       error -> error
     end
   end
 
   def prepare_context(_, _), do: {:error, :invalid_tool_snapshot}
+
+  defp invocation_binding(%{pinned_catalog: {identity, catalog}}, descriptor, _binding),
+    do: descriptor_binding(descriptor, identity, catalog)
+
+  defp invocation_binding(_, _, binding), do: binding
 
   defp identity_valid(%{session: %{id: session_id}}, identity, ceiling)
        when is_map(identity) and is_map(ceiling) do

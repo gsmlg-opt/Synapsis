@@ -279,6 +279,7 @@ defmodule Synapsis.MCPConfigs do
       "name" => r.name,
       "provider_id" => r.provider_id,
       "transport" => r.transport,
+      "tool_timeout_sec" => r.tool_timeout_sec,
       "enabled" => r.enabled,
       "command" => r.command,
       "args" => r.args || [],

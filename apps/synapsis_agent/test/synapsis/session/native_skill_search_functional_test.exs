@@ -59,8 +59,10 @@ defmodule Synapsis.Session.NativeSkillSearchFunctionalTest do
 
     for name <- [@search, @read] do
       assert descriptors[name].backend == NativeSkills
-      assert descriptors[name].tool_revision == 1
-      assert descriptors[name].backend_context.snapshot.agent_id == harness.agent_config.id
+      assert descriptors[name].tool_revision == 2
+
+      assert descriptors[name].backend_context.snapshot.assigned.agent_id ==
+               harness.agent_config.id
     end
 
     assert Enum.map(hd(requests)["tools"], &ToolName.decode(&1["name"]))
@@ -107,7 +109,10 @@ defmodule Synapsis.Session.NativeSkillSearchFunctionalTest do
                    )
              })
 
-    assert read.content == relevant.system_prompt_fragment <> "\nSource: " <> locator
+    assert read.content ==
+             "Skill location: #{locator}\n" <>
+               "Resolve relative resource paths from the directory containing this SKILL.md.\n\n" <>
+               relevant.system_prompt_fragment
 
     for {req, count} <- Enum.with_index(requests) do
       assert_wire(req, Enum.take(calls, count), Enum.take(results, count))
@@ -346,7 +351,7 @@ defmodule Synapsis.Session.NativeSkillSearchFunctionalTest do
     receive do
       {:trace, _, :call,
        {NativeSkills, :execute,
-        [%{backend_context: %{snapshot: %{agent_id: ^agent_id}}} = operation]}} ->
+        [%{backend_context: %{snapshot: %{assigned: %{agent_id: ^agent_id}}}} = operation]}} ->
         drain_effects(agent_id, [operation | calls])
     after
       0 -> Enum.reverse(calls)

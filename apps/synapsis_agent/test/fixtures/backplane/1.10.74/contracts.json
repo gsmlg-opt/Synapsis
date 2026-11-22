@@ -5672,9 +5672,9 @@
   "provenance": {
     "dependency_packages": {
       "backplane_ai_protocol": {
-        "outer_checksum": "c283edbf967a598121a42ff378066eef52f5ba19d1b0dfbf5c41327b04c69cca",
-        "package_checksum": "20dca876604c1e8b9e33ee07b746c79c4a4c62b85053978d9f7db2ae2cdf8563",
-        "version": "1.10.74"
+        "outer_checksum": "4b8981095ef05286671028df6e4812061bcb543b4b144670ddf75d27f9317c74",
+        "package_checksum": "6c5969f729735895e44fe4c080e8112817d7b95fe90a83946a59385d8f8f1423",
+        "version": "1.10.87"
       },
       "backplane_json_schema": {
         "outer_checksum": "68f6bb3d115abfd66ee2fa58b5c3212ae09483cb13a842ae6cc69cd0e821fb1b",

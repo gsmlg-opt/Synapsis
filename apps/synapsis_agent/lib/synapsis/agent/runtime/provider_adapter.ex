@@ -103,7 +103,8 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapter do
 
     with :ok <- current_catalog(request, context),
          {:ok, tools} <- request_tools(request),
-         {:ok, messages} <- ProviderMessages.to_host(request.messages),
+         {:ok, messages} <-
+           ProviderMessages.to_host(request.messages, Map.get(context, :image_payloads, %{})),
          {:ok, wire} <- Adapter.format_request(messages, tools, options),
          {:ok, handle} <- Adapter.stream(wire, config, link: true) do
       try do
@@ -130,26 +131,31 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapter do
   end
 
   defp current_catalog(request, %{tool_context_resolver: resolver, catalog_snapshot: catalog})
-       when is_function(resolver, 2) do
-    case resolver.(request, catalog) do
-      {:ok, _snapshot} -> :ok
-      {:error, error} -> {:error, error}
-    end
-  end
+       when is_function(resolver, 2),
+       do: validate_catalog(resolver, [request, catalog])
 
   defp current_catalog(request, %{tool_context_resolver: resolver})
-       when is_function(resolver, 1) do
-    case resolver.(request) do
-      {:ok, _snapshot} -> :ok
-      {:error, error} -> {:error, error}
-    end
-  end
+       when is_function(resolver, 1),
+       do: validate_catalog(resolver, [request])
 
   defp current_catalog(_request, context) when not is_map_key(context, :tool_context_resolver),
     do: :ok
 
   defp current_catalog(_, _),
     do: {:error, Error.new(:validation, "Provider catalog resolver is invalid")}
+
+  defp validate_catalog(resolver, arguments) do
+    case apply(resolver, arguments) do
+      {:ok, _validated} -> :ok
+      {:error, error} -> {:error, error}
+    end
+  catch
+    :exit, {:timeout, _call} ->
+      {:error, Error.new(:timeout, "Provider catalog validation timed out")}
+
+    :exit, _reason ->
+      {:error, Error.new(:execution_failure, "Provider catalog validation is unavailable")}
+  end
 
   defp request_tools(%{catalog_revision: revision, tools: tools})
        when is_integer(revision) and revision > 0 and is_list(tools) do

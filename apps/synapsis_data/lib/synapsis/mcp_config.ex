@@ -10,12 +10,15 @@ defmodule Synapsis.MCPConfig do
   @type t :: %__MODULE__{}
 
   @valid_transports ~w(stdio streamable_http sse)
+  @tool_timeout_seconds 1..600
+  @default_tool_timeout_ms 300_000
 
   @primary_key {:id, :binary_id, autogenerate: false}
   embedded_schema do
     field(:name, :string)
     field(:provider_id, :binary_id)
     field(:transport, :string, default: "stdio")
+    field(:tool_timeout_sec, :integer)
     field(:enabled, :boolean, default: true)
     field(:command, :string)
     field(:args, {:array, :string}, default: [])
@@ -35,6 +38,7 @@ defmodule Synapsis.MCPConfig do
       :name,
       :provider_id,
       :transport,
+      :tool_timeout_sec,
       :enabled,
       :command,
       :args,
@@ -45,12 +49,21 @@ defmodule Synapsis.MCPConfig do
     ])
     |> validate_required([:name, :transport])
     |> validate_inclusion(:transport, @valid_transports)
+    |> validate_inclusion(:tool_timeout_sec, @tool_timeout_seconds)
     |> validate_length(:name, max: 255)
     |> validate_length(:command, max: 4_096)
     |> validate_length(:url, max: 2_048)
     |> validate_change(:headers, &validate_headers/2)
     |> validate_transport_fields()
   end
+
+  @doc "Resolve the configured tool call timeout in milliseconds."
+  @spec tool_timeout_ms(t()) :: pos_integer()
+  def tool_timeout_ms(%__MODULE__{tool_timeout_sec: seconds})
+      when seconds in @tool_timeout_seconds,
+      do: to_timeout(second: seconds)
+
+  def tool_timeout_ms(%__MODULE__{}), do: @default_tool_timeout_ms
 
   defp validate_headers(:headers, headers) do
     if Enum.all?(headers, fn {name, value} ->

@@ -244,6 +244,28 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
     assert wire["tools"] in [nil, []]
   end
 
+  test "catalog lookup timeout and owner loss emit a specific terminal error before HTTP", ctx do
+    owner = self()
+
+    Gaoxy.Test.stub(ctx.fixture, "POST", "/v1/responses", fn conn ->
+      send(owner, :unavailable_catalog_http)
+      Plug.Conn.resp(conn, 500, "unexpected")
+    end)
+
+    for {exit_reason, class, message} <- [
+          {:timeout, :timeout, "Provider catalog validation timed out"},
+          {:noproc, :execution_failure, "Provider catalog validation is unavailable"}
+        ] do
+      context =
+        Map.put(ctx.context, :tool_context_resolver, fn _ -> exit({exit_reason, :fixture}) end)
+
+      assert [%{type: :response_failed, error: %{class: ^class, message: ^message}}] =
+               Enum.to_list(ProviderAdapter.stream(ctx.request, context))
+    end
+
+    refute_receive :unavailable_catalog_http
+  end
+
   test "HTTP failure emits exactly one terminal error", ctx do
     Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/responses", fn conn ->
       Plug.Conn.resp(conn, 500, "fixture failure")

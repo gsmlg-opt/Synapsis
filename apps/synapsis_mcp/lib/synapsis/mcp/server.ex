@@ -78,6 +78,19 @@ defmodule Synapsis.MCP.Server do
     :exit, _reason -> {:error, :mcp_unavailable}
   end
 
+  @doc "Call a native tool using the source's current tool timeout."
+  def runtime_call(%{source_id: id} = snapshot, raw_name, input) when is_binary(id) do
+    case MCPConfigs.get(id) do
+      %MCPConfig{} = config ->
+        runtime_call(snapshot, raw_name, input, MCPConfig.tool_timeout_ms(config))
+
+      nil ->
+        {:rejected, :stale_snapshot}
+    end
+  end
+
+  def runtime_call(_, _, _), do: {:rejected, :invalid_input}
+
   @doc "Call an exact tool from an unchanged source snapshot, retaining the raw MCP result."
   def runtime_call(%{server_pid: server} = snapshot, raw_name, input, timeout)
       when is_pid(server) and is_binary(raw_name) and is_map(input) and

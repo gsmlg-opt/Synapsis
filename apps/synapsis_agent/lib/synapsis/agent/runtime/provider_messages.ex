@@ -5,9 +5,11 @@ defmodule Synapsis.Agent.Runtime.ProviderMessages do
   alias Synapsis.Agent.Tools.ResultProjection
   alias Synapsis.Part.{Audio, DeliveredImage, Image, Reasoning, Text, ToolResult, ToolUse, Video}
 
-  def to_host(messages) when is_list(messages) do
+  def to_host(messages, image_payloads \\ %{})
+
+  def to_host(messages, image_payloads) when is_list(messages) and is_map(image_payloads) do
     Enum.reduce_while(messages, {:ok, [], %{}}, fn message, {:ok, host, calls} ->
-      with {:ok, converted} <- host_message(message, calls) do
+      with {:ok, converted} <- host_message(message, calls, image_payloads) do
         {:cont, {:ok, host ++ List.wrap(converted), remember_calls(converted, calls)}}
       else
         {:error, _} = error -> {:halt, error}
@@ -19,8 +21,38 @@ defmodule Synapsis.Agent.Runtime.ProviderMessages do
     end
   end
 
-  def to_host(_), do: unsupported("Expected a list of messages or blocks")
+  def to_host(_, _), do: unsupported("Expected a list of messages or blocks")
   def from_host(messages), do: map_all(messages, &runtime_message/1)
+
+  @doc "Separate inline image bytes from the history and prompt that the runtime journals."
+  def reference_images(history, prompt) do
+    {history, image_payloads} =
+      Enum.map_reduce(history, %{}, fn
+        %{content: content} = message, image_payloads ->
+          {content, image_payloads} = reference_image_blocks(content, image_payloads)
+          {%{message | content: content}, image_payloads}
+
+        message, image_payloads ->
+          {message, image_payloads}
+      end)
+
+    {prompt, image_payloads} = reference_image_blocks(prompt, image_payloads)
+    {history, prompt, image_payloads}
+  end
+
+  defp reference_image_blocks(blocks, image_payloads) when is_list(blocks) do
+    Enum.map_reduce(blocks, image_payloads, fn
+      %{type: :image, data: data} = block, image_payloads when is_binary(data) ->
+        ref = :crypto.hash(:sha256, data) |> Base.encode16(case: :lower)
+        block = block |> Map.delete(:data) |> Map.put(:image_ref, ref)
+        {block, Map.put_new(image_payloads, ref, data)}
+
+      block, image_payloads ->
+        {block, image_payloads}
+    end)
+  end
+
+  defp reference_image_blocks(content, image_payloads), do: {content, image_payloads}
 
   @doc "Builds a public host result, retaining rich native data and redacting diagnostic errors."
   def tool_result_part(id, result, tool_name \\ nil) do
@@ -45,13 +77,13 @@ defmodule Synapsis.Agent.Runtime.ProviderMessages do
     end
   end
 
-  defp host_message(%{role: :tool, tool_call_id: id, result: result} = message, calls) do
+  defp host_message(%{role: :tool, tool_call_id: id, result: result} = message, calls, _images) do
     with {:ok, name} <- result_name(message, calls[id]),
          {:ok, part} <- tool_result_part(id, result, name),
          do: {:ok, %{role: :tool, parts: [part]}}
   end
 
-  defp host_message(message, _calls), do: host_message(message)
+  defp host_message(message, _calls, image_payloads), do: host_message(message, image_payloads)
 
   defp result_name(message, expected) do
     case Map.fetch(message, :name) do
@@ -97,17 +129,26 @@ defmodule Synapsis.Agent.Runtime.ProviderMessages do
 
   defp safe_result(result), do: result
 
-  defp host_message(%{role: role, content: content} = message)
+  defp host_message(%{role: role, content: content} = message, image_payloads)
        when role in [:system, :developer, :user, :assistant] do
     blocks = if is_binary(content), do: [%{type: :text, text: content}], else: content
     calls = Enum.map(Map.get(message, :tool_calls, []), &Map.put(&1, :type, :tool_call))
     blocks = blocks ++ calls
 
-    with {:ok, parts} <- map_all(blocks, &host_part/1),
+    with {:ok, parts} <- map_all(blocks, &host_part(&1, image_payloads)),
          do: {:ok, %{role: role, parts: parts}}
   end
 
-  defp host_message(_), do: unsupported("Unsupported runtime message")
+  defp host_message(_, _), do: unsupported("Unsupported runtime message")
+
+  defp host_part(%{type: :image, image_ref: ref} = block, image_payloads) do
+    case Map.fetch(image_payloads, ref) do
+      {:ok, data} -> host_part(Map.put(block, :data, data))
+      :error -> unsupported("Conversation image is unavailable")
+    end
+  end
+
+  defp host_part(block, _image_payloads), do: host_part(block)
 
   defp host_part(%{type: :text, text: text}) when is_binary(text),
     do: {:ok, %Text{content: text}}
@@ -208,6 +249,12 @@ defmodule Synapsis.Agent.Runtime.ProviderMessages do
 
   @doc "Formats runtime tool results for provider history and live events, redacting diagnostic errors."
   def tool_result_text(%{content: content}) when is_binary(content), do: {:ok, content}
+
+  def tool_result_text(%{
+        is_error: true,
+        error: %Error{class: :forbidden, details: %{reason: :tool_context_unavailable}}
+      }),
+      do: {:ok, "Tool context is unavailable. Try another tool or continue without this result."}
 
   def tool_result_text(%{is_error: true, error: %Error{class: :forbidden}}),
     do: {:ok, "Tool denied by capability policy"}

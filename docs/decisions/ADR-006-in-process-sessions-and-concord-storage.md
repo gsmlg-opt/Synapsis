@@ -57,6 +57,12 @@ acknowledgement. Live deltas still broadcast first. Restart never replays effect
 or reconstructs children; unsettled root/child work becomes recovery-required,
 and completed saved child rows are historical.
 
+Uploaded image bytes live in the durable user message. Native conversation
+history and prompts carry a content digest for those bytes. The session adapter
+builds a lookup for the active provider context from the prompt and saved history.
+The provider adapter restores the original bytes before encoding a request.
+Fresh turns after restart or fork rebuild the lookup from the transcript.
+
 ### 1. Collapse Worker + Runner into one process; the engine becomes pure functions
 
 The graph engine (`Agent.Runtime.Runner`) stops being a GenServer and becomes a

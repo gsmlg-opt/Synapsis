@@ -120,6 +120,27 @@ defmodule Synapsis.Agent.Runtime.ResponsesCustomTransportTest do
     end
   end
 
+  test "non-Responses declarations omit custom tools and retain JSON function alternatives" do
+    function = %{
+      name: "json_probe",
+      description: "JSON input alternative",
+      parameters: %{"type" => "object", "properties" => %{}}
+    }
+
+    for protocol <- [:anthropic, :google] do
+      assert {:ok, wire} =
+               Synapsis.Provider.Adapter.format_request(
+                 [%{role: :user, parts: [%Synapsis.Part.Text{content: "probe"}]}],
+                 [@tool, function],
+                 %{provider_type: protocol, model: "probe"}
+               )
+
+      encoded = Jason.encode!(wire)
+      assert encoded =~ "json_probe"
+      refute encoded =~ "raw_probe"
+    end
+  end
+
   test "custom replay rejects unsupported protocols before HTTP, including an empty catalog" do
     fixture = Gaoxy.Test.open()
     owner = self()

@@ -32,7 +32,7 @@ defmodule Synapsis.Provider.MessageMapper do
            Request.new(
              %{
                model: model,
-               input: system_message(protocol, opts) ++ protocol_tool_results(input, protocol),
+               input: system_message(protocol, opts) ++ protocol_input(input, protocol),
                tools: Enum.map(tools, &canonical_tool(&1, protocol)),
                settings: settings(protocol, opts)
              },
@@ -67,24 +67,24 @@ defmodule Synapsis.Provider.MessageMapper do
     end
   end
 
-  # Responses `function_call_output` has no error flag, so failed tool results
-  # are sent as plain output (as Codex does); the error text stays in content.
-  defp protocol_tool_results(input, :openai_responses) do
+  defp protocol_input(input, :openai_responses) do
     Enum.map(input, fn
       %{role: :tool, content: content} = message ->
-        %{message | content: Enum.map(content, &responses_tool_image/1)}
+        # Responses sends failed tool results as plain output and keeps the error text.
+        %{message | content: Enum.map(content, &responses_image/1)}
         |> Map.put(:status, :success)
+
+      %{role: :user, content: content} = message ->
+        %{message | content: Enum.map(content, &responses_image/1)}
 
       message ->
         message
     end)
   end
 
-  defp protocol_tool_results(input, _protocol), do: input
+  defp protocol_input(input, _protocol), do: input
 
-  # Adapt validated tool projections to the Responses native image contract.
-  # Other protocols and user attachments retain their existing representation.
-  defp responses_tool_image(
+  defp responses_image(
          %{
            type: :image,
            data: %{"source" => "base64", "media_type" => mime, "data" => data}
@@ -92,7 +92,7 @@ defmodule Synapsis.Provider.MessageMapper do
        ),
        do: %{block | data: %{"mime_type" => mime, "data" => data}}
 
-  defp responses_tool_image(block), do: block
+  defp responses_image(block), do: block
 
   defp canonical_messages(messages) do
     Enum.reduce_while(messages, {:ok, []}, fn message, {:ok, acc} ->
@@ -407,7 +407,6 @@ defmodule Synapsis.Provider.MessageMapper do
   defp canonical_part(%Synapsis.Part.Audio{} = part),
     do: {:ok, %{type: :text, text: Synapsis.Part.Audio.summary(part)}}
 
-  # TODO(upstream): gsmlg-opt/backplane#179 — encode ordinary Responses image inputs.
   defp canonical_part(%Synapsis.Part.Image{media_type: media_type, data: data}) do
     {:ok,
      %{
