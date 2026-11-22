@@ -565,11 +565,14 @@ defmodule SynapsisCli.Main do
 
   defp process_sse_chunk(data, state, owner, request_ref) do
     buffer = state.buffer <> data
-    ready? = state.ready? or match?({:ok, _frame, _rest}, next_sse_frame(buffer))
+    # The retained buffer has no complete delimiter. Only its final three bytes
+    # can join the new chunk to form a split CRLF delimiter.
+    scan_from = max(byte_size(state.buffer) - 3, 0)
+    ready? = state.ready? or match?({:ok, _frame, _rest}, next_sse_frame(buffer, scan_from))
 
     if ready? and not state.ready?, do: send(owner, {request_ref, :ready})
 
-    case consume_sse_chunk(buffer, state) do
+    case consume_sse_chunk(buffer, state, scan_from) do
       {:continue, buffer, state} -> {:cont, %{state | buffer: buffer, ready?: ready?}}
       {:halt, result, state} -> {:halt, %{state | buffer: <<>>, ready?: ready?, terminal: result}}
     end
@@ -620,8 +623,8 @@ defmodule SynapsisCli.Main do
     end
   end
 
-  defp consume_sse_chunk(buffer, state) do
-    case next_sse_frame(buffer) do
+  defp consume_sse_chunk(buffer, state, scan_from) do
+    case next_sse_frame(buffer, scan_from) do
       :more ->
         {:continue, buffer, state}
 
@@ -630,16 +633,16 @@ defmodule SynapsisCli.Main do
 
       {:ok, frame, rest} ->
         case process_sse_event(parse_sse_event(frame), state) do
-          {:continue, state} -> consume_sse_chunk(rest, state)
+          {:continue, state} -> consume_sse_chunk(rest, state, 0)
           {:halt, result, state} -> {:halt, result, state}
         end
     end
   end
 
-  defp next_sse_frame(buffer) do
+  defp next_sse_frame(buffer, scan_from) do
     delimiters = ["\r\n\r\n", "\n\n"]
 
-    case :binary.match(buffer, delimiters) do
+    case :binary.match(buffer, delimiters, scope: {scan_from, byte_size(buffer) - scan_from}) do
       :nomatch when byte_size(buffer) > @max_sse_frame_bytes ->
         {:error, :sse_frame_too_large}
 

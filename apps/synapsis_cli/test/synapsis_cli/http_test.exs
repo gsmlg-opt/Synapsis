@@ -414,7 +414,7 @@ defmodule SynapsisCli.HTTPTest do
   # ── Message send warning on non-200 ───────────────────────────────
 
   describe "SSE stream transport" do
-    test "subscribes before submission, preserves split UTF-8 frames, and halts on done" do
+    test "subscribes before submission, preserves split UTF-8 and delimiters, and halts on done" do
       bypass = Gaoxy.Test.open()
       host = String.trim_trailing(Gaoxy.Test.url(bypass), "/")
       session_id = "ordered-session-#{System.unique_integer([:positive])}"
@@ -457,9 +457,17 @@ defmodule SynapsisCli.HTTPTest do
         {moon_offset, _length} = :binary.match(payload, "🌙")
         split_at = moon_offset + 2
         <<first::binary-size(split_at), rest::binary>> = payload
-        {:ok, conn} = Plug.Conn.chunk(conn, first)
-        {:ok, conn} = Plug.Conn.chunk(conn, rest)
-        conn
+        {crlf_offset, _length} = :binary.match(rest, "\r\n\r\n")
+        split_at = crlf_offset + 3
+        <<second::binary-size(split_at), rest::binary>> = rest
+        {lf_offset, _length} = :binary.match(rest, "\n\n")
+        split_at = lf_offset + 1
+        <<third::binary-size(split_at), rest::binary>> = rest
+
+        Enum.reduce([first, second, third, rest], conn, fn chunk, conn ->
+          assert {:ok, conn} = Plug.Conn.chunk(conn, chunk)
+          conn
+        end)
       end)
 
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
