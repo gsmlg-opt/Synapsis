@@ -37,13 +37,13 @@ defmodule Synapsis.Agent.Tools.WorkspaceMemoryTest do
     for descriptor <- descriptors do
       assert descriptor.backend == WorkspaceMemory
       assert descriptor.backend_context === ctx.context
-      assert descriptor.tool_revision === 1
+      assert descriptor.tool_revision === if(descriptor.tool_name == @search, do: 2, else: 1)
       assert descriptor.safety == %{read_only: true, retry_safe: true, parallel_safe: true}
       assert descriptor.schema["additionalProperties"] == false
     end
 
     assert search.schema["required"] == ["query"]
-    assert Enum.sort(Map.keys(search.schema["properties"])) == ["limit", "query"]
+    assert Enum.sort(Map.keys(search.schema["properties"])) == ["cursor", "limit", "query"]
     assert get.schema["required"] == ["path"]
     assert Enum.sort(Map.keys(get.schema["properties"])) == ["from", "lines", "path"]
     assert {:ok, _} = InputSchema.validate(search.schema, %{"query" => "memory", "limit" => 20})
@@ -66,7 +66,7 @@ defmodule Synapsis.Agent.Tools.WorkspaceMemoryTest do
     for changed <- [
           %{authority() | grants: ["*"]},
           %{authority() | grants: []},
-          %{authority() | tool_revisions: %{@search => 2, @get => 1}}
+          %{authority() | tool_revisions: %{@search => 1, @get => 1}}
         ] do
       assert {:error, %Error{}} = ToolCatalog.admit_batch(descriptors, authority: changed)
     end
@@ -123,6 +123,31 @@ defmodule Synapsis.Agent.Tools.WorkspaceMemoryTest do
     assert read_text =~ "truncated"
     assert read_text =~ "3"
     assert Jason.encode!(page)
+  end
+
+  test "partial workspace searches expose continuation without claiming global absence", ctx do
+    for number <- 1..260, do: put(ctx, "memory/#{number}.md", "daily\n")
+
+    assert {:ok,
+            %{content: text, structured: %{results: [], complete: false, next_cursor: cursor}}} =
+             WorkspaceMemory.execute(operation(ctx, @search, %{"query" => "absent"}))
+
+    assert text =~ "No matches on this page"
+    assert text =~ cursor
+    refute text =~ "No matching workspace memory lines."
+
+    assert {:ok, %{structured: %{results: [], next_cursor: next}}} =
+             WorkspaceMemory.execute(
+               operation(ctx, @search, %{"query" => "absent", "cursor" => cursor})
+             )
+
+    assert {:ok,
+            %{content: final_text, structured: %{results: [], complete: true, next_cursor: nil}}} =
+             WorkspaceMemory.execute(
+               operation(ctx, @search, %{"query" => "absent", "cursor" => next})
+             )
+
+    assert final_text =~ "No matching workspace memory lines."
   end
 
   test "invalid trusted contexts and model authority selectors are rejected", ctx do
@@ -453,14 +478,14 @@ defmodule Synapsis.Agent.Tools.WorkspaceMemoryTest do
       caller: "caller",
       run_id: "run-a",
       grants: [@search, @get],
-      tool_revisions: %{@search => 1, @get => 1}
+      tool_revisions: %{@search => 2, @get => 1}
     }
   end
 
   defp operation(ctx, name, arguments) do
     %{
       tool_name: name,
-      tool_revision: 1,
+      tool_revision: if(name == @search, do: 2, else: 1),
       arguments: arguments,
       run_id: "run-a",
       incarnation: 1,

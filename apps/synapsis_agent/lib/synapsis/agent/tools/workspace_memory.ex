@@ -76,10 +76,11 @@ defmodule Synapsis.Agent.Tools.WorkspaceMemory do
     {description, properties, required} =
       case name do
         @search ->
-          {"Lexically search this workspace's MEMORY.md and memory/**/*.md with real file/line citations.",
+          {"Lexically search this workspace's MEMORY.md and memory/**/*.md with real file/line citations. Partial pages include next_cursor; repeat the same query and limit with cursor until complete.",
            %{
              "query" => %{"type" => "string", "minLength" => 1, "maxLength" => 2048},
-             "limit" => %{"type" => "integer", "minimum" => 1, "maximum" => 20}
+             "limit" => %{"type" => "integer", "minimum" => 1, "maximum" => 20},
+             "cursor" => %{"type" => "string", "minLength" => 32, "maxLength" => 32}
            }, ["query"]}
 
         @get ->
@@ -93,7 +94,7 @@ defmodule Synapsis.Agent.Tools.WorkspaceMemory do
 
     %{
       tool_name: name,
-      tool_revision: 1,
+      tool_revision: if(name == @search, do: 2, else: 1),
       description: description,
       schema: %{
         "type" => "object",
@@ -139,13 +140,17 @@ defmodule Synapsis.Agent.Tools.WorkspaceMemory do
   end
 
   defp matching_scope(context, operation) when is_map(operation) do
-    Synapsis.Agent.Tools.CatalogBinding.host(
-      context,
-      operation,
-      __MODULE__,
-      1,
-      @native_context_keys
-    )
+    if Map.get(operation, :tool_name) in [@search, @get] do
+      Synapsis.Agent.Tools.CatalogBinding.host(
+        context,
+        operation,
+        __MODULE__,
+        if(operation.tool_name == @search, do: 2, else: 1),
+        @native_context_keys
+      )
+    else
+      {:error, :invalid_input}
+    end
   end
 
   defp matching_scope(_, _), do: {:error, :scope_mismatch}
@@ -153,8 +158,12 @@ defmodule Synapsis.Agent.Tools.WorkspaceMemory do
   defp input(%{tool_name: @search, arguments: %{"query" => query} = args}) do
     limit = Map.get(args, "limit", 5)
 
-    if Map.keys(args) -- ["query", "limit"] == [] and is_binary(query) and String.valid?(query) and
-         byte_size(query) in 1..2048 and is_integer(limit) and limit in 1..20,
+    if Map.keys(args) -- ["query", "limit", "cursor"] == [] and is_binary(query) and
+         String.valid?(query) and
+         byte_size(query) in 1..2048 and is_integer(limit) and limit in 1..20 and
+         (not Map.has_key?(args, "cursor") or
+            (is_binary(args["cursor"]) and String.valid?(args["cursor"]) and
+               byte_size(args["cursor"]) == 32)),
        do: :ok,
        else: {:error, :invalid_input}
   end
@@ -184,7 +193,11 @@ defmodule Synapsis.Agent.Tools.WorkspaceMemory do
   defp valid_path?(_), do: false
 
   defp read(root, %{tool_name: @search, arguments: args}),
-    do: Synapsis.Memory.search_workspace(root, args["query"], limit: Map.get(args, "limit", 5))
+    do:
+      Synapsis.Memory.search_workspace(root, args["query"],
+        limit: Map.get(args, "limit", 5),
+        cursor: args["cursor"]
+      )
 
   defp read(root, %{tool_name: @get, arguments: args}),
     do:
@@ -193,13 +206,16 @@ defmodule Synapsis.Agent.Tools.WorkspaceMemory do
         lines: Map.get(args, "lines", 120)
       )
 
+  defp text(%{results: [], complete: false} = page),
+    do: "No matches on this page; continue workspace memory search." <> continuation(page)
+
   defp text(%{results: []}), do: "No matching workspace memory lines."
 
-  defp text(%{results: results}) do
+  defp text(%{results: results} = page) do
     "Lexical workspace memory matches; snippets are bounded and may be truncated. Read the cited file for full lines.\n\n" <>
       Enum.map_join(results, "\n\n", fn hit ->
         "#{hit.snippet}\nSource: #{citation(hit)}"
-      end)
+      end) <> continuation(page)
   end
 
   defp text(%{content: ""} = page),
@@ -216,6 +232,11 @@ defmodule Synapsis.Agent.Tools.WorkspaceMemory do
     "#{page.content}\nSource: #{citation(page)}#{notice}"
   end
 
+  defp continuation(%{complete: false, next_cursor: cursor}),
+    do: "\nMore workspace memory remains. Repeat the same query and limit with cursor: #{cursor}"
+
+  defp continuation(_), do: ""
+
   defp citation(%{path: path, from: first, to: last}) do
     if first == last, do: "#{path}:#{first}", else: "#{path}:#{first}-#{last}"
   end
@@ -223,13 +244,33 @@ defmodule Synapsis.Agent.Tools.WorkspaceMemory do
   defp failure(reason) do
     class =
       cond do
-        reason in [:scope_mismatch, :unsafe_path] -> :forbidden
-        reason in [:invalid_context, :invalid_input] -> :validation
-        reason == :not_found -> :not_found
-        reason == :timeout -> :timeout
-        reason in [:scan_limit, :file_limit, :output_limit, :worker_limit] -> :budget_exceeded
-        reason == :unavailable -> :unsupported_capability
-        true -> :malformed_result
+        reason in [:scope_mismatch, :unsafe_path] ->
+          :forbidden
+
+        reason in [
+          :invalid_context,
+          :invalid_input,
+          :invalid_cursor,
+          :cursor_mismatch,
+          :directory_changed,
+          :file_changed
+        ] ->
+          :validation
+
+        reason == :not_found ->
+          :not_found
+
+        reason == :timeout ->
+          :timeout
+
+        reason in [:scan_limit, :file_limit, :output_limit, :worker_limit, :cursor_limit] ->
+          :budget_exceeded
+
+        reason == :unavailable ->
+          :unsupported_capability
+
+        true ->
+          :malformed_result
       end
 
     {:error,

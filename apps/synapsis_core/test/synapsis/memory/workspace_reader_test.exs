@@ -251,11 +251,112 @@ defmodule Synapsis.Memory.WorkspaceReaderTest do
     assert {:error, :file_limit} = WorkspaceReader.search(root, "x")
   end
 
-  test "counts nested directory entries, including unrelated entries, toward scan limit",
-       %{tmp_dir: root} do
-    for number <- 1..128, do: put(root, "memory/nested/#{number}.txt", "unrelated")
-    assert {:error, :scan_limit} = WorkspaceReader.list(root)
-    assert {:error, :scan_limit} = WorkspaceReader.search(root, "nothing")
+  test "wide memory directories preserve the main file and continue actual enumeration", %{
+    tmp_dir: root
+  } do
+    put(root, "MEMORY.md", "main needle\n")
+    for number <- 1..126, do: put(root, "memory/#{number}.md", "daily\n")
+    assert {:ok, %{results: [%{path: "MEMORY.md"}]}} = WorkspaceReader.search(root, "needle")
+    put(root, "memory/127.md", "daily\n")
+    assert {:ok, %{results: [%{path: "MEMORY.md"}]}} = WorkspaceReader.search(root, "needle")
+
+    for number <- 128..400, do: put(root, "memory/#{number}.md", "daily\n")
+    assert {:ok, first} = WorkspaceReader.list(root)
+    assert first.scanned_entries <= 128
+    refute first.complete
+    assert Enum.any?(first.files, &(&1.path == "MEMORY.md"))
+    first_paths = MapSet.new(first.files, & &1.path)
+    late_path = Enum.find(1..400, &(not MapSet.member?(first_paths, "memory/#{&1}.md")))
+    late_path = "memory/#{late_path}.md"
+    put(root, late_path, "first\nunique late phrase\n")
+    pages = collect_pages(root, first)
+    assert length(pages) >= 4
+    assert Enum.all?(pages, &(&1.scanned_entries <= 128))
+    paths = Enum.flat_map(pages, & &1.files) |> Enum.map(& &1.path)
+    assert length(paths) == 401
+    assert length(Enum.uniq(paths)) == 401
+
+    assert {:ok, first_search} = WorkspaceReader.search(root, "unique late phrase")
+    search_pages = collect_search(root, "unique late phrase", first_search)
+    assert [%{path: ^late_path, from: 2, to: 2}] = Enum.flat_map(search_pages, & &1.results)
+
+    assert {:ok, %{content: "unique late phrase\n"}} =
+             WorkspaceReader.read(root, late_path, from: 2, lines: 1)
+  end
+
+  test "partial zero matches differ from completed scans and cursors bind search scope", %{
+    tmp_dir: root
+  } do
+    for number <- 1..260, do: put(root, "memory/#{number}.md", "daily\n")
+
+    assert {:ok, %{results: [], complete: false, next_cursor: cursor} = first} =
+             WorkspaceReader.search(root, "absent")
+
+    assert is_binary(cursor)
+    assert {:error, :cursor_mismatch} = WorkspaceReader.search(root, "different", cursor: cursor)
+    assert {:error, :cursor_mismatch} = WorkspaceReader.list(root, cursor: cursor)
+
+    assert {:error, :cursor_mismatch} =
+             WorkspaceReader.search(Path.dirname(root), "absent", cursor: cursor)
+
+    pages = collect_search(root, "absent", first)
+    assert List.last(pages).complete
+    assert List.last(pages).next_cursor == nil
+    assert Enum.all?(pages, &(&1.results == []))
+    assert {:error, :invalid_cursor} = WorkspaceReader.search(root, "absent", cursor: cursor)
+  end
+
+  test "continues within files when the result limit is reached", %{tmp_dir: root} do
+    put(root, "MEMORY.md", Enum.map_join(1..25, "", &"match #{&1}\n"))
+    assert {:ok, first} = WorkspaceReader.search(root, "match", limit: 20)
+    assert length(first.results) == 20
+    refute first.complete
+
+    assert {:ok, last} =
+             WorkspaceReader.search(root, "match", limit: 20, cursor: first.next_cursor)
+
+    assert Enum.map(first.results ++ last.results, & &1.from) == Enum.to_list(1..25)
+    assert last.complete
+  end
+
+  test "directory changes invalidate a cursor and cancellation closes it", %{tmp_dir: root} do
+    for number <- 1..260, do: put(root, "memory/#{number}.md", "daily\n")
+    assert {:ok, %{next_cursor: cursor}} = WorkspaceReader.list(root)
+    put(root, "memory/new.md", "new\n")
+    assert {:error, :directory_changed} = WorkspaceReader.list(root, cursor: cursor)
+    assert {:ok, %{next_cursor: cursor}} = WorkspaceReader.list(root)
+    assert :ok = WorkspaceReader.cancel(cursor)
+    assert {:error, :invalid_cursor} = WorkspaceReader.list(root, cursor: cursor)
+  end
+
+  test "owner death closes a suspended active cursor and its enumeration port", %{tmp_dir: root} do
+    for number <- 1..260, do: put(root, "memory/#{number}.md", "daily\n")
+    assert {:ok, %{next_cursor: token}} = WorkspaceReader.search(root, "absent")
+    assert [{cursor, _}] = Registry.lookup(Synapsis.Memory.WorkspaceCursors.Registry, token)
+    %{scan: %{port: port}} = :sys.get_state(cursor)
+    initial_links = Process.info(cursor, :links) |> elem(1)
+    :erlang.suspend_process(cursor)
+    on_exit(fn -> Process.exit(cursor, :kill) end)
+    caller = spawn(fn -> WorkspaceReader.search(root, "absent", cursor: token) end)
+    on_exit(fn -> Process.exit(caller, :kill) end)
+    wait_for_link(cursor, initial_links, 100)
+    monitor = Process.monitor(cursor)
+    Process.exit(caller, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^cursor, :killed}, 500
+    assert Port.info(port) == nil
+    assert {:error, :invalid_cursor} = WorkspaceReader.search(root, "absent", cursor: token)
+  end
+
+  test "idle expiry closes directory handles and invalidates the cursor", %{tmp_dir: root} do
+    for number <- 1..260, do: put(root, "memory/#{number}.md", "daily\n")
+    assert {:ok, %{next_cursor: token}} = WorkspaceReader.list(root)
+    assert [{cursor, _}] = Registry.lookup(Synapsis.Memory.WorkspaceCursors.Registry, token)
+    %{scan: %{port: port}} = :sys.get_state(cursor)
+    monitor = Process.monitor(cursor)
+    send(cursor, :expire)
+    assert_receive {:DOWN, ^monitor, :process, ^cursor, :normal}, 500
+    assert Port.info(port) == nil
+    assert {:error, :invalid_cursor} = WorkspaceReader.list(root, cursor: token)
   end
 
   test "does not scan unrelated workspace directories", %{tmp_dir: root} do
@@ -301,6 +402,35 @@ defmodule Synapsis.Memory.WorkspaceReaderTest do
     Process.exit(caller, :kill)
     assert_receive {:DOWN, ^monitor, :process, ^reader, _}, 500
   end
+
+  defp collect_pages(_root, %{complete: true} = page), do: [page]
+
+  defp collect_pages(root, page) do
+    assert {:ok, next} = WorkspaceReader.list(root, cursor: page.next_cursor)
+    [page | collect_pages(root, next)]
+  end
+
+  defp collect_search(_root, _query, %{complete: true} = page), do: [page]
+
+  defp collect_search(root, query, page) do
+    assert {:ok, next} = WorkspaceReader.search(root, query, cursor: page.next_cursor)
+    [page | collect_search(root, query, next)]
+  end
+
+  defp wait_for_link(cursor, initial, remaining) when remaining > 0 do
+    if Process.info(cursor, :links) |> elem(1) |> Enum.any?(&(&1 not in initial)) do
+      :ok
+    else
+      receive do
+      after
+        5 -> :ok
+      end
+
+      wait_for_link(cursor, initial, remaining - 1)
+    end
+  end
+
+  defp wait_for_link(_cursor, _initial, 0), do: flunk("reader did not acquire cursor")
 
   defp traced_caller(root, test) do
     # Receive the filesystem call trace before the ordinary-priority reader can

@@ -200,6 +200,34 @@ defmodule Synapsis.Agent.Tools.ResultProjection do
   # Adapt only named host results at their known public paths before portability;
   # the backend/domain contract and generic reserved-key checks stay intact.
   defp public_native_host_memory(
+         %{"is_error" => false, "structured" => %{integration: "backplane_memory"} = structured} =
+           result,
+         "memory::get"
+       ) do
+    with {:ok, public} <- string_keys(structured) do
+      public_native_host_memory(Map.put(result, "structured", public), "memory::get")
+    end
+  end
+
+  defp public_native_host_memory(
+         %{
+           "is_error" => false,
+           "structured" => %{
+             "integration" => "backplane_memory",
+             "source" => source,
+             "result" => public
+           }
+         } = result,
+         "memory::get"
+       )
+       when is_map(source) and is_map(public) do
+    case public do
+      %{"record" => record} when is_map(record) -> {:ok, result}
+      _ -> invalid()
+    end
+  end
+
+  defp public_native_host_memory(
          %{"is_error" => false, "structured" => structured} = result,
          "memory::get"
        ) do

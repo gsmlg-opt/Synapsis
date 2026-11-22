@@ -277,6 +277,7 @@ defmodule Synapsis.Session.Worker do
 
   @impl :gen_statem
   def init(opts) do
+    Process.flag(:trap_exit, true)
     session_id = Keyword.fetch!(opts, :session_id)
 
     try do
@@ -307,6 +308,8 @@ defmodule Synapsis.Session.Worker do
             runtime_roster: RuntimeSession.initial_roster(session.id),
             pending_inputs: PendingInputs.new()
           }
+
+          Synapsis.Agent.MemoryCapture.started(data)
 
           # Drain recovered prompts after init so the Worker is registered first.
           {:ok, :booting, data, [{:next_event, :internal, :resume_pending_inputs}]}
@@ -925,6 +928,7 @@ defmodule Synapsis.Session.Worker do
 
   @impl :gen_statem
   def terminate(reason, _state, data) do
+    Synapsis.Agent.MemoryCapture.ended(data, reason)
     cancel_user_questions(data)
     Automation.stop(data)
     PendingInputs.stop(data)

@@ -342,8 +342,10 @@ defmodule Synapsis.Session.Worker.Runtime do
       when type in [:run_completed, :run_failed, :run_cancelled],
       do: data
 
-  def event(data, %{type: :prompt_consumed, mode: :new} = event),
-    do: PendingInputs.adopt(data, event)
+  def event(data, %{type: :prompt_consumed, mode: :new} = event) do
+    Synapsis.Agent.MemoryCapture.consumed(data, event)
+    PendingInputs.adopt(data, event)
+  end
 
   def event(data, %{type: :content_text_delta, delta: text}) do
     data = preview_reply(data, text)
@@ -379,6 +381,8 @@ defmodule Synapsis.Session.Worker.Runtime do
   def event(data, %{type: :tool_completed, message: message}) do
     case ProviderMessages.tool_result_part(message.tool_call_id, message.result, message[:name]) do
       {:ok, part} ->
+        Synapsis.Agent.MemoryCapture.tool_completed(data, message, part)
+
         Persistence.broadcast(data.session_id, "tool_result", %{
           tool_use_id: part.tool_use_id,
           content: part.content,

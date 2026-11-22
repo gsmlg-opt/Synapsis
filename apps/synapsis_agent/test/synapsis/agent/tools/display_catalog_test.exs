@@ -5,7 +5,7 @@ defmodule Synapsis.Agent.Tools.DisplayCatalogTest do
 
   @expected ~w(
     apply_patch clock::curr_time clock::sleep exec exec_command followup_task interrupt_agent
-    list_agents list_mcp_resource_templates list_mcp_resources memory::get read_mcp_resource
+    list_agents list_mcp_resource_templates list_mcp_resources memory::search memory::get memory::recent memory::remember memory::forget read_mcp_resource
     send_message spawn_agent synapsis::agents_list synapsis::ask_user synapsis::automations
     synapsis::automations_create synapsis::automations_manage synapsis::automations_remove
     synapsis::automations_update synapsis::automations_wake synapsis::browser synapsis::edit

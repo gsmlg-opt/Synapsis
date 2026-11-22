@@ -18,12 +18,12 @@ defmodule Synapsis.Memory do
   def read_workspace(root, path, opts \\ []),
     do: Synapsis.Memory.WorkspaceReader.read(root, path, opts)
 
-  @doc "Recall host memory only while its persisted configuration explicitly enables it."
+  @doc "Search shared host memory, preserving provenance and offline state, only while explicitly enabled."
   def recall_host(query, opts \\ []) do
     if Keyword.keyword?(opts) do
       with {:ok, source} <- Synapsis.Memory.Settings.host_source(),
            true <- Keyword.get(opts, :source, source) === source do
-        Synapsis.Memory.HostAgent.recall(source, query, Keyword.delete(opts, :source))
+        Synapsis.Memory.HostAgent.search(source, query, Keyword.delete(opts, :source))
       else
         false -> {:error, :source_changed}
         {:error, _} = error -> error
@@ -33,13 +33,18 @@ defmodule Synapsis.Memory do
     end
   end
 
-  @doc "Read one canonical host record only while its exact source remains enabled."
+  @doc "Read a shared host record/history by ID only while its exact source remains enabled."
   def get_host(id, opts \\ []) do
     if Keyword.keyword?(opts) and Keyword.keys(opts) -- [:source, :timeout, :deadline] == [] and
          length(Keyword.keys(opts)) == length(Enum.uniq(Keyword.keys(opts))) do
       with {:ok, source} <- Synapsis.Memory.Settings.host_source(),
            true <- Keyword.get(opts, :source, source) === source do
-        Synapsis.Memory.HostAgent.get(source, id, Keyword.delete(opts, :source))
+        Synapsis.Memory.HostAgent.call(
+          source,
+          "memory::get",
+          %{"id" => id},
+          Keyword.delete(opts, :source)
+        )
       else
         false -> {:error, :source_changed}
         {:error, _} = error -> error

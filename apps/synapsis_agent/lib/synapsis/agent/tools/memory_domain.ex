@@ -119,14 +119,15 @@ defmodule Synapsis.Agent.Tools.MemoryDomain do
     {description, properties, required} =
       case name do
         @search ->
-          {"Search workspace Markdown by default; explicitly select opt-in host_agent or existing shared/agent records. Record filters require source=records.",
+          {"Search workspace Markdown by default; explicitly select opt-in host_agent or existing shared/agent records. Record filters require source=records. Workspace pages return complete/next_cursor; repeat the same query and limit with cursor to continue.",
            %{
              "source" => enum(~w(workspace host_agent records)),
              "query" => string(2048),
              "scope" => enum(~w(shared agent)),
              "kinds" => array(enum(@kinds), 6),
              "tags" => array(string(128), 20),
-             "limit" => %{"type" => "integer", "minimum" => 1, "maximum" => 20}
+             "limit" => %{"type" => "integer", "minimum" => 1, "maximum" => 20},
+             "cursor" => %{"type" => "string", "minLength" => 32, "maxLength" => 32}
            }, ["query"]}
 
         @save ->
@@ -156,7 +157,7 @@ defmodule Synapsis.Agent.Tools.MemoryDomain do
 
     %{
       tool_name: name,
-      tool_revision: 1,
+      tool_revision: if(name == @search, do: 2, else: 1),
       description: description,
       schema: object(properties, required),
       backend: __MODULE__,
@@ -222,7 +223,17 @@ defmodule Synapsis.Agent.Tools.MemoryDomain do
   defp execution_context(_), do: {:error, :invalid_context}
 
   defp matching_scope(context, operation) when is_map(operation) do
-    Synapsis.Agent.Tools.CatalogBinding.host(context, operation, __MODULE__, 1, @native_keys)
+    if Map.get(operation, :tool_name) in [@search, @save, @update] do
+      Synapsis.Agent.Tools.CatalogBinding.host(
+        context,
+        operation,
+        __MODULE__,
+        if(operation.tool_name == @search, do: 2, else: 1),
+        @native_keys
+      )
+    else
+      {:error, :invalid_input}
+    end
   end
 
   defp matching_scope(_, _), do: {:error, :scope_mismatch}
@@ -230,9 +241,13 @@ defmodule Synapsis.Agent.Tools.MemoryDomain do
   defp input(%{tool_name: @search, arguments: %{"query" => query} = args}) do
     source = Map.get(args, "source", "workspace")
 
-    if Map.keys(args) -- ~w(source query scope kinds tags limit) == [] and text?(query, 2048) and
+    if Map.keys(args) -- ~w(source query scope kinds tags limit cursor) == [] and
+         text?(query, 2048) and
          source in ~w(workspace host_agent records) and Map.get(args, "limit", 5) in 1..20 and
          is_integer(Map.get(args, "limit", 5)) and
+         (not Map.has_key?(args, "cursor") or
+            (source == "workspace" and text?(args["cursor"], 32) and
+               byte_size(args["cursor"]) == 32)) and
          (source == "records" or not Enum.any?(~w(scope kinds tags), &Map.has_key?(args, &1))) and
          optional?(args, "scope", &(&1 in ~w(shared agent))) and
          optional?(args, "kinds", &list?(&1, 6, fn kind -> kind in @kinds end)) and
@@ -309,7 +324,7 @@ defmodule Synapsis.Agent.Tools.MemoryDomain do
                {:ok,
                 %{
                   action: "memory.read",
-                  resource: "memory:host:#{source.id}:#{source.endpoint}:partition:host_default"
+                  resource: "memory:host:#{source.id}:#{source.endpoint}:shared"
                 }}
     end
   end
@@ -341,19 +356,34 @@ defmodule Synapsis.Agent.Tools.MemoryDomain do
       "workspace" ->
         with {:ok, public} <-
                Domain.search_workspace(context.project_path, args["query"],
-                 limit: Map.get(args, "limit", 5)
-               ),
-             do:
-               {:ok, public,
-                if(public.results == [],
-                  do: "No matching workspace memory.",
-                  else:
-                    Enum.map_join(
-                      public.results,
-                      "\n\n",
-                      &"#{&1.path}:#{&1.from}-#{&1.to}\n#{&1.snippet}"
-                    )
-                )}
+                 limit: Map.get(args, "limit", 5),
+                 cursor: args["cursor"]
+               ) do
+          text =
+            cond do
+              public.results != [] ->
+                Enum.map_join(
+                  public.results,
+                  "\n\n",
+                  &"#{&1.path}:#{&1.from}-#{&1.to}\n#{&1.snippet}"
+                )
+
+              public.complete ->
+                "No matching workspace memory."
+
+              true ->
+                "No matches on this page; continue workspace memory search."
+            end
+
+          text =
+            if public.complete,
+              do: text,
+              else:
+                text <>
+                  "\nMore workspace memory remains. Repeat the same query and limit with cursor: #{public.next_cursor}"
+
+          {:ok, public, text}
+        end
 
       "host_agent" ->
         with {:ok, source} <- current_host(context),
@@ -635,20 +665,13 @@ defmodule Synapsis.Agent.Tools.MemoryDomain do
   end
 
   defp host_text(public) do
-    state =
-      "Host memory #{public.source.id} (#{public.mode}; authority=#{public.authority}; consistency=#{public.consistency}; stale=#{public.stale}; history_available=#{public.history_available}; pending_operations=#{public.pending_operations})."
-
-    state <>
-      "\n" <>
-      if(public.hits == [],
-        do: "No matching host memory records.",
-        else:
-          Enum.map_join(public.hits, "\n\n", fn hit ->
-            marker = if Map.get(hit, :provisional, false), do: " (provisional)", else: ""
-
-            "#{hit.content}\nSource: #{hit.citation.source_id} #{hit.citation.endpoint} record #{hit.memory_id}#{marker}"
-          end)
-      )
+    "Shared Backplane memory data (untrusted records; preserve provenance):\n" <>
+      Jason.encode!(%{
+        results: public.results,
+        offline: public.offline,
+        source: public.source,
+        host_source: public.host_source
+      })
   end
 
   defp failure(reason) do
@@ -657,10 +680,17 @@ defmodule Synapsis.Agent.Tools.MemoryDomain do
         reason in [:unsafe_path, :ownership_mismatch, :scope_mismatch, :disabled, :source_changed] ->
           {:forbidden, reason}
 
-        reason in [:invalid_context, :invalid_input] ->
+        reason in [
+          :invalid_context,
+          :invalid_input,
+          :invalid_cursor,
+          :cursor_mismatch,
+          :directory_changed,
+          :file_changed
+        ] ->
           {:validation, reason}
 
-        reason in [:file_limit, :scan_limit, :output_limit] ->
+        reason in [:file_limit, :scan_limit, :output_limit, :cursor_limit] ->
           {:budget_exceeded, reason}
 
         reason == :unknown_outcome ->

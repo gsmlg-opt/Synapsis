@@ -1,6 +1,12 @@
 defmodule Synapsis.Memory.HostAgent do
   @moduledoc """
-  Bounded reads from an explicitly trusted local Backplane host-agent source.
+  Bounded shared-memory calls to an explicitly trusted local Backplane Host Agent.
+
+  `catalog/2`, `instructions/2` and `call/4` consume the current five-tool MCP and
+  direct-call contract. `search/3` supplies a checked display projection with the
+  returned records, provenance and actual offline state. Current application
+  callers use these APIs; the older `recall/3` and canonical-only `get/3` retain
+  their separate legacy response contract for direct library callers.
 
   `recall/3` accepts `%{id: id, endpoint: "http://127.0.0.1:4222",
   agent_id: routing_id}` and query plus `:limit` (1..20, default 5), `:timeout`
@@ -16,8 +22,8 @@ defmodule Synapsis.Memory.HostAgent do
   default private partition; routing `agent_id` is provenance, not isolation.
   `get/3` accepts a lowercase canonical UUID and only `:timeout`/`:deadline`.
   It returns a singular `:record` with canonical online state and never falls
-  back to recall, a mirror or provisional content. Shared/project/session
-  filtering is unsupported by this client.
+  back to recall, a mirror or provisional content. These legacy APIs do not
+  accept shared/project/session filters; current tools use the host's schema.
 
   Raw HTTP bodies are limited to 256 KiB before JSON decode; portable output is
   limited to 64 KiB. Oversize results fail without truncation. A guardian owns
@@ -92,6 +98,172 @@ defmodule Synapsis.Memory.HostAgent do
       false -> {:error, :invalid_input}
       {:error, _} = error -> error
     end
+  end
+
+  @tools ~w(memory::search memory::get memory::recent memory::remember memory::forget)
+
+  @doc "Search shared memory and retain the Host Agent's actual provenance/offline state."
+  def search(source, query, opts \\ []) do
+    with :ok <- validate_source(source),
+         {:ok, limit, _deadline} <- input(query, opts),
+         {:ok, result} <-
+           call(
+             source,
+             "memory::search",
+             %{"query" => query, "limit" => limit},
+             Keyword.delete(opts, :limit)
+           ),
+         %{"results" => records} when is_list(records) <- result,
+         true <- length(records) <= limit,
+         true <- Enum.all?(records, &shared_record?/1),
+         offline = Map.get(result, "offline", false),
+         true <- is_boolean(offline) do
+      output(%{
+        results: records,
+        offline: offline,
+        host_source: result["source"],
+        source: %{id: source.id, endpoint: source.endpoint}
+      })
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :malformed_result}
+    end
+  end
+
+  defp shared_record?(record) when is_map(record) do
+    ScopedReader.valid_id?(record["id"]) and text?(record["content"], @max_response) and
+      (not Map.has_key?(record, "provenance") or is_map(record["provenance"]))
+  end
+
+  defp shared_record?(_), do: false
+
+  @doc "The supported shared-memory tools, independent of legacy workspace memory."
+  def tools, do: @tools
+
+  @doc "Read the current Host Agent MCP catalog without inventing or copying its schemas."
+  def catalog(source, opts \\ []) do
+    with {:ok, %{"tools" => tools}} when is_list(tools) <-
+           mcp(source, "tools/list", %{}, opts),
+         selected = Enum.filter(tools, &is_map/1) |> Enum.filter(&(&1["name"] in @tools)),
+         true <- Enum.sort(Enum.map(selected, & &1["name"])) == Enum.sort(@tools),
+         true <-
+           Enum.all?(selected, &(is_map(&1["inputSchema"]) and is_binary(&1["description"]))) do
+      {:ok, selected}
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :malformed_result}
+    end
+  end
+
+  @doc "Get resident instructions from the actual MCP initialize result."
+  def instructions(source, opts \\ []) do
+    params = %{
+      protocolVersion: "2025-11-25",
+      capabilities: %{},
+      clientInfo: %{name: "synapsis", version: to_string(Application.spec(:synapsis_core, :vsn))}
+    }
+
+    with {:ok, %{"instructions" => text}} when is_binary(text) <-
+           mcp(source, "initialize", params, opts),
+         true <- String.valid?(text) and byte_size(text) in 1..16_384 do
+      {:ok, text}
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :malformed_result}
+    end
+  end
+
+  @doc "Call a supported shared-memory tool once; preserve public provenance and offline state."
+  def call(source, name, arguments, opts \\ [])
+
+  def call(source, "memory::" <> method = name, arguments, opts) do
+    with true <- name in @tools and is_map(arguments) and not is_struct(arguments),
+         :ok <- validate_source(source),
+         true <- options?(opts, [:timeout, :deadline]),
+         {:ok, deadline} <- deadline(opts),
+         true <- byte_size(Jason.encode!(arguments)) <= @max_output do
+      bounded(
+        fn timeout ->
+          with {:ok, result} <-
+                 request(source, if(method == "get", do: :get, else: method), arguments, timeout),
+               {:ok, public} <- output(result) do
+            {:ok, public}
+          end
+        end,
+        deadline
+      )
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :invalid_input}
+    end
+  rescue
+    _ in [Jason.EncodeError, Protocol.UndefinedError] -> {:error, :invalid_input}
+  end
+
+  def call(_, _, _, _), do: {:error, :invalid_input}
+
+  defp mcp(source, method, params, opts) do
+    with :ok <- validate_source(source),
+         true <- options?(opts, [:timeout, :deadline]),
+         {:ok, deadline} <- deadline(opts) do
+      bounded(
+        fn timeout ->
+          id = "synapsis-memory-" <> Integer.to_string(System.unique_integer([:positive]))
+          payload = %{jsonrpc: "2.0", id: id, method: method, params: params}
+
+          with {:ok, body} <-
+                 http(
+                   source.endpoint <> "/memory/" <> source.agent_id <> "/mcp",
+                   payload,
+                   timeout
+                 )
+                 |> response_body(:mcp),
+               {:ok, %{"jsonrpc" => "2.0", "id" => ^id, "result" => result}} when is_map(result) <-
+                 decode(body) do
+            output(result)
+          else
+            {:error, _} = error -> error
+            _ -> {:error, :malformed_result}
+          end
+        end,
+        deadline
+      )
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :invalid_input}
+    end
+  end
+
+  @doc "Send a supported Synapsis 1.0 lifecycle envelope once, within two seconds."
+  def capture(source, hook, envelope, opts \\ []) do
+    opts = Keyword.put_new(opts, :timeout, 2_000)
+
+    with :ok <- validate_source(source),
+         true <- hook in ~w(session-start user-prompt-submit post-tool-use session-end),
+         true <- is_map(envelope) and byte_size(Jason.encode!(envelope)) <= 65_536,
+         true <- options?(opts, [:timeout, :deadline]) and opts[:timeout] in 1..2_000,
+         {:ok, deadline} <- deadline(opts) do
+      bounded(
+        fn timeout ->
+          with {:ok, body} <-
+                 http(source.endpoint <> "/capture/v1/hooks/synapsis/" <> hook, envelope, timeout)
+                 |> response_body(:capture),
+               {:ok, %{"ok" => true, "event_id" => event_id} = result} <- decode(body),
+               true <- event_id == envelope["event_id"] do
+            {:ok, result}
+          else
+            {:error, _} = error -> error
+            _ -> {:error, :malformed_result}
+          end
+        end,
+        deadline
+      )
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :invalid_input}
+    end
+  rescue
+    _ -> {:error, :invalid_input}
   end
 
   defp valid_endpoint?(endpoint) when is_binary(endpoint) do
@@ -211,31 +383,31 @@ defmodule Synapsis.Memory.HostAgent do
   end
 
   defp request(source, operation, arguments, timeout) do
-    # The high-level keyword constructor merges global Req defaults (including
-    # credentials and plugins). Build a clean request before explicit options.
-    response =
-      Req.Request.new()
-      |> Req.Steps.attach()
-      |> Req.merge(
-        method: :post,
-        url:
-          source.endpoint <>
-            "/memory/" <> source.agent_id <> "/call/" <> Atom.to_string(operation),
-        json: arguments,
-        raw: true,
-        into: &collect/2,
-        retry: false,
-        redirect: false,
-        receive_timeout: timeout,
-        request_timeout: timeout,
-        connect_options: [timeout: timeout]
-      )
-      |> Req.request()
+    url = source.endpoint <> "/memory/" <> source.agent_id <> "/call/" <> to_string(operation)
 
-    with {:ok, body} <- response_body(response, operation),
+    with {:ok, body} <- http(url, arguments, timeout) |> response_body(operation),
          {:ok, decoded} <- decode(body) do
       envelope(decoded, operation)
     end
+  end
+
+  defp http(url, arguments, timeout) do
+    # A clean request prevents unrelated global credentials/plugins leaking locally.
+    Req.Request.new()
+    |> Req.Steps.attach()
+    |> Req.merge(
+      method: :post,
+      url: url,
+      json: arguments,
+      raw: true,
+      into: &collect/2,
+      retry: false,
+      redirect: false,
+      receive_timeout: timeout,
+      request_timeout: timeout,
+      connect_options: [timeout: timeout]
+    )
+    |> Req.request()
   end
 
   defp collect({:data, data}, {request, response}) do

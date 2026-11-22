@@ -62,7 +62,7 @@ defmodule Synapsis.Agent.Tools.MemoryDomainTest do
       caller: "host",
       run_id: ctx.context.run_id,
       grants: @names,
-      tool_revisions: Map.new(@names, &{&1, 1})
+      tool_revisions: Map.new(@names, &{&1, if(&1 == hd(@names), do: 2, else: 1)})
     }
 
     assert {:ok, %{accepted: @names}} = ToolCatalog.admit_batch(descriptors, authority: authority)
@@ -98,6 +98,33 @@ defmodule Synapsis.Agent.Tools.MemoryDomainTest do
 
     assert {:ok, %{scope_id: "persisted-agent", contributed_by: "persisted-agent"}} =
              Synapsis.Memory.get_semantic(id)
+  end
+
+  test "workspace continuation is source-specific and distinguishes partial no matches", ctx do
+    File.mkdir_p!(Path.join(ctx.workspace, "memory"))
+
+    for number <- 1..260,
+        do: File.write!(Path.join(ctx.workspace, "memory/#{number}.md"), "daily\n")
+
+    assert {:ok,
+            %{content: text, structured: %{results: [], complete: false, next_cursor: cursor}}} =
+             search(ctx, %{"query" => "absent"})
+
+    assert text =~ "No matches on this page"
+    assert text =~ cursor
+
+    for source <- ["host_agent", "records"] do
+      assert {:error, %Error{class: :validation}} =
+               search(ctx, %{"source" => source, "query" => "absent", "cursor" => cursor})
+    end
+
+    assert {:ok, %{structured: %{next_cursor: next}}} =
+             search(ctx, %{"query" => "absent", "cursor" => cursor})
+
+    assert {:ok, %{content: final, structured: %{complete: true, next_cursor: nil}}} =
+             search(ctx, %{"query" => "absent", "cursor" => next})
+
+    assert final == "No matching workspace memory."
   end
 
   test "source search defaults to workspace with real citations and no record fallback", ctx do
@@ -562,7 +589,7 @@ defmodule Synapsis.Agent.Tools.MemoryDomainTest do
   defp operation(ctx, name, arguments),
     do: %{
       tool_name: name,
-      tool_revision: 1,
+      tool_revision: if(name == hd(@names), do: 2, else: 1),
       arguments: arguments,
       run_id: ctx.context.run_id,
       incarnation: ctx.context.incarnation,

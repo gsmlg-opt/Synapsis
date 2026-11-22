@@ -277,6 +277,14 @@ defmodule Synapsis.Agent.Tools.MCPSources do
 
   defp revision(_sources, "web::fetch"), do: {:ok, Synapsis.Agent.Tools.Web.Fetch.revision()}
 
+  defp revision(_sources, name)
+       when name in ["synapsis::workspace_memory_search", "synapsis::memory_source_search"],
+       do: {:ok, 2}
+
+  defp revision(_sources, name)
+       when name in ~w(memory::search memory::get memory::recent memory::remember memory::forget),
+       do: {:ok, Synapsis.Agent.Tools.HostMemory.revision()}
+
   defp revision(_sources, "mcp:" <> _), do: invalid()
   defp revision(_sources, name), do: if(name?(name), do: {:ok, 1}, else: invalid())
 

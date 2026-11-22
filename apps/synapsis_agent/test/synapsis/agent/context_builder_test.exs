@@ -48,6 +48,65 @@ defmodule Synapsis.Agent.ContextBuilderTest do
     end
   end
 
+  test "selected shared memory injects initialize instructions and durable session identity" do
+    alias Synapsis.Config.Store
+    alias Synapsis.Memory.Settings
+    previous = Store.get(:memory, "default")
+
+    on_exit(fn ->
+      case previous do
+        {:ok, entry} -> Store.put(:memory, entry)
+        {:error, :not_found} -> Store.delete(:memory, "default")
+      end
+    end)
+
+    server = Gaoxy.Test.open()
+
+    assert {:ok, _} =
+             Settings.save(%{
+               "backend" => "workspace",
+               "host_agent" => %{
+                 "enabled" => true,
+                 "endpoint" => String.trim_trailing(Gaoxy.Test.url(server), "/"),
+                 "agent_id" => "synapsis"
+               }
+             })
+
+    Gaoxy.Test.expect_once(server, "POST", "/memory/synapsis/mcp", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      request = Jason.decode!(body)
+      assert request["method"] == "initialize"
+
+      Plug.Conn.resp(
+        conn,
+        200,
+        Jason.encode!(%{
+          jsonrpc: "2.0",
+          id: request["id"],
+          result: %{instructions: "Use memory::search before exploring; remember once if useful."}
+        })
+      )
+    end)
+
+    opts = [
+      session_id: "durable-session",
+      memory_context: false,
+      agent_config: %{tools: ["memory::search", "memory::remember"]}
+    ]
+
+    prompt = ContextBuilder.build_system_prompt(:coding, opts)
+    assert prompt =~ "<shared_memory_instructions>"
+    assert prompt =~ "Use memory::search before exploring"
+    assert prompt =~ "Current session_id: durable-session"
+    assert length(Gaoxy.Test.requests(server).entries) == 1
+
+    prompt =
+      ContextBuilder.build_system_prompt(:coding, Keyword.put(opts, :agent_config, %{tools: []}))
+
+    refute prompt =~ "<shared_memory_instructions>"
+    assert length(Gaoxy.Test.requests(server).entries) == 1
+  end
+
   describe "memory_budget/1" do
     test "returns 3 max entries for 32K context" do
       budget = ContextBuilder.memory_budget(32_000)

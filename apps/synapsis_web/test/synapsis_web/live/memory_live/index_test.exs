@@ -73,6 +73,33 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
     assert render(view) =~ "Select a listed workspace memory file"
   end
 
+  @tag :tmp_dir
+  test "workspace files continue loading from bounded pages", %{conn: conn, tmp_dir: root} do
+    File.mkdir_p!(Path.join(root, "memory"))
+    File.write!(Path.join(root, "MEMORY.md"), "main\n")
+    for number <- 1..260, do: File.write!(Path.join(root, "memory/#{number}.md"), "daily\n")
+    name = "memory-pages-#{System.unique_integer([:positive])}"
+
+    {:ok, agent} =
+      Synapsis.AgentConfigs.create(%{name: name, config: %{"workspace_path" => root}})
+
+    on_exit(fn -> Synapsis.Config.Store.delete(:agent, agent.id) end)
+
+    {:ok, view, _} = live(conn, ~p"/agent/memory")
+    view |> form("#memory-agent-form", agent: name) |> render_change()
+    render_async(view)
+    assert has_element?(view, "#workspace-memory-files", "MEMORY.md")
+    assert has_element?(view, "#workspace-memory-load-more")
+    view |> element("#workspace-memory-load-more") |> render_click()
+    render_async(view)
+    assert has_element?(view, "#workspace-memory-load-more")
+    view |> element("#workspace-memory-load-more") |> render_click()
+    html = render_async(view)
+    refute has_element?(view, "#workspace-memory-load-more")
+    for number <- 1..260, do: assert(html =~ "memory/#{number}.md")
+    assert has_element?(view, "#workspace-memory-files", "MEMORY.md")
+  end
+
   test "missing workspace files render an empty state without creating memory", %{conn: conn} do
     root =
       Path.join(System.tmp_dir!(), "agent-memory-missing-#{System.unique_integer([:positive])}")
@@ -130,7 +157,7 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
     endpoint = String.trim_trailing(Gaoxy.Test.url(server), "/")
     parent = self()
 
-    Gaoxy.Test.stub(server, "POST", "/memory/synapsis/call/recall", fn conn ->
+    Gaoxy.Test.stub(server, "POST", "/memory/synapsis/call/search", fn conn ->
       send(parent, :unexpected_recall)
       Plug.Conn.send_resp(conn, 500, "unexpected recall")
     end)
@@ -151,6 +178,66 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
     refute has_element?(view, "#host-memory-state")
     assert has_element?(view, "#memory-agent-form")
     refute_receive :unexpected_recall
+  end
+
+  test "host search shows actual offline state and record provenance", %{conn: conn} do
+    alias Synapsis.Memory.Settings
+    alias Synapsis.Config.Store
+    previous = Store.get(:memory, "default")
+
+    on_exit(fn ->
+      case previous do
+        {:ok, entry} -> Store.put(:memory, entry)
+        {:error, :not_found} -> Store.delete(:memory, "default")
+      end
+    end)
+
+    server = Gaoxy.Test.open()
+
+    assert {:ok, _} =
+             Settings.save(%{
+               "backend" => "workspace",
+               "host_agent" => %{
+                 "enabled" => true,
+                 "endpoint" => String.trim_trailing(Gaoxy.Test.url(server), "/"),
+                 "agent_id" => "synapsis"
+               }
+             })
+
+    Gaoxy.Test.expect_once(server, "POST", "/memory/synapsis/call/search", fn conn ->
+      Plug.Conn.resp(
+        conn,
+        200,
+        Jason.encode!(%{
+          ok: true,
+          result: %{
+            offline: true,
+            source: "local",
+            results: [
+              %{
+                id: "shared-record",
+                content: "Use scoped tests <script>untrusted</script>",
+                kind: "procedure",
+                observed_at: "2026-11-18T00:00:00Z",
+                provenance: %{host: "other-host", agent: "codex"}
+              }
+            ]
+          }
+        })
+      )
+    end)
+
+    {:ok, view, _} = live(conn, ~p"/agent/memory")
+    view |> element("button", "Host agent") |> render_click()
+    render_hook(view, "recall_host", %{"query" => "scoped tests"})
+    html = render_async(view)
+    assert html =~ "Offline: true"
+    assert html =~ "other-host"
+    assert html =~ "codex"
+    assert html =~ "procedure"
+    assert html =~ "2026-11-18T00:00:00Z"
+    assert html =~ "&lt;script&gt;untrusted&lt;/script&gt;"
+    refute html =~ "Authority:"
   end
 
   test "long source lines show the reader notice without a misleading next page", %{conn: conn} do

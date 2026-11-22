@@ -55,7 +55,7 @@ defmodule Synapsis.Agent.Tools.Profiles do
   alias Synapsis.Session.Store
 
   @memory ~w(synapsis::workspace_memory_search synapsis::workspace_memory_get)
-  @host_memory ~w(memory::get)
+  @host_memory ~w(memory::search memory::get memory::recent memory::remember memory::forget)
   @semantic ~w(synapsis::memory_source_search synapsis::memory_save synapsis::memory_update)
   @filesystem Filesystem.names()
   @questions Questions.names()
@@ -602,7 +602,8 @@ defmodule Synapsis.Agent.Tools.Profiles do
          {:ok, automation_mutation} <- automation_mutation_descriptors(context, scope, names),
          {:ok, automation_wake} <- automation_wake_descriptors(context, scope, names),
          {:ok, memory} <- memory_descriptors(context, scope, names),
-         {:ok, host_memory} <- host_memory_descriptors(scope, names),
+         {:ok, host_memory} <-
+           host_memory_descriptors(Map.put(scope, :session_id, identity.session_id), names),
          {:ok, inspection} <- inspection_descriptors(context, identity, names),
          {:ok, skills, snapshot, skill_cache} <- skill_descriptors(context, scope, names) do
       {:ok,
@@ -830,8 +831,22 @@ defmodule Synapsis.Agent.Tools.Profiles do
            true <- Enum.any?(descriptors, &(&1.tool_name in @host_memory)) do
         {:ok, Enum.filter(descriptors, &(&1.tool_name in @host_memory))}
       else
-        false -> {:error, :host_memory_unavailable}
-        error -> error
+        false ->
+          HostMemory.unavailable_descriptors(
+            scope,
+            Enum.filter(names, &(&1 in @host_memory)),
+            :disabled
+          )
+
+        {:error, reason} when is_atom(reason) ->
+          HostMemory.unavailable_descriptors(
+            scope,
+            Enum.filter(names, &(&1 in @host_memory)),
+            reason
+          )
+
+        error ->
+          error
       end
     else
       {:ok, []}
@@ -1003,6 +1018,18 @@ defmodule Synapsis.Agent.Tools.Profiles do
 
   defp descriptor_binding(descriptor, identity, catalog \\ nil)
 
+  defp descriptor_binding(%{backend: Unavailable} = descriptor, identity, catalog) do
+    %{
+      tool_revision: descriptor.tool_revision,
+      classify:
+        &Unavailable.classify(
+          descriptor,
+          identity,
+          classification_operation(&1, descriptor, catalog)
+        )
+    }
+  end
+
   defp descriptor_binding(%{tool_name: name} = descriptor, identity, catalog)
        when name in @browser do
     %{
@@ -1027,18 +1054,6 @@ defmodule Synapsis.Agent.Tools.Profiles do
       tool_revision: descriptor.tool_revision,
       classify:
         &Fetch.classify(descriptor, identity, classification_operation(&1, descriptor, catalog))
-    }
-  end
-
-  defp descriptor_binding(%{backend: Unavailable} = descriptor, identity, catalog) do
-    %{
-      tool_revision: descriptor.tool_revision,
-      classify:
-        &Unavailable.classify(
-          descriptor,
-          identity,
-          classification_operation(&1, descriptor, catalog)
-        )
     }
   end
 
@@ -1193,8 +1208,9 @@ defmodule Synapsis.Agent.Tools.Profiles do
 
   defp permission_level(name) when name in @filesystem, do: Filesystem.permission_level(name)
 
-  defp permission_level(name) when name in ~w(synapsis::memory_save synapsis::memory_update),
-    do: :write
+  defp permission_level(name)
+       when name in ~w(synapsis::memory_save synapsis::memory_update memory::remember memory::forget),
+       do: :write
 
   defp permission_level(name) when name in @collaboration, do: :none
 

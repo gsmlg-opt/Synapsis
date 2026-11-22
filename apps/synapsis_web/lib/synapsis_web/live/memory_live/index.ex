@@ -20,6 +20,8 @@ defmodule SynapsisWeb.MemoryLive.Index do
        selected_agent: nil,
        workspace_root: nil,
        workspace_files: [],
+       workspace_cursor: nil,
+       workspace_appending: false,
        workspace_document: nil,
        workspace_loading: false,
        workspace_error: nil,
@@ -117,6 +119,20 @@ defmodule SynapsisWeb.MemoryLive.Index do
   def handle_event("refresh_workspace", _params, socket) do
     {:noreply,
      socket |> cancel_async(:workspace_list) |> cancel_async(:workspace_read) |> load_workspace()}
+  end
+
+  def handle_event("continue_workspace", _params, socket) do
+    cursor = socket.assigns.workspace_cursor
+    root = socket.assigns.workspace_root
+
+    if cursor && root && !socket.assigns.workspace_loading do
+      {:noreply,
+       socket
+       |> assign(workspace_loading: true, workspace_appending: true, workspace_error: nil)
+       |> start_async(:workspace_list, fn -> WorkspaceReader.list(root, cursor: cursor) end)}
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_event("read_workspace", %{"path" => path} = params, socket) do
@@ -246,7 +262,18 @@ defmodule SynapsisWeb.MemoryLive.Index do
 
   @impl true
   def handle_async(:workspace_list, {:ok, {:ok, result}}, socket) do
-    {:noreply, assign(socket, workspace_files: result.files, workspace_loading: false)}
+    files =
+      if socket.assigns.workspace_appending,
+        do: socket.assigns.workspace_files ++ result.files,
+        else: result.files
+
+    {:noreply,
+     assign(socket,
+       workspace_files: Enum.sort_by(files, & &1.path),
+       workspace_cursor: result.next_cursor,
+       workspace_appending: false,
+       workspace_loading: false
+     )}
   end
 
   def handle_async(:workspace_read, {:ok, {:ok, document}}, socket) do
@@ -258,6 +285,14 @@ defmodule SynapsisWeb.MemoryLive.Index do
       case result do
         {:ok, {:error, reason}} when is_atom(reason) -> reason
         _ -> :unavailable
+      end
+
+    socket =
+      if name == :workspace_list do
+        WorkspaceReader.cancel(socket.assigns.workspace_cursor)
+        assign(socket, workspace_cursor: nil, workspace_appending: false)
+      else
+        socket
       end
 
     {:noreply, assign(socket, workspace_error: reason, workspace_loading: false)}
@@ -286,9 +321,16 @@ defmodule SynapsisWeb.MemoryLive.Index do
     {:noreply, assign(socket, host_result: nil, host_error: reason, host_loading: false)}
   end
 
+  @impl true
+  def terminate(_reason, socket) do
+    WorkspaceReader.cancel(socket.assigns.workspace_cursor)
+    :ok
+  end
+
   defp load_workspace(%{assigns: %{workspace_root: nil}} = socket), do: socket
 
   defp load_workspace(socket) do
+    WorkspaceReader.cancel(socket.assigns.workspace_cursor)
     root = socket.assigns.workspace_root
 
     socket
@@ -296,6 +338,8 @@ defmodule SynapsisWeb.MemoryLive.Index do
       workspace_loading: true,
       workspace_error: nil,
       workspace_files: [],
+      workspace_cursor: nil,
+      workspace_appending: false,
       workspace_document: nil
     )
     |> start_async(:workspace_list, fn -> WorkspaceReader.list(root) end)
@@ -439,7 +483,13 @@ defmodule SynapsisWeb.MemoryLive.Index do
             <p :if={@workspace_error && @workspace_error != :unavailable} role="alert" class="mt-3">
               Workspace memory could not be read ({@workspace_error}).
             </p>
-            <p :if={!@workspace_loading && !@workspace_error && @workspace_files == []} class="mt-3">
+            <p
+              :if={
+                !@workspace_loading && !@workspace_error && @workspace_files == [] &&
+                  !@workspace_cursor
+              }
+              class="mt-3"
+            >
               No workspace memory files yet.
             </p>
             <div id="workspace-memory-files" class="space-y-2 mt-3">
@@ -455,6 +505,16 @@ defmodule SynapsisWeb.MemoryLive.Index do
                 <span class="text-xs text-on-surface-variant">{file.size} bytes</span>
               </div>
             </div>
+            <.dm_btn
+              :if={@workspace_cursor}
+              id="workspace-memory-load-more"
+              variant="ghost"
+              size="sm"
+              phx-click="continue_workspace"
+              disabled={@workspace_loading}
+            >
+              Load more memory files
+            </.dm_btn>
             <%= if @workspace_document do %>
               <article id="workspace-memory-content" class="mt-4">
                 <h3 class="font-semibold">{@workspace_document.path}</h3>
@@ -505,17 +565,23 @@ defmodule SynapsisWeb.MemoryLive.Index do
           <p :if={@host_error} role="alert" class="mt-3">Host recall failed ({@host_error}).</p>
           <%= if @host_result do %>
             <div id="host-memory-state" class="text-sm mt-3 space-y-1">
-              <p>Mode: {@host_result.mode} · Authority: {@host_result.authority}</p>
-              <p>Consistency: {@host_result.consistency} · Stale: {to_string(@host_result.stale)}</p>
+              <p>Offline: {to_string(@host_result.offline)}</p>
               <p>Source: {@host_result.source.id} · {@host_result.source.endpoint}</p>
             </div>
-            <p :if={@host_result.hits == []} class="mt-3">No matching host memories.</p>
+            <p :if={@host_result.results == []} class="mt-3">No matching host memories.</p>
             <article
-              :for={hit <- @host_result.hits}
+              :for={hit <- @host_result.results}
               class="border border-outline-variant rounded p-3 mt-3"
             >
-              <p class="text-xs text-on-surface-variant">Host record: {hit.memory_id}</p>
-              <p class="whitespace-pre-wrap text-sm mt-1">{hit.content}</p>
+              <p class="text-xs text-on-surface-variant">Host record: {hit["id"]}</p>
+              <p class="whitespace-pre-wrap text-sm mt-1">{hit["content"]}</p>
+              <p class="text-xs mt-1">
+                Kind: {hit["kind"]} · Observed: {hit["observed_at"]}
+              </p>
+              <p class="text-xs">
+                Host: {get_in(hit, ["provenance", "host"])} ·
+                Agent: {get_in(hit, ["provenance", "agent"])}
+              </p>
             </article>
           <% end %>
         </.dm_card>

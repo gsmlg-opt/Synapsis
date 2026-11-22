@@ -46,7 +46,7 @@ defmodule Synapsis.Agent.Tools.ProfilesTest do
       caller: identity.caller,
       run_id: identity.run_id,
       grants: [@get, @search, @skills],
-      tool_revisions: %{@get => 1, @search => 1, @skills => 2}
+      tool_revisions: %{@get => 1, @search => 2, @skills => 2}
     }
 
     invocation =
@@ -172,6 +172,127 @@ defmodule Synapsis.Agent.Tools.ProfilesTest do
     assert Enum.sort(Map.keys(projected.selected)) == Enum.sort(Map.keys(descriptors))
 
     assert :erts_debug.flat_size(projected) < 5 * :erts_debug.flat_size({snapshot, catalog})
+  end
+
+  test "an unplugged shared-memory module does not reject the conversation catalog", ctx do
+    alias Synapsis.Config.Store, as: ConfigStore
+    alias Synapsis.Agent.Tools.HostMemory
+    alias Synapsis.Memory.Settings
+    previous = ConfigStore.get(:memory, "default")
+
+    on_exit(fn ->
+      case previous do
+        {:ok, entry} -> ConfigStore.put(:memory, entry)
+        {:error, :not_found} -> ConfigStore.delete(:memory, "default")
+      end
+    end)
+
+    assert {:ok, _} =
+             Settings.save(%{
+               "backend" => "workspace",
+               "host_agent" => %{
+                 "enabled" => false,
+                 "endpoint" => "http://127.0.0.1:4222",
+                 "agent_id" => "synapsis"
+               }
+             })
+
+    names = ["memory::get", @get]
+    context = put_in(ctx.context, [:agent, :tools], names)
+
+    ceiling = %{
+      ctx.ceiling
+      | grants: names,
+        tool_revisions: %{"memory::get" => HostMemory.revision(), @get => 1}
+    }
+
+    assert {:ok, %{snapshot: snapshot}} = Profiles.build(context, ctx.identity, [], ceiling)
+    assert Map.has_key?(snapshot.issued_descriptors, "memory::get")
+    assert Map.has_key?(snapshot.issued_descriptors, @get)
+  end
+
+  test "read-only profile permits shared-memory reads and denies remember and forget", ctx do
+    alias Synapsis.Config.Store, as: ConfigStore
+    alias Synapsis.Memory.Settings
+    alias Synapsis.Agent.Tools.HostMemory
+    previous = ConfigStore.get(:memory, "default")
+
+    on_exit(fn ->
+      case previous do
+        {:ok, entry} -> ConfigStore.put(:memory, entry)
+        {:error, :not_found} -> ConfigStore.delete(:memory, "default")
+      end
+    end)
+
+    server = Gaoxy.Test.open()
+
+    assert {:ok, _} =
+             Settings.save(%{
+               "backend" => "workspace",
+               "host_agent" => %{
+                 "enabled" => true,
+                 "endpoint" => String.trim_trailing(Gaoxy.Test.url(server), "/"),
+                 "agent_id" => "synapsis"
+               }
+             })
+
+    names = HostMemory.names()
+
+    Gaoxy.Test.expect_once(server, "POST", "/memory/synapsis/mcp", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      request = Jason.decode!(body)
+      assert request["method"] == "tools/list"
+
+      tools =
+        Enum.map(
+          names,
+          &%{
+            name: &1,
+            description: "Shared " <> &1,
+            inputSchema: %{"type" => "object", "properties" => %{}}
+          }
+        )
+
+      Plug.Conn.resp(
+        conn,
+        200,
+        Jason.encode!(%{jsonrpc: "2.0", id: request["id"], result: %{tools: tools}})
+      )
+    end)
+
+    permission = %{ctx.raw | allow_read: :allow, allow_write: :deny}
+    assert :ok = Store.put_value(ctx.identity.session_id, "permission", permission)
+    context = put_in(ctx.context, [:agent, :tools], names)
+
+    ceiling = %{
+      ctx.ceiling
+      | grants: names,
+        tool_revisions: Map.new(names, &{&1, HostMemory.revision()})
+    }
+
+    assert {:ok, %{snapshot: snapshot}} = Profiles.build(context, ctx.identity, [], ceiling)
+
+    for name <- names do
+      invocation = %{
+        ctx.invocation
+        | tool_name: name,
+          tool_revision: HostMemory.revision(),
+          arguments: %{}
+      }
+
+      assert {:ok, sidecars} = Profiles.prepare_context(invocation, snapshot)
+      policy_context = Map.put(sidecars, :input_kind, :function)
+
+      if name in ~w(memory::remember memory::forget) do
+        assert snapshot.permission_levels[name] == :write
+        assert {:deny, :policy_denied} = Policy.prepare_tool(invocation, policy_context)
+      else
+        assert snapshot.permission_levels[name] == :read
+        assert :allow = Policy.prepare_tool(invocation, policy_context)
+      end
+    end
+
+    assert length(Gaoxy.Test.requests(server).entries) == 1
   end
 
   test "all unavailable names fail visibly before catalog admission", ctx do

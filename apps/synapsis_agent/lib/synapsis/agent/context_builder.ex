@@ -62,6 +62,7 @@ defmodule Synapsis.Agent.ContextBuilder do
              Keyword.get(opts, :workspace_path)
            )
        )},
+      {:shared_memory, load_shared_memory_instructions(agent_config, opts)},
       {:bootstrap, load_bootstrap()},
       {:agent, load_agent_context(agent_id)}
     ]
@@ -271,6 +272,21 @@ defmodule Synapsis.Agent.ContextBuilder do
 
   # -- Private --
 
+  defp load_shared_memory_instructions(agent_config, opts) do
+    selected = Map.get(agent_config, :tools) || Map.get(agent_config, "tools") || []
+
+    if is_list(selected) and Enum.any?(selected, &(&1 in Synapsis.Memory.HostAgent.tools())) do
+      with {:ok, source} <- Synapsis.Memory.Settings.host_source(),
+           {:ok, instructions} <- Synapsis.Memory.HostAgent.instructions(source, timeout: 2_000) do
+        session_id = Keyword.get(opts, :session_id)
+        context = if is_binary(session_id), do: "\nCurrent session_id: " <> session_id, else: ""
+        instructions <> context
+      else
+        _ -> nil
+      end
+    end
+  end
+
   defp wrap_layer(:base, content), do: content
   defp wrap_layer(:soul, content), do: "<soul>\n#{content}\n</soul>"
   defp wrap_layer(:identity, content), do: "<user_identity>\n#{content}\n</user_identity>"
@@ -283,6 +299,10 @@ defmodule Synapsis.Agent.ContextBuilder do
     do: "<available_skills>\n#{content}\n</available_skills>"
 
   defp wrap_layer(:memory, content), do: "<memory>\n#{content}\n</memory>"
+
+  defp wrap_layer(:shared_memory, content),
+    do: "<shared_memory_instructions>\n#{content}\n</shared_memory_instructions>"
+
   defp wrap_layer(:bootstrap, content), do: "<environment>\n#{content}\n</environment>"
   defp wrap_layer(:agent, content), do: "<agent_context>\n#{content}\n</agent_context>"
 

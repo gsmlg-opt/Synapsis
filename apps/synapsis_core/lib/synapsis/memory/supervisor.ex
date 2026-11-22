@@ -1,5 +1,5 @@
 defmodule Synapsis.Memory.Supervisor do
-  @moduledoc "Supervises memory system processes: Writer and Cache."
+  @moduledoc "Supervises memory storage, capture, cache and bounded workspace cursors."
   use Supervisor
 
   def start_link(opts \\ []) do
@@ -18,7 +18,14 @@ defmodule Synapsis.Memory.Supervisor do
       end
 
     children =
-      adapter_child ++ [Synapsis.Memory.EventLog, Synapsis.Memory.Cache, Synapsis.Memory.Writer]
+      adapter_child ++
+        [
+          Synapsis.Memory.EventLog,
+          Synapsis.Memory.Cache,
+          Synapsis.Memory.Writer,
+          Synapsis.Memory.Capture,
+          Synapsis.Memory.WorkspaceCursors
+        ]
 
     # Never escalate: a transient child crash must not terminate the supervisor
     # and take down the file adapter / event log siblings.

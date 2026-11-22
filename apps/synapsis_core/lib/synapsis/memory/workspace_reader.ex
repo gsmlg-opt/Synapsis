@@ -8,26 +8,35 @@ defmodule Synapsis.Memory.WorkspaceReader do
   checked around reads, without claiming atomic openat/no-follow protection
   against hostile concurrent renames.
 
-  Limits are 128 scanned entries, 64 KiB per file and JSON response, 120 lines
+  Limits are 128 scanned directory entries per page, 64 KiB per file and JSON response, 120 lines
   and 12,000 UTF-16 code units per read page (matching OpenClaw), 20 search
   results and 2 KiB per snippet. Pages fit complete lines. An oversized first
   line is explicitly marked partial, with no line continuation that would skip
   its remainder. An isolated worker has a bounded heap and a one-second total
-  deadline, shortened by `:deadline`.
+  deadline, shortened by `:deadline`. Search/list pages expose `complete` and a
+  one-use `next_cursor`, bound to root and query/limit. Handles expire after one
+  idle minute, are capped at 32 scans, and can be closed with `cancel/1`. Active
+  page cancellation terminates the enumeration process and its directory port.
   """
 
   @max_file 65_536
   @max_output 65_536
   @max_entries 128
+  alias Synapsis.Memory.WorkspaceCursors
   @max_chars 12_000
 
   def list(root, opts \\ []) do
-    with :ok <- options(opts, [:deadline]) do
+    with :ok <- options(opts, [:deadline, :cursor]),
+         :ok <- cursor_option(opts) do
       bounded(root, opts, fn root ->
-        with {:ok, files} <- files(root), do: output(%{status: "ok", files: files})
+        WorkspaceCursors.page({Path.expand(root), :list}, Keyword.get(opts, :cursor))
       end)
     end
   end
+
+  @doc "Close an unfinished enumeration immediately; idle cursors expire after one minute."
+  def cancel(cursor) when is_binary(cursor), do: WorkspaceCursors.cancel(cursor)
+  def cancel(_), do: {:error, :invalid_input}
 
   def read(root, path, opts \\ []) do
     with :ok <- options(opts, [:from, :lines, :deadline]),
@@ -67,19 +76,33 @@ defmodule Synapsis.Memory.WorkspaceReader do
   end
 
   def search(root, query, opts \\ []) do
-    with :ok <- options(opts, [:limit, :deadline]),
+    with :ok <- options(opts, [:limit, :deadline, :cursor]),
+         :ok <- cursor_option(opts),
          true <- is_binary(query) and String.valid?(query) and byte_size(query) in 1..2_048,
          limit = Keyword.get(opts, :limit, 5),
          true <- is_integer(limit) and limit in 1..20 do
       bounded(root, opts, fn root ->
-        with {:ok, files} <- files(root),
-             {:ok, results} <- matches(root, files, String.downcase(query), limit) do
-          output(%{status: "ok", ranking: "lexical", results: results})
-        end
+        WorkspaceCursors.page(
+          {Path.expand(root), {:search, String.downcase(query), limit}},
+          Keyword.get(opts, :cursor)
+        )
       end)
     else
       false -> {:error, :invalid_input}
       {:error, _} = error -> error
+    end
+  end
+
+  defp cursor_option(opts) do
+    case Keyword.get(opts, :cursor) do
+      nil ->
+        :ok
+
+      cursor when is_binary(cursor) and byte_size(cursor) == 32 ->
+        if String.valid?(cursor), do: :ok, else: {:error, :invalid_input}
+
+      _ ->
+        {:error, :invalid_input}
     end
   end
 
@@ -183,84 +206,186 @@ defmodule Synapsis.Memory.WorkspaceReader do
     receive do: ({:DOWN, ^monitor, :process, ^worker, _} -> :ok)
   end
 
-  defp files(root) do
-    with {:ok, canonical} <- optional_file(root, "MEMORY.md"),
-         {:ok, nested, _count} <- walk(root, "memory", length(canonical) + 1) do
-      {:ok, Enum.sort_by(canonical ++ nested, & &1.path)}
+  # Called only by a capped, supervised cursor with a bounded heap. The caller's
+  # existing guardian supplies the total page deadline and cancellation lifetime.
+  @doc false
+  def scan_page({root, operation}, previous) do
+    deadline = System.monotonic_time(:millisecond) + 850
+
+    with {:ok, scan} <- scan_state(root, operation, previous),
+         {:ok, scan, scanned} <- enumerate(root, scan),
+         {:ok, items, pending} <- select_page(root, operation, scan.pending, deadline) do
+      pending = Enum.map(pending, &Map.delete(&1, :content))
+      complete = scan.complete and pending == []
+      key = if operation == :list, do: :files, else: :results
+      result = Map.put(%{status: "ok", complete: complete, scanned_entries: scanned}, key, items)
+      result = if operation == :list, do: result, else: Map.put(result, :ranking, "lexical")
+
+      with {:ok, result} <- output(result),
+           do: {:ok, result, if(complete, do: nil, else: %{scan | pending: pending})}
     end
   end
 
+  defp scan_state(root, operation, nil) do
+    with {:ok, canonical} <- optional_file(root, "MEMORY.md"),
+         {:ok, canonical} <- canonical_content(root, operation, canonical),
+         node when is_binary(node) <-
+           System.get_env("SYNAPSIS_FILESYSTEM_NODE") || System.find_executable("node") do
+      script = Application.app_dir(:synapsis_core, "priv/memory/workspace_cursor.cjs")
+
+      port =
+        Port.open({:spawn_executable, node}, [
+          :binary,
+          :exit_status,
+          {:line, 1_048_576},
+          args: ["--max-old-space-size=16", script, root]
+        ])
+
+      {:ok, %{port: port, pending: canonical, complete: false, fresh: true}}
+    else
+      nil -> {:error, :unavailable}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp scan_state(_root, _operation, scan), do: {:ok, scan}
+
+  defp canonical_content(root, {:search, _, _}, [file]) do
+    with {:ok, content} <- read_file(root, file.path),
+         do: {:ok, [Map.put(file, :content, content)]}
+  end
+
+  defp canonical_content(_root, _operation, files), do: {:ok, files}
+
+  defp enumerate(root, scan) do
+    budget = if scan.fresh or scan.pending == [], do: @max_entries, else: 0
+    Port.command(scan.port, Jason.encode!(%{budget: budget}) <> "\n")
+
+    receive do
+      {port, {:data, {:eol, json}}} when port == scan.port ->
+        case Jason.decode(json) do
+          {:ok, %{"entries" => paths, "scanned" => scanned, "complete" => complete}} ->
+            with {:ok, files} <- collect_files(root, paths) do
+              pending = Enum.sort_by(scan.pending ++ files, & &1.path)
+              {:ok, %{scan | pending: pending, complete: complete, fresh: false}, scanned}
+            end
+
+          {:ok, %{"error" => code}} ->
+            {:error, cursor_error(code)}
+
+          _ ->
+            {:error, :unavailable}
+        end
+
+      {port, _} when port == scan.port ->
+        {:error, :unavailable}
+    after
+      1_000 -> {:error, :timeout}
+    end
+  end
+
+  defp cursor_error("unsafe_path"), do: :unsafe_path
+  defp cursor_error("directory_changed"), do: :directory_changed
+  defp cursor_error("scan_limit"), do: :scan_limit
+  defp cursor_error(_), do: :unavailable
+
+  defp collect_files(root, paths) do
+    Enum.reduce_while(paths, {:ok, []}, fn path, {:ok, files} ->
+      if valid_path?(path) do
+        case optional_file(root, path) do
+          {:ok, [file]} -> {:cont, {:ok, [file | files]}}
+          {:ok, []} -> {:halt, {:error, :directory_changed}}
+          {:error, _} = error -> {:halt, error}
+        end
+      else
+        {:halt, {:error, :unsafe_path}}
+      end
+    end)
+  end
+
   defp optional_file(root, path) do
-    case leaf(Path.join(root, path)) do
-      {:ok, stat} -> {:ok, [%{path: path, size: stat.size}]}
+    with {:ok, _} <- ancestry(Path.dirname(Path.join(root, path)), :not_found) do
+      case leaf(Path.join(root, path)) do
+        {:ok, stat} -> {:ok, [%{path: path, size: stat.size}]}
+        {:error, :not_found} -> {:ok, []}
+        {:error, _} = error -> error
+      end
+    else
       {:error, :not_found} -> {:ok, []}
       {:error, _} = error -> error
     end
   end
 
-  defp walk(root, relative, count) do
-    directory = Path.join(root, relative)
+  defp select_page(_root, :list, files, _deadline) do
+    {selected, pending} = fit_items(files, [])
+    {:ok, selected, pending}
+  end
 
-    with {:ok, ancestors} <- ancestry(directory, :not_found),
-         {:ok, names} <- File.ls(directory),
-         true <- count + length(names) <= @max_entries,
-         {:ok, ^ancestors} <- ancestry(directory, :not_found) do
-      names
-      |> Enum.sort()
-      |> Enum.reduce_while({:ok, [], count + length(names)}, fn name, {:ok, files, scanned} ->
-        path = Path.join(relative, name)
+  defp select_page(root, {:search, query, limit}, files, deadline),
+    do: search_files(root, files, query, limit, [], deadline)
 
-        result =
-          case File.lstat(Path.join(root, path), time: :posix) do
-            {:ok, %{type: :directory}} ->
-              walk(root, path, scanned)
+  defp fit_items([], selected), do: {Enum.reverse(selected), []}
 
-            {:ok, %{type: :regular}} ->
-              if String.ends_with?(name, ".md"),
-                do: optional_file(root, path),
-                else: {:ok, []}
+  defp fit_items([file | rest] = pending, selected) do
+    if fits?([file | selected]),
+      do: fit_items(rest, [file | selected]),
+      else: {Enum.reverse(selected), pending}
+  end
 
-            {:ok, _} ->
-              {:error, :unsafe_path}
+  defp fits?(items), do: byte_size(Jason.encode!(items)) <= @max_output - 512
 
-            {:error, _} ->
-              {:error, :unavailable}
-          end
+  defp search_files(_root, [], _query, _limit, results, _deadline),
+    do: {:ok, Enum.reverse(results), []}
 
-        case result do
-          {:ok, children, next} -> {:cont, {:ok, files ++ children, next}}
-          {:ok, children} -> {:cont, {:ok, files ++ children, scanned}}
-          {:error, _} = error -> {:halt, error}
-        end
-      end)
+  defp search_files(root, [file | rest] = files, query, limit, results, deadline) do
+    if System.monotonic_time(:millisecond) >= deadline or length(results) == limit do
+      {:ok, Enum.reverse(results), files}
     else
-      false -> {:error, :scan_limit}
-      {:error, :not_found} -> {:ok, [], count}
-      {:error, _} = error -> error
-      {:ok, _} -> {:error, :unsafe_path}
+      search_file(root, file, rest, query, limit, results, deadline)
     end
   end
 
-  defp matches(root, files, query, limit) do
-    Enum.reduce_while(files, {:ok, []}, fn %{path: path}, {:ok, results} ->
-      case read_file(root, path) do
-        {:ok, content} ->
-          found =
-            content
-            |> lines()
-            |> Enum.with_index(1)
-            |> Enum.filter(fn {line, _} -> String.contains?(String.downcase(line), query) end)
-            |> Enum.take(limit)
-            |> Enum.map(fn {line, number} ->
-              %{path: path, from: number, to: number, snippet: snippet(line, query)}
-            end)
+  defp search_file(root, file, rest, query, limit, results, deadline) do
+    with {:ok, content} <- selected_content(root, file),
+         hash = :crypto.hash(:sha256, content),
+         true <- not Map.has_key?(file, :hash) or file.hash == hash do
+      numbered =
+        content |> lines() |> Enum.with_index(1) |> Enum.drop(Map.get(file, :from, 1) - 1)
 
-          {:cont, {:ok, Enum.take(results ++ found, limit)}}
+      case search_lines(numbered, file.path, query, limit, results) do
+        {:done, results} ->
+          search_files(root, rest, query, limit, results, deadline)
 
-        {:error, _} = error ->
-          {:halt, error}
+        {:more, results, from} ->
+          pending = [%{path: file.path, size: file.size, from: from, hash: hash} | rest]
+          {:ok, Enum.reverse(results), pending}
       end
-    end)
+    else
+      false -> {:error, :file_changed}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp selected_content(_root, %{content: content}), do: {:ok, content}
+  defp selected_content(root, file), do: read_file(root, file.path)
+
+  defp search_lines([], _path, _query, _limit, results), do: {:done, results}
+
+  defp search_lines([{line, number} | rest], path, query, limit, results) do
+    cond do
+      length(results) == limit ->
+        {:more, results, number}
+
+      String.contains?(String.downcase(line), query) ->
+        hit = %{path: path, from: number, to: number, snippet: snippet(line, query)}
+
+        if fits?([hit | results]),
+          do: search_lines(rest, path, query, limit, [hit | results]),
+          else: {:more, results, number}
+
+      true ->
+        search_lines(rest, path, query, limit, results)
+    end
   end
 
   defp read_file(root, relative) do

@@ -23,12 +23,13 @@ defmodule Synapsis.Session.NativeHostMemoryRecallFunctionalTest do
   @completion "Selected memory received"
   @prompt "Search the selected memory source"
   @replay_prompt "Recall the completed selected memory search"
-  @description "Search workspace Markdown by default; explicitly select opt-in host_agent or existing shared/agent records. Record filters require source=records."
+  @description "Search workspace Markdown by default; explicitly select opt-in host_agent or existing shared/agent records. Record filters require source=records. Workspace pages return complete/next_cursor; repeat the same query and limit with cursor to continue."
   @schema %{
     "type" => "object",
     "properties" => %{
       "source" => %{"type" => "string", "enum" => ~w(workspace host_agent records)},
       "query" => %{"type" => "string", "minLength" => 1, "maxLength" => 2048},
+      "cursor" => %{"type" => "string", "minLength" => 32, "maxLength" => 32},
       "scope" => %{"type" => "string", "enum" => ~w(shared agent)},
       "kinds" => %{
         "type" => "array",
@@ -50,63 +51,29 @@ defmodule Synapsis.Session.NativeHostMemoryRecallFunctionalTest do
   }
   @canonical_hit %{
     "id" => @canonical_id,
-    "canonical_id" => @canonical_id,
-    "authority" => "canonical",
-    "provisional" => false,
+    "kind" => "fact",
     "content" => @canonical_content,
-    "confidence" => 0.9,
-    "memory_type" => "semantic",
-    "tags" => ["fixture", "雪"],
-    "score" => 0.8,
-    "final_score" => 0.85,
-    "distance" => 0.2,
-    "kind" => "memory",
-    "lifecycle_state" => "active"
+    "observed_at" => "2026-11-18T00:00:00Z",
+    "sync" => "synced",
+    "provenance" => %{"host" => "other-host", "agent" => "codex", "integration" => "codex"}
   }
   @provisional_hit %{
     "id" => @provisional_id,
-    "canonical_id" => "future-canonical-one",
-    "authority" => "provisional",
-    "provisional" => true,
+    "kind" => "worklog",
     "content" => @provisional_content,
-    "confidence" => 0.7,
-    "memory_type" => "episodic",
-    "tags" => ["pending", "未同步"],
-    "score" => 0.6,
-    "final_score" => 0.65,
-    "distance" => 0.4,
-    "kind" => "memory",
-    "lifecycle_state" => "candidate"
+    "observed_at" => "2026-11-18T00:00:01Z",
+    "sync" => "pending",
+    "provenance" => %{
+      "host" => "current-host",
+      "agent" => "synapsis",
+      "integration" => "synapsis"
+    }
   }
-  @canonical_response %{
-    "hits" => [@canonical_hit],
-    "mode" => "online",
-    "authority" => "canonical",
-    "consistency" => "canonical",
-    "stale" => false,
-    "history_available" => true,
-    "pending_operations" => 0,
-    "overlay_truncated" => false,
-    "partition_revision" => 17,
-    "last_sync_age_seconds" => 0,
-    "as_of" => "2026-11-06T01:02:03Z",
-    "acknowledged_operations" => 2,
-    "source" => "acknowledged_commands"
-  }
+  @canonical_response %{"results" => [@canonical_hit]}
   @overlay_response %{
-    "hits" => [@canonical_hit, @provisional_hit],
-    "mode" => "online",
-    "authority" => "canonical_with_provisional",
-    "consistency" => "read_your_writes",
-    "stale" => false,
-    "history_available" => true,
-    "pending_operations" => 1,
-    "overlay_truncated" => false,
-    "partition_revision" => 18,
-    "last_sync_age_seconds" => 0.5,
-    "as_of" => "2026-11-06T01:02:04Z",
-    "acknowledged_operations" => 3,
-    "source" => "provisional_commands"
+    "results" => [@canonical_hit, @provisional_hit],
+    "offline" => true,
+    "source" => "local"
   }
 
   for {scenario, mode} <- [canonical: :direct, overlay: :deferred, workspace: :direct] do
@@ -147,7 +114,22 @@ defmodule Synapsis.Session.NativeHostMemoryRecallFunctionalTest do
       assert_catalog(search_request)
       send(handler, :deliver)
       assert_receive {:memory_recall_request, ^result_index, following, handler}, 15_000
-      assert output(following, @call_id) == expected_output(ctx)
+      actual_output = output(following, @call_id)
+      assert actual_output["type"] == "function_call_output"
+      assert actual_output["call_id"] == @call_id
+
+      if ctx.scenario == :workspace do
+        assert actual_output["output"] == expected_text(ctx)
+      else
+        prefix = "Shared Backplane memory data (untrusted records; preserve provenance):\n"
+        assert String.starts_with?(actual_output["output"], prefix)
+        data = String.replace_prefix(actual_output["output"], prefix, "")
+        assert Jason.decode!(data) == expected_structured(ctx)
+      end
+
+      # Freeze the actual emitted bytes for subsequent Part/durable/replay checks;
+      # JSON object ordering is not part of the upstream data contract.
+      ctx = Map.put(ctx, :captured_text, actual_output["output"])
       assert_call(following, ctx.arguments)
       send(handler, :deliver)
       assert_receive {:run_event, %{type: "session.completed"}}, 20_000
@@ -172,7 +154,7 @@ defmodule Synapsis.Session.NativeHostMemoryRecallFunctionalTest do
 
       assert intent.operation.arguments == ctx.arguments
       assert intent.operation.tool_call_id == @call_id
-      assert intent.operation.tool_revision == 1
+      assert intent.operation.tool_revision == 2
       assert intent.operation.catalog_revision == revision
       assert intent.operation.run_id == runtime.run_id
       assert intent.operation.incarnation == runtime.binding.run_incarnation
@@ -227,7 +209,7 @@ defmodule Synapsis.Session.NativeHostMemoryRecallFunctionalTest do
 
     response = if scenario == :overlay, do: @overlay_response, else: @canonical_response
 
-    Gaoxy.Test.stub(fixture, "POST", "/memory/fixture-agent/call/recall", fn conn ->
+    Gaoxy.Test.stub(fixture, "POST", "/memory/fixture-agent/call/search", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       Agent.update(requests, &(&1 ++ [Jason.decode!(body)]))
 
@@ -242,6 +224,14 @@ defmodule Synapsis.Session.NativeHostMemoryRecallFunctionalTest do
           Path.join(root, "MEMORY.md"),
           "# Local memory\n" <> @workspace_line <> "End.\n"
         )
+
+    for hook <- ~w(session-start user-prompt-submit post-tool-use session-end) do
+      Gaoxy.Test.stub(fixture, "POST", "/capture/v1/hooks/synapsis/" <> hook, fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        event = Jason.decode!(body)
+        Plug.Conn.resp(conn, 202, Jason.encode!(%{ok: true, event_id: event["event_id"]}))
+      end)
+    end
 
     harness =
       SessionHarness.setup_session!(
@@ -284,7 +274,7 @@ defmodule Synapsis.Session.NativeHostMemoryRecallFunctionalTest do
 
     arguments =
       if scenario == :workspace,
-        do: %{"query" => "concord", "limit" => 1},
+        do: %{"query" => "concord", "limit" => 2},
         else: %{"source" => "host_agent", "query" => "recall 雪 😀", "limit" => 3}
 
     ctx = %{
@@ -364,132 +354,53 @@ defmodule Synapsis.Session.NativeHostMemoryRecallFunctionalTest do
     %{
       "status" => "ok",
       "ranking" => "lexical",
+      "complete" => true,
+      "scanned_entries" => 0,
+      "next_cursor" => nil,
       "results" => [
         %{"path" => "MEMORY.md", "from" => 2, "to" => 2, "snippet" => @workspace_line}
       ]
     }
   end
 
-  defp expected_structured(%{scenario: :canonical} = ctx) do
+  defp expected_structured(ctx) do
+    response = if ctx.scenario == :overlay, do: @overlay_response, else: @canonical_response
+
     %{
-      "mode" => "online",
-      "source_authority" => "canonical",
-      "consistency" => "canonical",
-      "stale" => false,
-      "history_available" => true,
-      "pending_operations" => 0,
-      "overlay_truncated" => false,
-      "partition_revision" => 17,
-      "last_sync_age_seconds" => 0,
-      "as_of" => "2026-11-06T01:02:03Z",
-      "acknowledged_operations" => 2,
-      "host_source" => "acknowledged_commands",
-      "source" => expected_source(ctx),
-      "hits" => [expected_canonical_hit(ctx)]
+      "source" => %{"id" => "backplane-host", "endpoint" => ctx.source.endpoint},
+      "results" => response["results"],
+      "offline" => Map.get(response, "offline", false),
+      "host_source" => response["source"]
     }
   end
 
-  defp expected_structured(%{scenario: :overlay} = ctx) do
-    %{
-      "mode" => "online",
-      "source_authority" => "canonical_with_provisional",
-      "consistency" => "read_your_writes",
-      "stale" => false,
-      "history_available" => true,
-      "pending_operations" => 1,
-      "overlay_truncated" => false,
-      "partition_revision" => 18,
-      "last_sync_age_seconds" => 0.5,
-      "as_of" => "2026-11-06T01:02:04Z",
-      "acknowledged_operations" => 3,
-      "host_source" => "provisional_commands",
-      "source" => expected_source(ctx),
-      "hits" => [expected_canonical_hit(ctx), expected_provisional_hit(ctx)]
-    }
-  end
-
-  defp expected_source(ctx),
-    do: %{
-      "id" => "backplane-host",
-      "endpoint" => ctx.source.endpoint,
-      "partition" => "host_default"
-    }
-
-  defp expected_canonical_hit(ctx) do
-    %{
-      "memory_id" => @canonical_id,
-      "canonical_id" => @canonical_id,
-      "source_authority" => "canonical",
-      "provisional" => false,
-      "content" => @canonical_content,
-      "confidence" => 0.9,
-      "memory_type" => "semantic",
-      "tags" => ["fixture", "雪"],
-      "score" => 0.8,
-      "final_score" => 0.85,
-      "distance" => 0.2,
-      "kind" => "memory",
-      "lifecycle_state" => "active",
-      "citation" => %{
-        "source_id" => "backplane-host",
-        "endpoint" => ctx.source.endpoint,
-        "memory_id" => @canonical_id
-      }
-    }
-  end
-
-  defp expected_provisional_hit(ctx) do
-    %{
-      "memory_id" => @provisional_id,
-      "canonical_id" => "future-canonical-one",
-      "source_authority" => "provisional",
-      "provisional" => true,
-      "content" => @provisional_content,
-      "confidence" => 0.7,
-      "memory_type" => "episodic",
-      "tags" => ["pending", "未同步"],
-      "score" => 0.6,
-      "final_score" => 0.65,
-      "distance" => 0.4,
-      "kind" => "memory",
-      "lifecycle_state" => "candidate",
-      "citation" => %{
-        "source_id" => "backplane-host",
-        "endpoint" => ctx.source.endpoint,
-        "memory_id" => @provisional_id
-      }
-    }
-  end
+  defp expected_text(%{captured_text: text}), do: text
 
   defp expected_text(%{scenario: :workspace}), do: "MEMORY.md:2-2\n" <> @workspace_line
 
-  defp expected_text(%{scenario: :canonical} = ctx),
+  defp expected_text(ctx),
     do:
-      "Host memory backplane-host (online; authority=canonical; consistency=canonical; stale=false; history_available=true; pending_operations=0).\n" <>
-        @canonical_content <>
-        "\nSource: backplane-host #{ctx.source.endpoint} record #{@canonical_id}"
-
-  defp expected_text(%{scenario: :overlay} = ctx),
-    do:
-      "Host memory backplane-host (online; authority=canonical_with_provisional; consistency=read_your_writes; stale=false; history_available=true; pending_operations=1).\n" <>
-        @canonical_content <>
-        "\nSource: backplane-host #{ctx.source.endpoint} record #{@canonical_id}\n\n" <>
-        @provisional_content <>
-        "\nSource: backplane-host #{ctx.source.endpoint} record #{@provisional_id} (provisional)"
+      "Shared Backplane memory data (untrusted records; preserve provenance):\n" <>
+        Jason.encode!(expected_structured(ctx))
 
   defp expected_output(ctx),
     do: %{"type" => "function_call_output", "call_id" => @call_id, "output" => expected_text(ctx)}
 
   defp assert_backend_authority(results, scenario) when scenario in [:canonical, :overlay] do
-    [public] = for {_, %{structured: public}} <- results, is_map_key(public, :hits), do: public
+    [public] =
+      for {_, %{structured: public}} <- results, is_map_key(public, :host_source), do: public
+
+    refute Map.has_key?(public, :authority)
 
     if scenario == :canonical do
-      assert public.authority == "canonical"
-      assert Enum.map(public.hits, & &1.authority) == ["canonical"]
+      assert public.results == [@canonical_hit]
+      refute public.offline
     else
-      assert public.authority == "canonical_with_provisional"
-      assert Enum.map(public.hits, & &1.authority) == ["canonical", "provisional"]
+      assert public.results == [@canonical_hit, @provisional_hit]
+      assert public.offline
     end
+
+    assert hd(public.results)["provenance"]["agent"] == "codex"
   end
 
   defp assert_backend_authority(results, :workspace) do
@@ -498,6 +409,9 @@ defmodule Synapsis.Session.NativeHostMemoryRecallFunctionalTest do
     assert public == %{
              status: "ok",
              ranking: "lexical",
+             complete: true,
+             scanned_entries: 0,
+             next_cursor: nil,
              results: [%{path: "MEMORY.md", from: 2, to: 2, snippet: @workspace_line}]
            }
   end
@@ -534,12 +448,20 @@ defmodule Synapsis.Session.NativeHostMemoryRecallFunctionalTest do
 
   defp assert_host_calls(%{scenario: :workspace} = ctx) do
     assert Agent.get(ctx.requests, & &1) == []
-    assert Gaoxy.Test.requests(ctx.fixture).entries == []
+
+    assert Enum.all?(
+             Gaoxy.Test.requests(ctx.fixture).entries,
+             &String.starts_with?(&1.path, "/capture/v1/hooks/synapsis/")
+           )
   end
 
   defp assert_host_calls(ctx) do
     assert Agent.get(ctx.requests, & &1) == [%{"query" => "recall 雪 😀", "limit" => 3}]
-    assert length(Gaoxy.Test.requests(ctx.fixture).entries) == 1
+
+    assert Enum.count(
+             Gaoxy.Test.requests(ctx.fixture).entries,
+             &(&1.path == "/memory/fixture-agent/call/search")
+           ) == 1
   end
 
   defp tool_parts(id),

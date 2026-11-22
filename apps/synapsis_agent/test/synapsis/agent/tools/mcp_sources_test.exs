@@ -87,6 +87,13 @@ defmodule Synapsis.Agent.Tools.MCPSourcesTest do
     %{first: first, first_pid: first_pid, second: second, second_pid: second_pid, state: state}
   end
 
+  test "shared host-memory authority uses the issued native descriptor revision" do
+    names = Synapsis.Agent.Tools.HostMemory.names()
+    assert {:ok, revisions} = MCPSources.revisions(%{mcp_sources: %{}}, names)
+    assert revisions == Map.new(names, &{&1, Synapsis.Agent.Tools.HostMemory.revision()})
+    assert Enum.all?(Map.values(revisions), &(&1 == 2))
+  end
+
   test "explicit empty selection remains empty and never acquires configured sources" do
     assert {:ok, %{tools: [], mcp_sources: sources}} = MCPSources.capture(%{tools: []})
     assert sources == %{}

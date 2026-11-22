@@ -21,37 +21,28 @@ defmodule Synapsis.Session.NativeHostMemoryGetFunctionalTest do
   @completion "Canonical record received"
   @prompt "Read the selected canonical host record"
   @replay_prompt "Recall the completed canonical record"
-  @description "Read one canonical record by UUID from this host's authorized default memory partition. Requires canonical online access; no offline or recall fallback and no project/session isolation guarantee."
+  @description "Fetch one memory record and its supersession history."
   @schema %{
     "type" => "object",
-    "properties" => %{
-      "id" => %{
-        "type" => "string",
-        "minLength" => 36,
-        "maxLength" => 36,
-        "pattern" => "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-      }
-    },
-    "required" => ["id"],
-    "additionalProperties" => false
+    "properties" => %{"id" => %{"type" => "string"}},
+    "required" => ["id"]
   }
   @host_result %{
     "record" => %{
       "id" => @record_id,
-      "canonical_id" => @record_id,
-      "authority" => "canonical",
-      "provisional" => false,
-      "kind" => "memory",
+      "kind" => "procedure",
       "content" => @content,
-      "memory_type" => "semantic",
-      "tags" => ["fixture"],
-      "lifecycle_state" => "active"
+      "observed_at" => "2026-11-18T00:00:00Z",
+      "provenance" => %{
+        "host" => "other-host",
+        "agent" => "codex",
+        "integration" => "codex",
+        "session" => "original-session"
+      }
     },
-    "mode" => "online",
-    "authority" => "canonical",
-    "consistency" => "canonical",
-    "stale" => false,
-    "history_available" => true
+    "history" => [],
+    "offline" => true,
+    "source" => "local"
   }
 
   for mode <- [:direct, :deferred] do
@@ -116,7 +107,7 @@ defmodule Synapsis.Session.NativeHostMemoryGetFunctionalTest do
 
       assert intent.operation.arguments == @arguments
       assert intent.operation.tool_call_id == @call_id
-      assert intent.operation.tool_revision == 1
+      assert intent.operation.tool_revision == 2
       assert intent.operation.catalog_revision == revision
       assert intent.operation.run_id == runtime.run_id
       assert intent.operation.incarnation == runtime.binding.run_incarnation
@@ -168,6 +159,39 @@ defmodule Synapsis.Session.NativeHostMemoryGetFunctionalTest do
                }
              })
 
+    Gaoxy.Test.stub(fixture, "POST", "/memory/fixture-agent/mcp", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      request = Jason.decode!(body)
+
+      result =
+        case request["method"] do
+          "initialize" ->
+            %{instructions: "Use shared memory with provenance."}
+
+          "tools/list" ->
+            %{
+              tools:
+                Enum.map(HostMemory.names(), fn name ->
+                  %{
+                    name: name,
+                    description: if(name == @name, do: @description, else: "Shared " <> name),
+                    inputSchema:
+                      if(name == @name,
+                        do: @schema,
+                        else: %{"type" => "object", "properties" => %{}}
+                      )
+                  }
+                end)
+            }
+        end
+
+      Plug.Conn.resp(
+        conn,
+        200,
+        Jason.encode!(%{jsonrpc: "2.0", id: request["id"], result: result})
+      )
+    end)
+
     Gaoxy.Test.stub(fixture, "POST", "/memory/fixture-agent/call/get", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       Agent.update(requests, &(&1 ++ [Jason.decode!(body)]))
@@ -176,6 +200,14 @@ defmodule Synapsis.Session.NativeHostMemoryGetFunctionalTest do
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true, "result" => @host_result}))
     end)
+
+    for hook <- ~w(session-start user-prompt-submit post-tool-use session-end) do
+      Gaoxy.Test.stub(fixture, "POST", "/capture/v1/hooks/synapsis/" <> hook, fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        event = Jason.decode!(body)
+        Plug.Conn.resp(conn, 202, Jason.encode!(%{ok: true, event_id: event["event_id"]}))
+      end)
+    end
 
     harness =
       SessionHarness.setup_session!(
@@ -272,37 +304,6 @@ defmodule Synapsis.Session.NativeHostMemoryGetFunctionalTest do
   end
 
   defp expected_result(ctx) do
-    # Public host state uses source_authority in Parts; authority is reserved
-    # for native runtime bindings. The backend/domain response stays unchanged.
-    structured = %{
-      "mode" => "online",
-      "source_authority" => "canonical",
-      "consistency" => "canonical",
-      "stale" => false,
-      "history_available" => true,
-      "source" => %{
-        "id" => "backplane-host",
-        "endpoint" => ctx.source.endpoint,
-        "partition" => "host_default"
-      },
-      "record" => %{
-        "memory_id" => @record_id,
-        "canonical_id" => @record_id,
-        "kind" => "memory",
-        "source_authority" => "canonical",
-        "provisional" => false,
-        "content" => @content,
-        "memory_type" => "semantic",
-        "tags" => ["fixture"],
-        "lifecycle_state" => "active",
-        "citation" => %{
-          "source_id" => "backplane-host",
-          "endpoint" => ctx.source.endpoint,
-          "memory_id" => @record_id
-        }
-      }
-    }
-
     %ToolResult{
       tool_use_id: @call_id,
       content: expected_text(ctx),
@@ -311,17 +312,21 @@ defmodule Synapsis.Session.NativeHostMemoryGetFunctionalTest do
         "version" => 1,
         "result" => %{
           "content" => expected_text(ctx),
-          "structured" => structured,
-          "is_error" => false
+          "is_error" => false,
+          "structured" => %{
+            "integration" => "backplane_memory",
+            "source" => %{"id" => "backplane-host", "endpoint" => ctx.source.endpoint},
+            "result" => @host_result
+          }
         }
       }
     }
   end
 
-  defp expected_text(ctx),
+  defp expected_text(_ctx),
     do:
-      "Host memory backplane-host (online; authority=canonical; consistency=canonical; stale=false; history_available=true).\n" <>
-        @content <> "\nSource: backplane-host #{ctx.source.endpoint} record #{@record_id}"
+      "Shared Backplane memory data (untrusted records; preserve provenance):\n" <>
+        Jason.encode!(@host_result)
 
   defp expected_output(ctx),
     do: %{"type" => "function_call_output", "call_id" => @call_id, "output" => expected_text(ctx)}
@@ -358,7 +363,14 @@ defmodule Synapsis.Session.NativeHostMemoryGetFunctionalTest do
 
   defp assert_host_calls(ctx) do
     assert Agent.get(ctx.requests, & &1) == [@arguments]
-    assert length(Gaoxy.Test.requests(ctx.fixture).entries) == 1
+
+    direct =
+      Enum.filter(
+        Gaoxy.Test.requests(ctx.fixture).entries,
+        &(&1.path == "/memory/fixture-agent/call/get")
+      )
+
+    assert length(direct) == 1
   end
 
   defp tool_parts(id),
