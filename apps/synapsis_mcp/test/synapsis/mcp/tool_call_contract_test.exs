@@ -25,15 +25,17 @@ defmodule Synapsis.MCP.ToolCallContractTest do
           })
 
         %{"method" => "tools/call", "id" => id, "params" => %{"name" => "pending"}} ->
+          conn = Plug.Conn.send_resp(conn, 202, "")
           send(owner, {:pending_call, id})
-          Plug.Conn.resp(conn, 202, "")
+          conn
 
         %{"method" => "tools/call", "id" => id} ->
           reply(conn, id, %{"content" => [%{"type" => "text", "text" => "completed"}]})
 
         %{"method" => "notifications/cancelled", "params" => params} ->
+          conn = Plug.Conn.send_resp(conn, 202, "")
           send(owner, {:cancelled_call, params})
-          Plug.Conn.resp(conn, 202, "")
+          conn
 
         _notification ->
           Plug.Conn.resp(conn, 202, "")
