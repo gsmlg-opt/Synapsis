@@ -187,7 +187,18 @@ defmodule Synapsis.Session.Worker do
     timeout = Keyword.get(opts, :timeout, 15_000)
 
     if is_binary(text) and is_integer(timeout) and timeout > 0 do
-      :gen_statem.call(via(session_id), {:append_automation_result, text}, min(timeout, 30_000))
+      run_id = Keyword.get(opts, :run_id)
+
+      delivery_id =
+        if is_binary(run_id) and run_id != "",
+          do: "#{session_id}/#{run_id}/announce",
+          else: Ecto.UUID.generate()
+
+      :gen_statem.call(
+        via(session_id),
+        {:append_automation_result, text, delivery_id},
+        min(timeout, 30_000)
+      )
     else
       {:error, :invalid_input}
     end
@@ -352,8 +363,8 @@ defmodule Synapsis.Session.Worker do
     keep(data, [{:reply, from, reply}])
   end
 
-  def handle_event({:call, from}, {:append_automation_result, text}, _state, data) do
-    {data, actions} = Automation.enqueue(data, text, from)
+  def handle_event({:call, from}, {:append_automation_result, text, delivery_id}, _state, data) do
+    {data, actions} = PendingInputs.announcement(data, text, delivery_id, from)
     advance(data, actions)
   end
 

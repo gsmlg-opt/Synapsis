@@ -483,7 +483,7 @@ defmodule Synapsis.Session.AutomationWakeFunctionalTest do
 
           blocks when is_list(blocks) ->
             Enum.map_join(blocks, "", fn
-              %{"type" => "text", "text" => text} -> text
+              %{"type" => type, "text" => text} when type in ~w(input_text output_text) -> text
               _ -> ""
             end)
         end

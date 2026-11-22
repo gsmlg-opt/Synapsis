@@ -324,7 +324,7 @@ defmodule Synapsis.Agent.Automation.Execution do
     id = source_session_id(run)
 
     if is_binary(id) and id != "" and is_binary(run.summary) do
-      case append_result(sessions, id, run.summary, timeout) do
+      case append_result(sessions, id, run.summary, run.id, timeout) do
         {:ok, %{status: status} = result} when status in [:delivered, :deferred] ->
           delivery_observation(run, Atom.to_string(status))
           |> Map.put("message_id", Map.get(result, :message_id))
@@ -340,8 +340,8 @@ defmodule Synapsis.Agent.Automation.Execution do
     end
   end
 
-  defp append_result(sessions, id, text, timeout) do
-    sessions.append_automation_result(id, text, timeout: timeout)
+  defp append_result(sessions, id, text, run_id, timeout) do
+    sessions.append_automation_result(id, text, timeout: timeout, run_id: run_id)
   rescue
     _ -> {:error, :unknown_outcome}
   catch

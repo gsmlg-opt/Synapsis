@@ -178,6 +178,216 @@ defmodule Synapsis.Agent.Heartbeat.NativeTypedScheduleFunctionalTest do
     assert {:ok, _} = Routines.update({"routine", config["id"]}, %{"enabled" => false})
   end
 
+  test "a failed periodic occurrence advances to a future slot and the next run succeeds", ctx do
+    fixture = native_fixture(ctx.tmp_dir, fail_first: true)
+    anchor = future(1_000)
+    config = put_routine(fixture, every(300, anchor))
+    assert :ok = LocalScheduler.reload()
+    first = await_run(config["id"])
+    assert {:ok, failed} = wait_for_run(first.id, "failed")
+    assert DateTime.compare(failed.scheduled_for, anchor) == :eq
+
+    saved = await_config(config["id"], &(&1["last_status"] == "failed"))
+    next = parse!(saved["next_run_at"])
+    assert DateTime.compare(next, failed.finished_at) == :gt
+    assert rem(DateTime.diff(next, anchor, :millisecond), 300) == 0
+    assert_slot(config["id"], next)
+    assert :ok = LocalScheduler.reload()
+    replace_scheduler()
+    second = await_run(config["id"], [failed.id])
+    completed = assert_native_run(second, fixture, 1)
+    assert {:ok, _} = Routines.update({"routine", config["id"]}, %{"enabled" => false})
+    assert DateTime.compare(completed.scheduled_for, next) == :eq
+    assert completed.id != failed.id
+    assert completed.idempotency_key != failed.idempotency_key
+
+    assert Enum.count(
+             routine_runs(config["id"]),
+             &(DateTime.compare(&1.scheduled_for, anchor) == :eq)
+           ) ==
+             1
+
+    assert {:ok, ^failed} = Runs.fetch_by_idempotency_key(failed.idempotency_key)
+  end
+
+  for recovery <- [:reload, :restart], kind <- [:every, :cron] do
+    @tag recovery: recovery, schedule_kind: kind
+    test "#{recovery} recovers a legacy held failed #{kind} occurrence from its durable Run",
+         ctx do
+      fixture = native_fixture(ctx.tmp_dir, fail_first: true)
+      stop_scheduler()
+      due = future(-1_000)
+
+      schedule =
+        case ctx.schedule_kind do
+          :every -> every(60_000, due)
+          :cron -> %{"kind" => "cron", "expr" => "0 0 1 1 *", "tz" => "Asia/Kathmandu"}
+        end
+
+      config = put_routine(fixture, schedule, %{"next_run_at" => DateTime.to_iso8601(due)})
+      restart_scheduler()
+      run = await_run(config["id"])
+      assert {:ok, failed} = wait_for_run(run.id, "failed")
+      await_config(config["id"], &(&1["last_status"] == "failed"))
+
+      # Emulate the persisted and in-memory state left by the old scheduler.
+      assert {:ok, _} =
+               ConfigStore.put(:routine, Map.merge(config, %{"last_status" => "failed"}))
+
+      key = {"routine", config["id"]}
+
+      :sys.replace_state(LocalScheduler, fn state ->
+        timer = state.timers[key]
+        if is_reference(timer.ref), do: Process.cancel_timer(timer.ref)
+        put_in(state.timers[key], %{timer | ref: nil, next_run_at: due})
+      end)
+
+      case ctx.recovery do
+        :reload -> assert :ok = LocalScheduler.reload()
+        :restart -> replace_scheduler()
+      end
+
+      saved = await_config(config["id"], &(&1["next_run_at"] != config["next_run_at"]))
+      next = parse!(saved["next_run_at"])
+      assert DateTime.compare(next, DateTime.utc_now()) == :gt
+      assert_slot(config["id"], next)
+      assert is_reference(:sys.get_state(LocalScheduler).timers[key].ref)
+      assert routine_runs(config["id"]) == [failed]
+      assert requests(fixture) |> length() == 1
+      assert {:ok, ^failed} = Runs.fetch_by_idempotency_key(failed.idempotency_key)
+      assert {:ok, _} = Routines.update(key, %{"enabled" => false})
+    end
+  end
+
+  test "a failed manual recurring run preserves the pending scheduled occurrence", ctx do
+    fixture = native_fixture(ctx.tmp_dir, fail_first: true)
+    target = future(60_000)
+    config = put_routine(fixture, every(60_000, target))
+    assert :ok = LocalScheduler.reload()
+    assert {:ok, run} = Routines.trigger({"routine", config["id"]})
+    assert {:ok, failed} = wait_for_run(run.id, "failed")
+    await_config(config["id"], &(&1["last_status"] == "failed"))
+    assert_slot(config["id"], target)
+    assert :ok = LocalScheduler.reload()
+    replace_scheduler()
+    assert_slot(config["id"], target)
+    assert routine_runs(config["id"]) == [failed]
+    assert {:ok, _} = Routines.update({"routine", config["id"]}, %{"enabled" => false})
+  end
+
+  test "a failed one-shot retains its occurrence and durable failure after replacement", ctx do
+    fixture = native_fixture(ctx.tmp_dir, fail_first: true)
+    target = future(1_000)
+    config = put_routine(fixture, at(target))
+    assert :ok = LocalScheduler.reload()
+    run = await_run(config["id"])
+    assert {:ok, failed} = wait_for_run(run.id, "failed")
+    await_config(config["id"], &(&1["last_status"] == "failed"))
+    assert_slot(config["id"], target)
+    assert :ok = LocalScheduler.reload()
+    replace_scheduler()
+    assert_slot(config["id"], target)
+    assert {:ok, %{"enabled" => true}} = ConfigStore.get(:routine, config["id"])
+    assert routine_runs(config["id"]) == [failed]
+    assert requests(fixture) |> length() == 1
+    assert {:ok, _} = Routines.update({"routine", config["id"]}, %{"enabled" => false})
+  end
+
+  test "reload and replacement preserve an admitted recurring occurrence until its result", ctx do
+    fixture = native_fixture(ctx.tmp_dir, hold_first: true)
+    target = future(1_000)
+    config = put_routine(fixture, every(60_000, target))
+    assert :ok = LocalScheduler.reload()
+    assert_receive {:typed_provider_waiting, handler}, 5_000
+    run = await_run(config["id"])
+    assert :ok = LocalScheduler.reload()
+    assert_slot(config["id"], target)
+    replace_scheduler()
+    assert_slot(config["id"], target)
+    assert routine_runs(config["id"]) == [Runs.get(run.id)]
+    send(handler, :continue_typed_schedule)
+    completed = assert_native_run(run, fixture, 1)
+    assert_slot(config["id"], DateTime.add(completed.started_at, 60_000, :millisecond))
+    assert {:ok, _} = Routines.update({"routine", config["id"]}, %{"enabled" => false})
+  end
+
+  test "a failed old generation cannot advance its replacement schedule", ctx do
+    fixture = native_fixture(ctx.tmp_dir, fail_first: true, hold_first: true)
+    config = put_routine(fixture, every(60_000, future(1_000)))
+    assert :ok = LocalScheduler.reload()
+    assert_receive {:typed_provider_waiting, handler}, 5_000
+    run = await_run(config["id"])
+    target = future(120_000)
+
+    assert {:ok, replacement} =
+             Routines.update({"routine", config["id"]}, %{"schedule" => every(120_000, target)})
+
+    assert replacement["schedule_generation"] != config["schedule_generation"]
+    send(handler, :continue_typed_schedule)
+    assert {:ok, _failed} = wait_for_run(run.id, "failed")
+    assert :ok = LocalScheduler.reload()
+    replace_scheduler()
+    assert_slot(config["id"], target)
+    assert {:ok, saved} = ConfigStore.get(:routine, config["id"])
+    assert saved["schedule_generation"] == replacement["schedule_generation"]
+    refute saved["last_status"] == "failed"
+    assert {:ok, _} = Routines.update({"routine", config["id"]}, %{"enabled" => false})
+  end
+
+  test "a past slot with unknown effects is retained even when its old config says failed", ctx do
+    fixture = native_fixture(ctx.tmp_dir)
+    stop_scheduler()
+    target = future(-1_000)
+
+    config =
+      put_routine(fixture, every(60_000, target), %{
+        "next_run_at" => DateTime.to_iso8601(target),
+        "last_status" => "failed"
+      })
+
+    occurrence = DateTime.to_iso8601(target)
+
+    context = %{
+      "generation" => config["schedule_generation"],
+      "occurrence" => occurrence,
+      "advance" => true,
+      "preserved_next_run_at" => occurrence
+    }
+
+    key =
+      Enum.join(
+        ["routine", config["id"], config["schedule_generation"], occurrence, "occurrence"],
+        ":"
+      )
+
+    assert {:ok, queued} =
+             Runs.create(%{
+               kind: "heartbeat",
+               source: "system",
+               assistant_name: fixture.agent.name,
+               routine_id: config["id"],
+               prompt: config["prompt"],
+               tool_profile: "native_agent",
+               scheduled_for: target,
+               idempotency_key: key,
+               metadata: %{
+                 "automation_ref" => %{"source" => "routine", "id" => config["id"]},
+                 "routine_schedule" => context
+               }
+             })
+
+    assert {:ok, running} = Runs.mark_running(queued)
+    assert {:ok, unknown} = Runs.mark_unknown_outcome(running)
+    restart_scheduler()
+    await_config(config["id"], &(&1["last_status"] == "unknown_outcome"))
+    assert :ok = LocalScheduler.reload()
+    replace_scheduler()
+    assert_slot(config["id"], target)
+    assert routine_runs(config["id"]) == [unknown]
+    assert requests(fixture) == []
+    assert {:ok, _} = Routines.update({"routine", config["id"]}, %{"enabled" => false})
+  end
+
   test "restart admits a persisted due recurring slot and an edit survives its older terminal result",
        ctx do
     fixture = native_fixture(ctx.tmp_dir, hold_first: true)
@@ -446,7 +656,16 @@ defmodule Synapsis.Agent.Heartbeat.NativeTypedScheduleFunctionalTest do
             ]
         end
 
-      DeterministicProvider.send_sse(conn, chunks)
+      if number == 1 and Keyword.get(opts, :fail_first, false) do
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(
+          400,
+          Jason.encode!(%{error: %{message: "confirmed schedule failure"}})
+        )
+      else
+        DeterministicProvider.send_sse(conn, chunks)
+      end
     end)
 
     on_exit(fn ->

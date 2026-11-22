@@ -2,14 +2,14 @@ defmodule Synapsis.Session.Worker.Automation do
   @moduledoc """
   Session-owned automation context reads and completed assistant-result appends.
 
-  Reads and writes run in supervised tasks. Pending delivery is local to the
-  Worker and is not a durable retry queue. The existing session owner serializes
-  completion inserts before preparing another provider turn.
+  Reads and writes run in supervised tasks. Completed messages are admitted to
+  durable pending custody before acknowledgement. The session owner serializes
+  completion inserts and receipts before preparing another provider turn.
   """
 
   alias Synapsis.Agent.Runtime.SessionAdapter
   alias Synapsis.Automation.Context
-  alias Synapsis.Session.Store
+  alias Synapsis.Session.{PendingInputStore, Store}
   alias Synapsis.Session.Worker.Persistence
   alias Synapsis.{Message, Part, Session}
 
@@ -165,34 +165,59 @@ defmodule Synapsis.Session.Worker.Automation do
     end
   end
 
-  def enqueue(%{pending_inputs: %{blocked: true}} = data, _text, from),
-    do: {data, [{:reply, from, {:error, :unknown_outcome}}]}
+  def admitted(data, %{status: "consumed"} = input, from),
+    do: {data, [{:reply, from, {:ok, %{status: :delivered, message_id: input.id}}}]}
 
-  def enqueue(%{automation_uncertain: true} = data, _text, from),
-    do: {data, [{:reply, from, {:error, :unknown_outcome}}]}
+  def admitted(data, %{status: "inflight", id: input_id}, from) do
+    if data.automation_task != nil and data.automation_task.entry.message.id == input_id do
+      {data, [{:reply, from, {:ok, %{status: :deferred, message_id: input_id}}}]}
+    else
+      {%{data | automation_uncertain: true}, [{:reply, from, {:error, :unknown_outcome}}]}
+    end
+  end
 
-  def enqueue(data, text, from) do
-    message = %Message{
-      id: Ecto.UUID.generate(),
-      session_id: data.session_id,
-      role: "assistant",
-      parts: [%Part.Text{content: text}],
-      inserted_at: DateTime.utc_now(),
-      token_count: Synapsis.ContextWindow.estimate_tokens(text)
-    }
+  def admitted(data, input, from) do
+    already_pending =
+      Enum.any?(data.automation_pending, &(&1.message.id == input.id)) or
+        (data.automation_task != nil and data.automation_task.entry.message.id == input.id)
 
     deferred =
       data.runtime_active or not is_nil(data.automation_task) or data.automation_pending != []
 
-    entry = %{message: message, from: if(deferred, do: nil, else: from)}
-    data = %{data | automation_pending: data.automation_pending ++ [entry]}
+    entry = entry(data, input, if(deferred, do: nil, else: from))
+
+    data =
+      if already_pending,
+        do: data,
+        else: %{data | automation_pending: data.automation_pending ++ [entry]}
 
     actions =
       if deferred,
-        do: [{:reply, from, {:ok, %{status: :deferred, message_id: message.id}}}],
+        do: [{:reply, from, {:ok, %{status: :deferred, message_id: input.id}}}],
         else: []
 
     {start_next(data), actions}
+  end
+
+  def restore(data, %{status: "inflight"}), do: %{data | automation_uncertain: true}
+
+  def restore(data, input) do
+    %{data | automation_pending: data.automation_pending ++ [entry(data, input, nil)]}
+  end
+
+  defp entry(data, input, from) do
+    {:ok, inserted_at, _} = DateTime.from_iso8601(input.inserted_at)
+
+    message = %Message{
+      id: input.id,
+      session_id: data.session_id,
+      role: "assistant",
+      parts: [%Part.Text{content: input.content}],
+      inserted_at: inserted_at,
+      token_count: Synapsis.ContextWindow.estimate_tokens(input.content)
+    }
+
+    %{message: message, from: from}
   end
 
   def start_next(%{pending_inputs: %{blocked: true}} = data), do: data
@@ -205,32 +230,19 @@ defmodule Synapsis.Session.Worker.Automation do
           automation_pending: [entry | rest]
         } = data
       ) do
-    known_offset = if(data.runtime_turn_offset > 0, do: data.runtime_turn_offset)
-
     task =
       Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->
-        # A never-run/restarted Worker inherits the runtime's existing count_turns
-        # preparation cost. That API scans the full stored prefix; it is not the
-        # bounded context reader and does not promise bounded native allocation.
-        with {:ok, offset} <- append_offset(data.session_id, known_offset),
-             {:ok, meta} <-
-               Store.append_automation_turn(
-                 data.session_id,
-                 offset,
-                 Message.encode(entry.message),
-                 DateTime.utc_now()
-               ) do
-          {:ok, offset, meta}
-        end
+        PendingInputStore.complete_assistant(
+          data.session_id,
+          entry.message.id,
+          Message.encode(entry.message)
+        )
       end)
 
     %{data | automation_task: %{task: task, entry: entry}, automation_pending: rest}
   end
 
   def start_next(data), do: data
-
-  defp append_offset(_id, offset) when is_integer(offset), do: {:ok, offset}
-  defp append_offset(id, nil), do: Store.count_turns(id)
 
   def append_result(data, {:ok, offset, meta}) do
     entry = data.automation_task.entry
@@ -250,7 +262,7 @@ defmodule Synapsis.Session.Worker.Automation do
 
   def append_result(data, {:error, reason}) do
     entry = data.automation_task.entry
-    uncertain = reason == :unknown_outcome
+    uncertain = reason in [:unknown_outcome, :timeout, :conflict]
 
     Persistence.broadcast(data.session_id, "automation_result", %{
       status: if(uncertain, do: :unknown_outcome, else: :failed),

@@ -9,7 +9,7 @@ defmodule Synapsis.Session.Worker.PendingInputs do
   """
 
   alias Synapsis.Session.PendingInputStore
-  alias Synapsis.Session.Worker.{Persistence, Runtime}
+  alias Synapsis.Session.Worker.{Automation, Persistence, Runtime}
 
   @queue_limit 64
   @event_limit 20
@@ -36,6 +36,14 @@ defmodule Synapsis.Session.Worker.PendingInputs do
       %{data | pending_inputs: lane},
       operation(:prompt, from, %{content: content, images: images, input_context: input_context})
     )
+  end
+
+  def announcement(data, content, delivery_id, from) do
+    if data.automation_uncertain do
+      {data, [{:reply, from, {:error, :unknown_outcome}}]}
+    else
+      enqueue(data, operation(:announcement, from, %{content: content, delivery_id: delivery_id}))
+    end
   end
 
   def steer(data, content, from),
@@ -370,6 +378,12 @@ defmodule Synapsis.Session.Worker.PendingInputs do
     PendingInputStore.append_prompt(id, payload.content, payload.images, opts)
   end
 
+  defp execute(id, _owner_id, %{kind: :announcement, payload: payload, deadline: deadline}),
+    do:
+      PendingInputStore.append_assistant(id, payload.content, payload.delivery_id,
+        deadline: deadline
+      )
+
   defp execute(id, _owner_id, %{kind: :steer, payload: payload, deadline: deadline}),
     do: PendingInputStore.append_steer(id, payload.content, deadline: deadline)
 
@@ -424,8 +438,23 @@ defmodule Synapsis.Session.Worker.PendingInputs do
         drain: Enum.any?(inputs, &(&1.kind == "prompt" and &1.status == "queued"))
     }
 
-    {%{data | pending_inputs: lane}, []}
+    data = %{data | pending_inputs: lane}
+
+    data =
+      Enum.reduce(inputs, data, fn
+        %{kind: "assistant_completion", status: status} = input, acc
+        when status in ["queued", "inflight"] ->
+          Automation.restore(acc, input)
+
+        _input, acc ->
+          acc
+      end)
+
+    {data, []}
   end
+
+  defp apply_result(data, %{kind: :announcement} = op, {:ok, input}),
+    do: Automation.admitted(data, input, op.from)
 
   defp apply_result(data, %{kind: kind} = op, {:ok, input})
        when kind in [:prompt, :steer, :wake] do
@@ -434,6 +463,9 @@ defmodule Synapsis.Session.Worker.PendingInputs do
       "input_queued",
       Map.take(input, [:id, :kind, :content])
     )
+
+    if kind in [:prompt, :steer],
+      do: Synapsis.Agent.MemoryCapture.accepted(data, input.id, input.content)
 
     lane = data.pending_inputs
     lane = %{lane | drain: lane.drain or kind != :steer}

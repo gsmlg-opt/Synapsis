@@ -137,6 +137,7 @@ defmodule Synapsis.Agent.AutomationExecutionFunctionalTest do
     run = run()
     before_read = System.monotonic_time(:millisecond)
     {prompt, metadata} = AutomationExecution.prepare(run, SessionsProbe, run.prompt)
+    after_read = System.monotonic_time(:millisecond)
 
     assert prompt == "Recent conversation:\n- User: Original\n\n" <> run.prompt
     assert Map.delete(metadata, "automation_context") == run.metadata
@@ -150,7 +151,7 @@ defmodule Synapsis.Agent.AutomationExecutionFunctionalTest do
     assert_receive {:context_read, source_id, [deadline: deadline]}
     assert source_id == run.metadata["automation_origin"]["session_id"]
     assert deadline > before_read
-    assert deadline <= before_read + 5_000
+    assert deadline <= after_read + 5_000
     assert run.prompt == "  Authored automation\nwith exact bytes  \n"
   end
 
@@ -200,7 +201,7 @@ defmodule Synapsis.Agent.AutomationExecutionFunctionalTest do
     assert Agent.get(SessionsProbe, & &1.appends) == []
   end
 
-  test "announce observations distinguish delivered and ephemeral deferred source appends" do
+  test "announce observations distinguish delivered and durably deferred source appends" do
     for status <- [:delivered, :deferred] do
       run = run() |> Map.merge(%{status: "completed", summary: "Result\nexact bytes  "})
       message_id = Ecto.UUID.generate()
@@ -214,7 +215,11 @@ defmodule Synapsis.Agent.AutomationExecutionFunctionalTest do
       assert observation["status"] == Atom.to_string(status)
       assert observation["source_session_id"] == run.metadata["automation_origin"]["session_id"]
       assert observation["message_id"] == message_id
-      assert_receive {:result_append, source_id, "Result\nexact bytes  ", [timeout: 500], false}
+
+      assert_receive {:result_append, source_id, "Result\nexact bytes  ",
+                      [timeout: 500, run_id: run_id], false}
+
+      assert run_id == run.id
       assert source_id == run.metadata["automation_origin"]["session_id"]
 
       assert [%{payload: ^observation}] =
@@ -264,7 +269,10 @@ defmodule Synapsis.Agent.AutomationExecutionFunctionalTest do
     assert terminal.metadata["automation_delivery"]["status"] == "pending"
     assert_receive {:completion_persisted, run_id}
     assert run_id == run.id
-    assert_receive {:result_append, source_id, "Final completed result", [timeout: 1_000], true}
+
+    assert_receive {:result_append, source_id, "Final completed result",
+                    [timeout: 1_000, run_id: ^run_id], true}
+
     assert source_id == run.metadata["automation_origin"]["session_id"]
 
     assert {:ok, ^terminal, [_already_completed]} =

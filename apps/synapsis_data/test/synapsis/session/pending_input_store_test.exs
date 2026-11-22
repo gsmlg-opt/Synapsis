@@ -13,6 +13,35 @@ defmodule Synapsis.Session.PendingInputStoreTest do
     {:ok, session_id: session_id}
   end
 
+  test "assistant admission deduplicates by delivery identity and survives recovery", %{
+    session_id: id
+  } do
+    assert {:ok, first} = PendingInputStore.append_assistant(id, "same body", "run-one")
+    assert {:ok, duplicate} = PendingInputStore.append_assistant(id, "same body", "run-one")
+    assert duplicate.id == first.id
+    assert {:ok, second} = PendingInputStore.append_assistant(id, "same body", "run-two")
+    refute second.id == first.id
+    assert :ok = PendingInputStore.recover_for_owner(id, Ecto.UUID.generate())
+
+    assert [
+             %{id: first_id, kind: "assistant_completion", status: "queued"},
+             %{id: second_id, kind: "assistant_completion", status: "queued"}
+           ] = PendingInputStore.list(id)
+
+    assert first_id == first.id
+    assert second_id == second.id
+  end
+
+  test "assistant pending capacity is bounded independently of prompts", %{session_id: id} do
+    for index <- 1..25 do
+      assert {:ok, _} = PendingInputStore.append_assistant(id, "body", "run-#{index}")
+    end
+
+    assert {:error, :queue_full} = PendingInputStore.append_assistant(id, "body", "overflow")
+    assert {:ok, _} = PendingInputStore.append_assistant(id, "body", "run-1")
+    assert {:ok, _} = PendingInputStore.append_prompt(id, "prompt", [])
+  end
+
   test "stores queued prompts in FIFO order", %{session_id: session_id} do
     assert {:ok, first} = PendingInputStore.append_prompt(session_id, "first", [])
     assert {:ok, second} = PendingInputStore.append_prompt(session_id, "second", [])

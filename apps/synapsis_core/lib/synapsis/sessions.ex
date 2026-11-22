@@ -429,8 +429,10 @@ defmodule Synapsis.Sessions do
   @doc """
   Append a completed assistant result through the original session owner.
 
-  An active turn returns `:deferred`; that acknowledgement is ephemeral, not a
-  durable delivery receipt. Idle delivery awaits persistence and starts no turn.
+  An active turn returns `:deferred` only after durable admission. Idle delivery
+  awaits atomic transcript and receipt persistence and starts no provider turn.
+  With `:run_id`, redelivery returns the same message UUID, including after restart;
+  callers without a Run ID retain independent explicit append semantics.
   """
   def append_automation_result(session_id, text, opts \\ []) do
     with :ok <- ensure_session_running(session_id) do

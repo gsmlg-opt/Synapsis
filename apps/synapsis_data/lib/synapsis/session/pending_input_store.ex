@@ -1,6 +1,6 @@
 defmodule Synapsis.Session.PendingInputStore do
   @moduledoc """
-  Concord-backed custody for prompts, mid-turn steering and owned system events.
+  Concord-backed custody for prompts, steering, system events and completed assistant messages.
 
   Inputs share `sessions/<id>/pending_inputs`. All mutations conditionally write
   the exact snapshot they read, with at most three acknowledged-conflict attempts
@@ -27,7 +27,10 @@ defmodule Synapsis.Session.PendingInputStore do
     :inserted_at,
     :updated_at,
     :input_provenance,
-    :event
+    :event,
+    :delivery_id,
+    :completion_offset,
+    :completion_claim
   ]
 
   @type t :: %__MODULE__{
@@ -35,12 +38,15 @@ defmodule Synapsis.Session.PendingInputStore do
           session_id: String.t(),
           kind: String.t(),
           status: String.t(),
-          content: String.t(),
+          content: String.t() | nil,
           image_parts: list(),
           inserted_at: String.t(),
           updated_at: String.t(),
           input_provenance: map() | nil,
-          event: map() | nil
+          event: map() | nil,
+          delivery_id: String.t() | nil,
+          completion_offset: non_neg_integer() | nil,
+          completion_claim: String.t() | nil
         }
 
   @doc "List all pending input records for a session in insertion order."
@@ -106,6 +112,158 @@ defmodule Synapsis.Session.PendingInputStore do
 
       _ ->
         {:error, :invalid_input_provenance}
+    end
+  end
+
+  @doc "Durably admit a completed assistant message, retaining its UUID on redelivery."
+  def append_assistant(session_id, content, delivery_id, opts \\ [])
+      when is_binary(session_id) and is_binary(content) and is_binary(delivery_id) do
+    input = %{
+      new_input(session_id, "assistant_completion", content, [])
+      | delivery_id: delivery_id
+    }
+
+    append(session_id, input, @attempts, deadline(opts))
+  end
+
+  @doc "Atomically append the admitted assistant turn and retain a lightweight delivery receipt."
+  def complete_assistant(session_id, input_id, turn, opts \\ []) do
+    claim_assistant(session_id, input_id, turn, Ecto.UUID.generate(), @attempts, deadline(opts))
+  end
+
+  # The durable claim precedes dispatch. Only this invocation owns its token;
+  # a replacement can read its receipt but cannot resume a possibly dispatched
+  # transaction. A crash between claim and dispatch is conservatively unknown.
+  defp claim_assistant(session_id, input_id, turn, claim, attempts, deadline) do
+    with {:ok, snapshot, entries} <- load_entries(session_id, deadline),
+         %__MODULE__{kind: "assistant_completion"} = input <-
+           entries |> entries_to_inputs() |> Enum.find(&(&1.id == input_id)) do
+      cond do
+        input.status in ["consumed", "inflight"] ->
+          reconcile_assistant(session_id, input_id, deadline)
+
+        input.status != "queued" or value(turn, :id) != input.id ->
+          {:error, :invalid_input_state}
+
+        true ->
+          claimed = touch(%{input | status: "inflight", completion_claim: claim})
+
+          updated =
+            Enum.map(entries, fn entry ->
+              if value(entry, :id) == input_id, do: merge_input(entry, claimed), else: entry
+            end)
+
+          case persist(session_id, snapshot, updated, deadline) do
+            :ok ->
+              commit_assistant(session_id, input_id, turn, claim, @attempts, deadline)
+
+            {:error, :conflict} when attempts > 1 ->
+              claim_assistant(session_id, input_id, turn, claim, attempts - 1, deadline)
+
+            {:error, :unknown_outcome} ->
+              reconcile_assistant(session_id, input_id, deadline)
+
+            error ->
+              error
+          end
+      end
+    else
+      nil -> {:error, :input_not_found}
+      error -> error
+    end
+  end
+
+  defp commit_assistant(session_id, input_id, turn, claim, attempts, deadline) do
+    with {:ok, snapshot, entries} <- load_entries(session_id, deadline),
+         %__MODULE__{kind: "assistant_completion", status: "inflight", completion_claim: ^claim} =
+           input <-
+           entries |> entries_to_inputs() |> Enum.find(&(&1.id == input_id)),
+         {:ok, timeout} <- remaining(deadline),
+         {:ok, meta} <- Store.get_meta(session_id, timeout: timeout),
+         {:ok, offset} <- Store.count_turns(session_id),
+         {:ok, timeout} <- remaining(deadline) do
+      timestamp_key = if Map.has_key?(meta, "updated_at"), do: "updated_at", else: :updated_at
+      updated_meta = Map.put(meta, timestamp_key, DateTime.utc_now())
+      receipt = touch(%{input | status: "consumed", content: nil, completion_offset: offset})
+
+      updated =
+        Enum.map(entries, fn entry ->
+          if value(entry, :id) == input_id, do: merge_input(entry, receipt), else: entry
+        end)
+
+      case Store.commit_pending_completion(
+             session_id,
+             snapshot,
+             updated,
+             offset,
+             [turn],
+             meta,
+             updated_meta,
+             timeout: timeout
+           ) do
+        :ok ->
+          {:ok, offset, updated_meta}
+
+        {:error, :conflict} when attempts > 1 ->
+          commit_assistant(session_id, input_id, turn, claim, attempts - 1, deadline)
+
+        {:error, :unknown_outcome} ->
+          reconcile_assistant(session_id, input_id, deadline)
+
+        error ->
+          release_rejected_claim(session_id, input_id, claim, error)
+      end
+    else
+      {:error, _} = error -> release_rejected_claim(session_id, input_id, claim, error)
+      _ -> reconcile_assistant(session_id, input_id, deadline)
+    end
+  end
+
+  # Acknowledged rejection, or failure before dispatch, proves no final write is
+  # outstanding. Release only our token with a separate bounded cleanup budget.
+  defp release_rejected_claim(session_id, input_id, claim, error) do
+    case release_claim(session_id, input_id, claim, @attempts, deadline([])) do
+      :ok -> error
+      _ -> {:error, :unknown_outcome}
+    end
+  end
+
+  defp release_claim(session_id, input_id, claim, attempts, deadline) do
+    with {:ok, snapshot, entries} <- load_entries(session_id, deadline) do
+      updated =
+        Enum.map(entries, fn entry ->
+          case normalize_input(entry) do
+            %{id: ^input_id, status: "inflight", completion_claim: ^claim} = input ->
+              merge_input(entry, touch(%{input | status: "queued", completion_claim: nil}))
+              |> Map.delete(:completion_claim)
+              |> Map.delete("completion_claim")
+
+            _ ->
+              entry
+          end
+        end)
+
+      case persist(session_id, snapshot, updated, deadline) do
+        {:error, :conflict} when attempts > 1 ->
+          release_claim(session_id, input_id, claim, attempts - 1, deadline)
+
+        result ->
+          result
+      end
+    end
+  end
+
+  # An uncertain write is only read back, never redispatched. An absent receipt
+  # does not establish rollback: the session owner must keep its recovery fence.
+  defp reconcile_assistant(session_id, input_id, deadline) do
+    with {:ok, _snapshot, entries} <- load_entries(session_id, deadline),
+         %{status: "consumed", completion_offset: offset} <-
+           entries |> entries_to_inputs() |> Enum.find(&(&1.id == input_id)),
+         {:ok, timeout} <- remaining(deadline),
+         {:ok, meta} <- Store.get_meta(session_id, timeout: timeout) do
+      {:ok, offset, meta}
+    else
+      _ -> {:error, :unknown_outcome}
     end
   end
 
@@ -239,7 +397,17 @@ defmodule Synapsis.Session.PendingInputStore do
     with {:ok, snapshot, entries} <- load_entries(session_id, deadline) do
       inputs = entries_to_inputs(entries)
 
+      duplicate =
+        Enum.find(
+          inputs,
+          &(&1.kind == "assistant_completion" and
+              input.kind == "assistant_completion" and &1.delivery_id == input.delivery_id)
+        )
+
       cond do
+        duplicate != nil ->
+          {:ok, duplicate}
+
         Enum.any?(inputs, &(&1.id == input.id)) ->
           {:error, :input_conflict}
 
@@ -533,7 +701,10 @@ defmodule Synapsis.Session.PendingInputStore do
       inserted_at: value(input, :inserted_at),
       updated_at: value(input, :updated_at),
       input_provenance: value(input, :input_provenance),
-      event: value(input, :event)
+      event: value(input, :event),
+      delivery_id: value(input, :delivery_id),
+      completion_offset: value(input, :completion_offset),
+      completion_claim: value(input, :completion_claim)
     }
   end
 
@@ -544,6 +715,9 @@ defmodule Synapsis.Session.PendingInputStore do
     |> Map.from_struct()
     |> put_or_drop_optional(:input_provenance, input.input_provenance)
     |> put_or_drop_optional(:event, input.event)
+    |> put_or_drop_optional(:delivery_id, input.delivery_id)
+    |> put_or_drop_optional(:completion_offset, input.completion_offset)
+    |> put_or_drop_optional(:completion_claim, input.completion_claim)
   end
 
   defp put_or_drop_optional(map, key, nil), do: Map.delete(map, key)
@@ -563,6 +737,9 @@ defmodule Synapsis.Session.PendingInputStore do
     |> put_known_key(:updated_at, input.updated_at)
     |> merge_optional(:input_provenance, input.input_provenance)
     |> merge_optional(:event, input.event)
+    |> merge_optional(:delivery_id, input.delivery_id)
+    |> merge_optional(:completion_offset, input.completion_offset)
+    |> merge_optional(:completion_claim, input.completion_claim)
     |> Map.delete(:attachments)
     |> Map.delete("attachments")
   end
@@ -584,6 +761,10 @@ defmodule Synapsis.Session.PendingInputStore do
       Map.has_key?(map, string_key) -> Map.put(map, string_key, value)
       true -> Map.put(map, key, value)
     end
+  end
+
+  defp pending_count(inputs, "assistant_completion") do
+    Enum.count(inputs, &(&1.kind == "assistant_completion" and &1.status in @pending_statuses))
   end
 
   defp pending_count(inputs, "system_event") do

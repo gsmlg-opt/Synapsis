@@ -796,6 +796,9 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
           else: acc
       end)
 
+    state = recover_failed_occurrences(state)
+    configs = state.configs
+
     enabled_configs =
       Enum.filter(
         configs,
@@ -824,6 +827,46 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
       end)
 
     %{state | reload_status: :ok, occurrence_submissions: submissions}
+  end
+
+  defp recover_failed_occurrences(state) do
+    Enum.reduce(state.configs, state, fn config, acc ->
+      key = routine_key(config)
+
+      with true <- typed_schedule?(config) and materialized?(config),
+           true <- value(config, :enabled, true) != false,
+           true <- value(value(config, :schedule), :kind) in ["every", "cron"],
+           "failed" <- value(config, :last_status),
+           false <- retirement_identity_pending?(acc, key),
+           %DateTime{} = slot <- parse_datetime(value(config, :next_run_at)),
+           true <- DateTime.compare(slot, DateTime.utc_now()) != :gt,
+           prepared = prepare_trigger(config, slot, false),
+           {:ok, %{status: "failed"} = run} <-
+             Runs.fetch_by_idempotency_key(value(prepared, :__idempotency_key)),
+           false <- MapSet.member?(acc.retired_run_ids, run.id),
+           context when is_map(context) <- value(run.metadata || %{}, :routine_schedule),
+           true <- context == value(prepared, :__schedule_context),
+           %{"source" => "routine", "id" => id} <-
+             value(run.metadata || %{}, :automation_ref),
+           true <- id == value(config, :id),
+           true <- same_datetime?(run.scheduled_for, slot) do
+        tracked = %{
+          key: key,
+          config: prepared,
+          last_run_at: run.started_at,
+          next_run_at: slot
+        }
+
+        acc
+        |> put_terminal_event(run.id, :persisted)
+        |> persist_typed_terminal(tracked, "failed", %{
+          status: "failed",
+          payload: terminal_run_payload(run)
+        })
+      else
+        _unconfirmed -> acc
+      end
+    end)
   end
 
   defp public_status_options(opts) when is_list(opts) do
@@ -1330,13 +1373,14 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
               if routine_key(entry) == tracked.key, do: updated, else: entry
             end)
 
-      # Failed/unknown outcomes remain unfinished; no retry or retirement policy is invented.
+      # Unknown effects and one-shot failures keep their unfinished occurrence.
       timers =
         cond do
           retire? or value(updated, :enabled, true) == false ->
             timers
 
-          status == "completed" or value(context, :advance) != true ->
+          status == "completed" or failed_periodic_occurrence?(config, context, status) or
+              value(context, :advance) != true ->
             schedule_config(timers, updated)
 
           match?(%DateTime{}, next_run_at) ->
@@ -1407,8 +1451,16 @@ defmodule Synapsis.Agent.Heartbeat.LocalScheduler do
     end
   end
 
-  defp typed_outcome(_config, context, _status, _started_at),
-    do: {%{}, parse_datetime(value(context, :preserved_next_run_at))}
+  defp typed_outcome(config, context, status, _started_at) do
+    if failed_periodic_occurrence?(config, context, status),
+      do: {%{}, computed_next(config)},
+      else: {%{}, parse_datetime(value(context, :preserved_next_run_at))}
+  end
+
+  defp failed_periodic_occurrence?(config, context, status),
+    do:
+      status == "failed" and value(context, :advance) == true and
+        value(value(config, :schedule), :kind) in ["every", "cron"]
 
   defp computed_next(config) do
     case Schedule.next_after(

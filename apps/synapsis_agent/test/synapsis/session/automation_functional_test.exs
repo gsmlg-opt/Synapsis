@@ -99,6 +99,163 @@ defmodule Synapsis.Session.AutomationFunctionalTest do
     assert length(Regex.scan(~r/Result between turns/, final)) == 1
   end
 
+  test "acknowledged announcement survives worker replacement and keeps its run identity", ctx do
+    fixture = fixture(ctx.tmp_dir, stream_first: true)
+    id = fixture.session.id
+    run_id = Ecto.UUID.generate()
+    assert :ok = Worker.send_message(id, "Held source prompt")
+    assert_receive {:automation_request, 0, _, handler}, 5_000
+    assert_receive {"text_delta", %{text: "正在回答"}}, 5_000
+
+    assert {:ok, %{status: :deferred, message_id: message_id}} =
+             Sessions.append_automation_result(id, "Durable result", run_id: run_id)
+
+    assert [%{kind: "assistant_completion", id: ^message_id, status: "queued"}] =
+             Synapsis.Session.PendingInputStore.list(id)
+
+    assert :ok = DynamicSupervisor.stop_session(id)
+    send(handler, :abandon_automation)
+    assert :ok = Sessions.ensure_running(id)
+
+    assert {:ok, :delivered} =
+             wait_for(fn ->
+               case Store.list_turns(id) do
+                 {:ok, turns} ->
+                   if Enum.any?(turns, &(&1.id == message_id)),
+                     do: {:ok, :delivered},
+                     else: :retry
+
+                 _ ->
+                   :retry
+               end
+             end)
+
+    # Replace again after the append committed: only the durable receipt remains.
+    assert :ok = DynamicSupervisor.stop_session(id)
+    assert :ok = Sessions.ensure_running(id)
+
+    assert {:ok, %{status: :delivered, message_id: ^message_id}} =
+             Sessions.append_automation_result(id, "Durable result", run_id: run_id)
+
+    assert {:ok, turns} = Store.list_turns(id)
+    assert Enum.count(turns, &(&1.id == message_id)) == 1
+    assert length(Agent.get(fixture.requests, & &1)) == 1
+
+    assert {:ok, %{status: :delivered, message_id: other_id}} =
+             Sessions.append_automation_result(id, "Durable result", run_id: Ecto.UUID.generate())
+
+    refute other_id == message_id
+    assert length(Agent.get(fixture.requests, & &1)) == 1
+  end
+
+  test "replacement preserves an unresolved final transaction fence", ctx do
+    fixture = fixture(ctx.tmp_dir)
+    id = fixture.session.id
+    assert :ok = DynamicSupervisor.stop_session(id)
+    run_id = Ecto.UUID.generate()
+
+    assert {:ok, input} =
+             Synapsis.Session.PendingInputStore.append_assistant(
+               id,
+               "Unknown commit",
+               "#{id}/#{run_id}/announce"
+             )
+
+    assert {:ok, snapshot = {:present, [entry], _}} = Store.read_pending_inputs(id)
+
+    claimed =
+      entry |> Map.put(:status, "inflight") |> Map.put(:completion_claim, Ecto.UUID.generate())
+
+    assert :ok = Store.compare_put_pending_inputs(id, snapshot, [claimed])
+    assert :ok = Sessions.ensure_running(id)
+
+    assert {:error, :unknown_outcome} =
+             Sessions.append_automation_result(id, "Unknown commit", run_id: run_id)
+
+    assert {:ok, []} = Store.list_turns(id)
+    assert [%{status: "inflight", id: message_id}] = Synapsis.Session.PendingInputStore.list(id)
+    assert message_id == input.id
+    assert Agent.get(fixture.requests, & &1) == []
+    assert :ok = DynamicSupervisor.stop_session(id)
+    assert :ok = Sessions.ensure_running(id)
+
+    assert {:error, :unknown_outcome} =
+             Sessions.append_automation_result(id, "Unknown commit", run_id: run_id)
+
+    assert {:ok, []} = Store.list_turns(id)
+    assert Agent.get(fixture.requests, & &1) == []
+  end
+
+  test "a final commit with its task reply withheld recovers only the existing receipt", ctx do
+    fixture = fixture(ctx.tmp_dir)
+    id = fixture.session.id
+    assert :ok = DynamicSupervisor.stop_session(id)
+    run_id = Ecto.UUID.generate()
+
+    assert {:ok, input} =
+             Synapsis.Session.PendingInputStore.append_assistant(
+               id,
+               "Committed before reply",
+               "#{id}/#{run_id}/announce"
+             )
+
+    turn = %{id: input.id, role: "assistant", parts: [%{type: "text", text: input.content}]}
+    owner = self()
+
+    task =
+      Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->
+        result = Synapsis.Session.PendingInputStore.complete_assistant(id, input.id, turn)
+        send(owner, {:commit_before_reply, self(), result})
+
+        receive do
+          :release_commit_reply -> result
+        after
+          5_000 -> raise "commit reply handshake timed out"
+        end
+      end)
+
+    on_exit(fn -> if Process.alive?(task.pid), do: Process.exit(task.pid, :kill) end)
+    assert_receive {:commit_before_reply, task_pid, {:ok, 0, _}}, 5_000
+    assert :ok = Sessions.ensure_running(id)
+
+    assert {:ok, %{status: :delivered, message_id: message_id}} =
+             Sessions.append_automation_result(id, "Committed before reply", run_id: run_id)
+
+    assert message_id == input.id
+    assert {:ok, [^turn]} = Store.list_turns(id)
+    assert Agent.get(fixture.requests, & &1) == []
+    send(task_pid, :release_commit_reply)
+    assert {:ok, 0, _} = Task.await(task, 5_000)
+  end
+
+  test "explicit append callers retain independent message identities", ctx do
+    fixture = fixture(ctx.tmp_dir)
+    id = fixture.session.id
+
+    assert {:ok, %{status: :delivered, message_id: first}} =
+             Sessions.append_automation_result(id, "same")
+
+    assert {:ok, %{status: :delivered, message_id: second}} =
+             Sessions.append_automation_result(id, "same")
+
+    refute first == second
+    assert {:ok, [%{id: ^first}, %{id: ^second}]} = Store.list_turns(id)
+    assert Agent.get(fixture.requests, & &1) == []
+  end
+
+  test "storage rejection does not acknowledge an announcement", ctx do
+    fixture = fixture(ctx.tmp_dir)
+    id = fixture.session.id
+    assert {:ok, %{status: :delivered}} = Sessions.append_automation_result(id, "initial")
+    assert :ok = Store.put_value(id, "pending_inputs", :invalid)
+
+    assert {:error, :invalid_pending_inputs} =
+             Sessions.append_automation_result(id, "rejected", run_id: Ecto.UUID.generate())
+
+    assert {:ok, [%{parts: [%{text: "initial"}]}]} = Store.list_turns(id)
+    assert Agent.get(fixture.requests, & &1) == []
+  end
+
   test "live context includes visible streaming text without persisting it early", ctx do
     fixture = fixture(ctx.tmp_dir, stream_first: true)
     id = fixture.session.id
@@ -167,18 +324,29 @@ defmodule Synapsis.Session.AutomationFunctionalTest do
           conn
         end
 
-      if index == 0 and (Keyword.get(opts, :hold_first, false) or stream?) do
-        receive do
-          :continue_automation -> :ok
-        after
-          10_000 -> raise "automation fixture handshake timed out"
+      finish? =
+        if index == 0 and (Keyword.get(opts, :hold_first, false) or stream?) do
+          receive do
+            :continue_automation -> true
+            :abandon_automation when stream? -> false
+          after
+            10_000 -> raise "automation fixture handshake timed out"
+          end
+        else
+          true
         end
+
+      if finish? do
+        chunks =
+          if stream?, do: [], else: [DeterministicProvider.text_chunk("fixture reply #{index}")]
+
+        DeterministicProvider.send_sse(
+          conn,
+          chunks ++ [DeterministicProvider.finish_chunk("stop")]
+        )
+      else
+        conn
       end
-
-      chunks =
-        if stream?, do: [], else: [DeterministicProvider.text_chunk("fixture reply #{index}")]
-
-      DeterministicProvider.send_sse(conn, chunks ++ [DeterministicProvider.finish_chunk("stop")])
     end)
 
     assert {:ok, session} =
@@ -213,7 +381,7 @@ defmodule Synapsis.Session.AutomationFunctionalTest do
 
           blocks when is_list(blocks) ->
             Enum.map_join(blocks, "", fn
-              %{"type" => "text", "text" => text} -> text
+              %{"type" => type, "text" => text} when type in ~w(input_text output_text) -> text
               _ -> ""
             end)
         end
