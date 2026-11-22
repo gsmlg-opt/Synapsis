@@ -51,9 +51,9 @@ defmodule Synapsis.Agent.MemoryCaptureTest do
       "/capture/v1/hooks/synapsis/user-prompt-submit",
       fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        event = Jason.decode!(body)
+        event = Formata.JSON.decode!(body)
         send(test, {:captured, event})
-        Plug.Conn.resp(conn, 202, Jason.encode!(%{ok: true, event_id: event["event_id"]}))
+        Plug.Conn.resp(conn, 202, Formata.JSON.encode!(%{ok: true, event_id: event["event_id"]}))
       end
     )
 
@@ -81,9 +81,9 @@ defmodule Synapsis.Agent.MemoryCaptureTest do
       "/capture/v1/hooks/synapsis/session-end",
       fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        event = Jason.decode!(body)
+        event = Formata.JSON.decode!(body)
         send(test, {:ended, event})
-        Plug.Conn.resp(conn, 202, Jason.encode!(%{ok: true, event_id: event["event_id"]}))
+        Plug.Conn.resp(conn, 202, Formata.JSON.encode!(%{ok: true, event_id: event["event_id"]}))
       end
     )
 

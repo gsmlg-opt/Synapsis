@@ -25,7 +25,7 @@ defmodule Synapsis.Agent.Tools.AutomationWake do
     :catalog_revision
   ]
   @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
 
   def names, do: [@name]
   def revision, do: @revision
@@ -89,7 +89,7 @@ defmodule Synapsis.Agent.Tools.AutomationWake do
              mode: Map.get(operation.arguments, "mode", "next-heartbeat"),
              deadline: deadline
            ) do
-      {:ok, %{content: Jason.encode!(%{"ok" => true}), structured: %{"ok" => true}}}
+      {:ok, %{content: Formata.JSON.encode!(%{"ok" => true}), structured: %{"ok" => true}}}
     else
       {:error, %Error{} = error} -> {:error, error}
       {:error, reason} -> {:error, error(reason)}

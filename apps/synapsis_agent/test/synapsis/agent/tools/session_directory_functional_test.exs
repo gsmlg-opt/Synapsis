@@ -48,8 +48,8 @@ defmodule Synapsis.Agent.Tools.SessionDirectoryFunctionalTest do
 
     assert {:ok, %{content: content, structured: page}} = SessionDirectory.execute(operation)
     assert page == core
-    assert Jason.decode!(content) == Jason.decode!(Jason.encode!(core))
-    assert content == Jason.encode!(core, pretty: true)
+    assert Formata.JSON.decode!(content) == Formata.JSON.decode!(Formata.JSON.encode!(core))
+    assert content == Formata.JSON.encode!(core, pretty: true)
     assert [%{id: ^id, agent: "archive"}] = page.sessions
 
     assert Enum.sort(Map.keys(hd(page.sessions))) ==

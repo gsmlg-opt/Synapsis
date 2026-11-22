@@ -132,7 +132,8 @@ defmodule SynapsisWeb.MemoryLive.ShowTest do
         |> LazyHTML.query("#edit-memory-form")
         |> LazyHTML.attribute("data-initial-values")
 
-      assert %{"title" => "Saved title", "summary" => "Saved summary"} = Jason.decode!(json)
+      assert %{"title" => "Saved title", "summary" => "Saved summary"} =
+               Formata.JSON.decode!(json)
     end
 
     test "saving edit updates memory", %{conn: conn} do

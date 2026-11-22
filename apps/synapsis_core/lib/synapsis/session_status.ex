@@ -22,7 +22,7 @@ defmodule Synapsis.SessionStatus do
          {:ok, meta} <- bounded_read(id, deadline),
          {:ok, session} <- project(meta, id),
          result = %{source: "durable", session: session},
-         {:ok, json} <- Jason.encode(result),
+         {:ok, json} <- Synapsis.JSON.encode(result),
          true <- byte_size(json) <= @output_limit,
          :ok <- remaining(deadline) do
       {:ok, result}
@@ -61,7 +61,7 @@ defmodule Synapsis.SessionStatus do
              {:ok, updated} <- timestamp(field(meta, :updated_at)),
              row = Map.new(@text_fields, &{&1, field(meta, &1)}),
              row = Map.merge(row, %{id: id, inserted_at: inserted, updated_at: updated}),
-             {:ok, json} <- Jason.encode(row),
+             {:ok, json} <- Synapsis.JSON.encode(row),
              true <- byte_size(json) <= @output_limit do
           {:ok, row}
         else

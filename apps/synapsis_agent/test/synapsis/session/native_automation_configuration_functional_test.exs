@@ -196,7 +196,7 @@ defmodule Synapsis.Session.NativeAutomationConfigurationFunctionalTest do
     assert saved["name"] == name
     assert saved["enabled"] == false
     assert saved["automation_origin"]["session_id"] == source.id
-    assert byte_size(Jason.encode!(receipt)) < 1_024
+    assert byte_size(Formata.JSON.encode!(receipt)) < 1_024
   end
 
   defp create(source, _f) do
@@ -220,7 +220,7 @@ defmodule Synapsis.Session.NativeAutomationConfigurationFunctionalTest do
              &(&1[:type] == "tool_result" and &1[:content] == result.content)
            )
 
-    {Jason.decode!(result.content), result}
+    {Formata.JSON.decode!(result.content), result}
   end
 
   defp assert_effect(run, root) do
@@ -288,7 +288,7 @@ defmodule Synapsis.Session.NativeAutomationConfigurationFunctionalTest do
 
     Gaoxy.Test.stub(http, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       Agent.update(log, &(&1 ++ [request]))
       following = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
 

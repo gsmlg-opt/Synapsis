@@ -48,7 +48,7 @@ defmodule Synapsis.Session.NativeImageFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/messages", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -117,7 +117,10 @@ defmodule Synapsis.Session.NativeImageFunctionalTest do
            } = part
 
     assert {:ok, dump} = Synapsis.Part.dump(part)
-    assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+    assert {:ok, ^part} =
+             dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
+
     assert projection["result"]["path"] == "tiny.png"
     assert projection["result"]["bytes"] == byte_size(bytes)
     assert projection["result"]["detail"] == "original"
@@ -175,7 +178,10 @@ defmodule Synapsis.Session.NativeImageFunctionalTest do
       %{
         "type" => "content_block_delta",
         "index" => 0,
-        "delta" => %{"type" => "input_json_delta", "partial_json" => Jason.encode!(@arguments)}
+        "delta" => %{
+          "type" => "input_json_delta",
+          "partial_json" => Formata.JSON.encode!(@arguments)
+        }
       },
       %{"type" => "content_block_stop", "index" => 0},
       %{"type" => "message_delta", "delta" => %{"stop_reason" => "tool_use"}},
@@ -204,6 +210,9 @@ defmodule Synapsis.Session.NativeImageFunctionalTest do
   defp response(conn, events) do
     conn
     |> Plug.Conn.put_resp_content_type("text/event-stream")
-    |> Plug.Conn.resp(200, Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n")))
+    |> Plug.Conn.resp(
+      200,
+      Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
+    )
   end
 end

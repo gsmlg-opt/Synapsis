@@ -370,7 +370,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsCatalogFunctionalTest do
     |> LazyHTML.query("[data-initial-values]")
     |> LazyHTML.attribute("data-initial-values")
     |> hd()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 
   defp mount_id(view) do

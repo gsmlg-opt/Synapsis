@@ -45,7 +45,7 @@ defmodule Synapsis.SessionDirectoryInlineHistoryFunctionalTest do
       {result, events} = observe(fn -> SessionDirectory.list_rendered(request, ctx.context) end)
       assert {:ok, %{text: text, page: page}} = result
       assert page == legacy
-      assert text == Jason.encode!(legacy, pretty: true)
+      assert text == Formata.JSON.encode!(legacy, pretty: true)
       assert [%{id: ^id}] = page.sessions
       refute Map.has_key?(hd(page.sessions), :messages)
 
@@ -164,7 +164,7 @@ defmodule Synapsis.SessionDirectoryInlineHistoryFunctionalTest do
     assert text =~ ~s("fraction": 1e-7)
     assert text =~ ~s("large": 100000000000000000000)
     assert javascript_pretty(text) == text
-    assert Jason.decode!(text) == Jason.decode!(Jason.encode!(page))
+    assert Formata.JSON.decode!(text) == Formata.JSON.decode!(Formata.JSON.encode!(page))
     assert byte_size(text) <= 65_536
     assert [[_entries, 20, _broker, _policy]] = calls(events, History, :project)
 
@@ -347,7 +347,7 @@ defmodule Synapsis.SessionDirectoryInlineHistoryFunctionalTest do
   defp incoming(events) do
     Enum.flat_map(events, fn
       {:port_data, _, {:eol, text}} ->
-        case Jason.decode(text) do
+        case Formata.JSON.decode(text) do
           {:ok, frame} -> [frame]
           _ -> []
         end
@@ -362,7 +362,7 @@ defmodule Synapsis.SessionDirectoryInlineHistoryFunctionalTest do
       for(
         [_port, data, _opts] <- calls(events, :erlang, :port_command),
         line <- String.split(IO.iodata_to_binary(data), "\n", trim: true),
-        do: Jason.decode!(line)
+        do: Formata.JSON.decode!(line)
       )
 
   defp javascript_pretty(json) do
@@ -387,7 +387,7 @@ defmodule Synapsis.SessionDirectoryInlineHistoryFunctionalTest do
       ])
 
     try do
-      assert Port.command(port, Jason.encode!(json) <> "\n")
+      assert Port.command(port, Formata.JSON.encode!(json) <> "\n")
       collect_javascript(port, "")
     after
       if Port.info(port), do: Port.close(port)

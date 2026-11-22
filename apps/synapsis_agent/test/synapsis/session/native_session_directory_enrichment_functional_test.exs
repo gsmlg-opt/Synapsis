@@ -90,7 +90,7 @@ defmodule Synapsis.Session.NativeSessionDirectoryEnrichmentFunctionalTest do
 
     Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       Agent.update(
         ctx.harness.counter,
@@ -162,11 +162,13 @@ defmodule Synapsis.Session.NativeSessionDirectoryEnrichmentFunctionalTest do
     assert row["title"] == "saved host title"
     assert row["derived_title"] == "Build the native session report."
     assert row["last_message_preview"] == "Native report ready. 雪 😀"
-    assert Jason.decode!(result.content) == page
-    ordered = Jason.decode!(result.content, objects: :ordered_objects)
-    assert result.content == Jason.encode!(ordered, pretty: true)
+    assert Formata.JSON.decode!(result.content) == page
+    ordered = Formata.JSON.decode!(result.content, objects: :ordered_objects)
+    assert result.content == Formata.JSON.encode!(ordered, pretty: true)
     assert byte_size(result.content) <= 65_536
-    assert byte_size(Jason.encode!(%{content: result.content, structured: page})) <= 262_144
+
+    assert byte_size(Formata.JSON.encode!(%{content: result.content, structured: page})) <=
+             262_144
 
     next = List.last(requests)
 
@@ -218,10 +220,13 @@ defmodule Synapsis.Session.NativeSessionDirectoryEnrichmentFunctionalTest do
     assert native.structured.has_more == false
     assert Enum.sort(Enum.map(native.structured.sessions, & &1.id)) == Enum.sort(ids)
     assert Enum.count(native.structured.sessions, &Map.has_key?(&1, :last_message_preview)) == 100
-    assert Jason.decode!(native.content) == Jason.decode!(Jason.encode!(native.structured))
-    assert native.content == Jason.encode!(native.structured, pretty: true)
+
+    assert Formata.JSON.decode!(native.content) ==
+             Formata.JSON.decode!(Formata.JSON.encode!(native.structured))
+
+    assert native.content == Formata.JSON.encode!(native.structured, pretty: true)
     assert byte_size(native.content) <= 65_536
-    wrapper_bytes = byte_size(Jason.encode!(native))
+    wrapper_bytes = byte_size(Formata.JSON.encode!(native))
     assert wrapper_bytes > 65_536
     assert wrapper_bytes <= 262_144
   end

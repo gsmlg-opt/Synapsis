@@ -61,7 +61,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
              "name" => "Unsaved provider",
              "base_url" => "https://draft.example/v1",
              "credential_id" => id
-           } = Jason.decode!(json)
+           } = Formata.JSON.decode!(json)
 
     assert id == credential.id
     assert has_element?(view, "input[name='name'][value='Unsaved provider']")
@@ -190,7 +190,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
 
       refute LazyHTML.attribute(form, "id") == [mount_id]
       [json] = LazyHTML.attribute(form, "data-initial-values")
-      assert %{"name" => "backplane", "credential_id" => ""} = Jason.decode!(json)
+      assert %{"name" => "backplane", "credential_id" => ""} = Formata.JSON.decode!(json)
       refute has_element?(view, "input[name='api_key']")
     end
 
@@ -203,7 +203,10 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "backplane-model"}]}))
+        |> Plug.Conn.send_resp(
+          200,
+          Formata.JSON.encode!(%{"data" => [%{"id" => "backplane-model"}]})
+        )
       end)
 
       {:ok, view, _html} = live(conn, ~p"/settings/providers/new")
@@ -388,7 +391,7 @@ defmodule SynapsisWeb.ProviderLive.IndexTest do
       Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "model-a"}]}))
+        |> Plug.Conn.send_resp(200, Formata.JSON.encode!(%{"data" => [%{"id" => "model-a"}]}))
       end)
 
       {:ok, view, _html} = live(conn, ~p"/settings/providers/new")

@@ -190,7 +190,7 @@ defmodule SynapsisWeb.AgentLive.BrowserSettingsFunctionalTest do
     |> LazyHTML.query("[data-form-id]")
     |> LazyHTML.attribute("data-initial-values")
     |> hd()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 
   defp editor do

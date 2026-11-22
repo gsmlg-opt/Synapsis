@@ -7,7 +7,9 @@ defmodule Synapsis.Agent.Heartbeat.TypedScheduleFunctionalTest do
   @fixture Path.expand("../../../fixtures/openclaw/488631c/schedule-computation.json", __DIR__)
 
   test "matches all pinned reference timestamps and subsequent at/every computations" do
-    observations = @fixture |> File.read!() |> Jason.decode!() |> Map.fetch!("observations")
+    observations =
+      @fixture |> File.read!() |> Formata.JSON.decode!() |> Map.fetch!("observations")
+
     assert length(observations) == 12
 
     for observation <- observations do

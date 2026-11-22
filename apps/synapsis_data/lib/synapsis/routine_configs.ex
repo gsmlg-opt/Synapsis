@@ -108,7 +108,7 @@ defmodule Synapsis.RoutineConfigs do
   defp decode_cursor(cursor, requester_name)
        when is_binary(cursor) and byte_size(cursor) in 1..4_096 do
     with {:ok, json} <- Base.url_decode64(cursor, padding: false),
-         {:ok, [1, requester_id, ^requester_name, name, source, id]} <- Jason.decode(json),
+         {:ok, [1, requester_id, ^requester_name, name, source, id]} <- Formata.JSON.decode(json),
          true <- uuid?(requester_id) and uuid?(id),
          true <- is_binary(name) and byte_size(name) in 1..256 and String.valid?(name),
          true <- source in ["routine", "heartbeat"],
@@ -146,18 +146,18 @@ defmodule Synapsis.RoutineConfigs do
   defp encode_cursor(requester, {name, source, id}),
     do:
       [1, requester.id, requester.name, name, source, id]
-      |> Jason.encode!()
+      |> Formata.JSON.encode!()
       |> Base.url_encode64(padding: false)
 
   defp encode_result(result, deadline) do
     with :ok <- active(deadline),
-         {:ok, encoded} <- Jason.encode(result),
+         {:ok, encoded} <- Synapsis.JSON.encode(result),
          :ok <- active(deadline) do
       if byte_size(encoded) <= 65_536,
         do: {:ok, result},
         else: {:error, :output_too_large}
     else
-      {:error, %Jason.EncodeError{}} -> {:error, :invalid_config}
+      {:error, :invalid_json} -> {:error, :invalid_config}
       {:error, _} = error -> error
     end
   end

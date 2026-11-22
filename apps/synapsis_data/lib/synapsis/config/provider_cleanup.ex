@@ -108,10 +108,10 @@ defmodule Synapsis.Config.ProviderCleanup do
   end
 
   defp scrub_agent_config(encoded, skill_ids, mcp_ids) when is_binary(encoded) do
-    case Jason.decode(encoded) do
+    case Formata.JSON.decode(encoded) do
       {:ok, config} when is_map(config) ->
         updated = scrub_agent_config(config, skill_ids, mcp_ids)
-        if updated == config, do: encoded, else: Jason.encode!(updated)
+        if updated == config, do: encoded, else: Formata.JSON.encode!(updated)
 
       _ ->
         encoded

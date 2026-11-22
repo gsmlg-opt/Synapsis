@@ -62,7 +62,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     refute_receive {"permission_requests", _payload}, 100
 
     assert_receive {:tool_provider_request, 2, second_request, _request_pid}, 2_000
-    assert Jason.encode!(second_request) =~ "Tool denied"
+    assert Formata.JSON.encode!(second_request) =~ "Tool denied"
     assert {:ok, completed} = wait_for_run(queued.id, "completed")
     assert completed.summary == "daemon tool run complete"
   end
@@ -91,7 +91,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
     assert :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, "session:#{running.session_id}")
 
     assert_receive {:tool_provider_request, 2, second_request, _request_pid}, 2_000
-    assert Jason.encode!(second_request) =~ "Tool denied"
+    assert Formata.JSON.encode!(second_request) =~ "Tool denied"
     refute_receive {"permission_requests", _payload}, 100
     refute_receive {"permission_request", _payload}, 100
     refute File.exists?(target)
@@ -150,7 +150,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
 
     Gaoxy.Test.expect(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       request_number = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
       send(owner, {:tool_provider_request, request_number, request, self()})
 
@@ -194,7 +194,8 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
              Synapsis.Config.Store.put(:backplane, %{
                "id" => source_id,
                "enabled" => true,
-               "connection_options_json" => Jason.encode!(%{"trust_mcp_annotations" => true})
+               "connection_options_json" =>
+                 Formata.JSON.encode!(%{"trust_mcp_annotations" => true})
              })
 
     assert {:ok, mcp_config} =
@@ -257,7 +258,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       case request do
         %{"id" => id, "method" => "tools/call"} when mode == :pending ->
@@ -295,7 +296,7 @@ defmodule Synapsis.Agent.DaemonToolsIntegrationTest do
           |> Plug.Conn.put_resp_content_type("application/json")
           |> Plug.Conn.send_resp(
             200,
-            Jason.encode!(%{"jsonrpc" => "2.0", "id" => id, "result" => result})
+            Formata.JSON.encode!(%{"jsonrpc" => "2.0", "id" => id, "result" => result})
           )
 
         _notification ->

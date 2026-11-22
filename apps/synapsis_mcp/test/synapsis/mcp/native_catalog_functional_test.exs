@@ -15,7 +15,7 @@ defmodule Synapsis.MCP.NativeCatalogFunctionalTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       current = Agent.get(state, & &1)
 
       response =
@@ -59,7 +59,7 @@ defmodule Synapsis.MCP.NativeCatalogFunctionalTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(
           200,
-          Jason.encode!(Map.merge(response, %{"jsonrpc" => "2.0", "id" => request["id"]}))
+          Formata.JSON.encode!(Map.merge(response, %{"jsonrpc" => "2.0", "id" => request["id"]}))
         )
       else
         Plug.Conn.resp(conn, 202, "")

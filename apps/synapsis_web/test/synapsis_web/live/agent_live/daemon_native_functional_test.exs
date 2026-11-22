@@ -306,7 +306,7 @@ defmodule SynapsisWeb.AgentLive.DaemonNativeFunctionalTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       following? = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
       send(owner, {:native_ui_request, label, following?, request})
 
@@ -430,7 +430,7 @@ defmodule SynapsisWeb.AgentLive.DaemonNativeFunctionalTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query("[data-dm-react-field]")
     |> LazyHTML.attribute("data-dm-react-field")
-    |> Enum.map(&Jason.decode!/1)
+    |> Enum.map(&Formata.JSON.decode!/1)
     |> Enum.find(&(&1["name"] == name))
   end
 
@@ -442,7 +442,7 @@ defmodule SynapsisWeb.AgentLive.DaemonNativeFunctionalTest do
     |> LazyHTML.query("[data-form-id]")
     |> LazyHTML.attribute("data-initial-values")
     |> hd()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 
   defp manual_defaults, do: %{"prompt" => "", "assistant_name" => "", "tool_profile" => ""}

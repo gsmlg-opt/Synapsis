@@ -192,11 +192,11 @@ defmodule Synapsis.Provider.TavilySearchFunctionalTest do
 
     Gaoxy.Test.stub(ctx.fixture, "POST", "/proxy/search", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(owner, {:http, Jason.decode!(body), conn.req_headers, conn.query_string})
+      send(owner, {:http, Formata.JSON.decode!(body), conn.req_headers, conn.query_string})
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(payload))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
     end)
   end
 end

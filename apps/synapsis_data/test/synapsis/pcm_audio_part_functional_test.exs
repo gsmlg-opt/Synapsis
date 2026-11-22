@@ -31,7 +31,9 @@ defmodule Synapsis.PCMAudioPartFunctionalTest do
 
     assert {:ok, ^part} = Part.cast(expected)
     assert {:ok, ^expected} = Part.dump(part)
-    assert {:ok, ^part} = expected |> Jason.encode!() |> Jason.decode!() |> Part.load()
+
+    assert {:ok, ^part} =
+             expected |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Part.load()
 
     changeset =
       Message.changeset(%Message{}, %{role: "assistant", session_id: id, parts: [expected]})

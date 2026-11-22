@@ -256,7 +256,7 @@ defmodule SynapsisServer.ProviderControllerTest do
 
         request_conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "forbidden"}]}))
+        |> Plug.Conn.send_resp(200, Formata.JSON.encode!(%{"data" => [%{"id" => "forbidden"}]}))
       end)
 
       {:ok, provider} =

@@ -7,7 +7,7 @@ defmodule Synapsis.Agent.Heartbeat.CronStaggerFunctionalTest do
   @fixture Path.expand("../../../fixtures/openclaw/488631c/cron-stagger.json", __DIR__)
 
   test "next instants match the unchanged pinned source with actual Croner" do
-    fixture = @fixture |> File.read!() |> Jason.decode!()
+    fixture = @fixture |> File.read!() |> Formata.JSON.decode!()
     assert fixture["referencePin"] == "488631c18fae7cc541ba8fc8beff6cbb0438787b"
     observations = fixture["observations"]
     assert length(observations) >= 8

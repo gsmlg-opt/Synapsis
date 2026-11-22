@@ -21,7 +21,7 @@ defmodule Synapsis.MCP.Backplane151EventsFunctionalTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      wire = Jason.decode!(body)
+      wire = Formata.JSON.decode!(body)
       headers = Map.new(conn.req_headers)
       send(owner, {:events_http, wire["method"], wire["params"], headers, wire["id"]})
 
@@ -32,7 +32,7 @@ defmodule Synapsis.MCP.Backplane151EventsFunctionalTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(
           200,
-          Jason.encode!(%{"jsonrpc" => "2.0", "id" => wire["id"], "result" => result})
+          Formata.JSON.encode!(%{"jsonrpc" => "2.0", "id" => wire["id"], "result" => result})
         )
       else
         Plug.Conn.resp(conn, 202, "")

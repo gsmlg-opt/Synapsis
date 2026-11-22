@@ -130,7 +130,7 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           401,
-          Jason.encode!(%{"error" => %{"type" => "authentication_error"}})
+          Formata.JSON.encode!(%{"error" => %{"type" => "authentication_error"}})
         )
       end)
 
@@ -236,7 +236,7 @@ defmodule Synapsis.Provider.AdapterTest do
 
       Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        decoded = Jason.decode!(body)
+        decoded = Formata.JSON.decode!(body)
         refute Map.has_key?(decoded, "__synapsis_tool_name_aliases__")
         assert get_in(decoded, ["tools", Access.at(0), "name"]) == alias_name
 
@@ -360,7 +360,7 @@ defmodule Synapsis.Provider.AdapterTest do
         headers = Map.new(conn.req_headers)
         assert headers["authorization"] == "Bearer string-key"
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        assert %{"input" => [], "stream" => true} = Jason.decode!(body)
+        assert %{"input" => [], "stream" => true} = Formata.JSON.decode!(body)
 
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
@@ -456,7 +456,7 @@ defmodule Synapsis.Provider.AdapterTest do
           refute Map.has_key?(headers, "authorization")
 
           {:ok, body, conn} = Plug.Conn.read_body(conn)
-          parsed = Jason.decode!(body)
+          parsed = Formata.JSON.decode!(body)
           assert parsed["model"] == "gpt-4o"
 
           conn
@@ -688,7 +688,7 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(ResponsesFixture.response([ResponsesFixture.message("wrong")]))
+          Formata.JSON.encode!(ResponsesFixture.response([ResponsesFixture.message("wrong")]))
         )
       end)
 
@@ -714,7 +714,7 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(ResponsesFixture.response([ResponsesFixture.message("wrong")]))
+          Formata.JSON.encode!(ResponsesFixture.response([ResponsesFixture.message("wrong")]))
         )
       end)
 
@@ -733,7 +733,7 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(%{
+          Formata.JSON.encode!(%{
             "content" => [%{"type" => "text", "text" => "The answer is 4"}],
             "stop_reason" => "end_turn"
           })
@@ -766,7 +766,7 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(ResponsesFixture.response([ResponsesFixture.message("Hello")]))
+          Formata.JSON.encode!(ResponsesFixture.response([ResponsesFixture.message("Hello")]))
         )
       end)
 
@@ -791,7 +791,7 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(ResponsesFixture.response([ResponsesFixture.message("Hi")]))
+          Formata.JSON.encode!(ResponsesFixture.response([ResponsesFixture.message("Hi")]))
         )
       end)
 
@@ -818,7 +818,7 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(ResponsesFixture.response([ResponsesFixture.message("Hi")]))
+          Formata.JSON.encode!(ResponsesFixture.response([ResponsesFixture.message("Hi")]))
         )
       end)
 
@@ -840,7 +840,7 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(ResponsesFixture.response([ResponsesFixture.message("Hi")]))
+          Formata.JSON.encode!(ResponsesFixture.response([ResponsesFixture.message("Hi")]))
         )
       end)
 
@@ -859,7 +859,7 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(ResponsesFixture.response([ResponsesFixture.message("OK")]))
+          Formata.JSON.encode!(ResponsesFixture.response([ResponsesFixture.message("OK")]))
         )
       end)
 
@@ -875,7 +875,7 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           401,
-          Jason.encode!(%{"error" => %{"message" => "invalid_api_key"}})
+          Formata.JSON.encode!(%{"error" => %{"message" => "invalid_api_key"}})
         )
       end)
 
@@ -905,7 +905,7 @@ defmodule Synapsis.Provider.AdapterTest do
           |> Plug.Conn.put_resp_content_type("application/json")
           |> Plug.Conn.send_resp(
             200,
-            Jason.encode!(%{
+            Formata.JSON.encode!(%{
               "candidates" => [
                 %{
                   "content" => %{"parts" => [%{"text" => "Gemini response"}]},
@@ -934,7 +934,7 @@ defmodule Synapsis.Provider.AdapterTest do
       Gaoxy.Test.expect_once(bypass, "POST", "/v1/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(200, Jason.encode!(%{"unexpected" => "format"}))
+        |> Plug.Conn.send_resp(200, Formata.JSON.encode!(%{"unexpected" => "format"}))
       end)
 
       config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "anthropic"}
@@ -956,7 +956,7 @@ defmodule Synapsis.Provider.AdapterTest do
       Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(200, Jason.encode!(%{"unexpected" => "format"}))
+        |> Plug.Conn.send_resp(200, Formata.JSON.encode!(%{"unexpected" => "format"}))
       end)
 
       config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "openai"}
@@ -979,7 +979,7 @@ defmodule Synapsis.Provider.AdapterTest do
         fn conn ->
           conn
           |> Plug.Conn.put_resp_content_type("application/json")
-          |> Plug.Conn.send_resp(200, Jason.encode!(%{"unexpected" => "format"}))
+          |> Plug.Conn.send_resp(200, Formata.JSON.encode!(%{"unexpected" => "format"}))
         end
       )
 
@@ -1006,7 +1006,7 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(ResponsesFixture.response([ResponsesFixture.message("Hi")]))
+          Formata.JSON.encode!(ResponsesFixture.response([ResponsesFixture.message("Hi")]))
         )
       end)
 
@@ -1026,7 +1026,7 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           429,
-          Jason.encode!(%{"error" => %{"message" => "rate_limit_exceeded"}})
+          Formata.JSON.encode!(%{"error" => %{"message" => "rate_limit_exceeded"}})
         )
       end)
 
@@ -1121,7 +1121,7 @@ defmodule Synapsis.Provider.AdapterTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(%{
+          Formata.JSON.encode!(%{
             "data" => [
               %{"id" => "gpt-4o", "context_length" => 128_000},
               %{"id" => "gpt-4o-mini", "context_length" => 128_000}

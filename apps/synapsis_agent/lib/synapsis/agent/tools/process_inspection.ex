@@ -18,7 +18,7 @@ defmodule Synapsis.Agent.Tools.ProcessInspection do
   @actions ~w(list inspect log poll remove clear_finished)
   @keys [:identity, :local]
   @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
 
   def names, do: [@name]
   def permission_level(@name), do: :write
@@ -65,7 +65,7 @@ defmodule Synapsis.Agent.Tools.ProcessInspection do
       {:ok,
        %{
          action: "command.inspect." <> args["action"],
-         resource: "command:inspection:" <> Jason.encode!(target),
+         resource: "command:inspection:" <> Formata.JSON.encode!(target),
          permission_level: level
        }}
     else
@@ -86,9 +86,9 @@ defmodule Synapsis.Agent.Tools.ProcessInspection do
 
       with {:ok, value} <- dispatch(local, args),
            payload = %{"action" => args["action"], "result" => value},
-           {:ok, content} <- Jason.encode(payload) do
+           {:ok, content} <- Synapsis.JSON.encode(payload) do
         # One public JSON representation is shared by model text and Parts.
-        {:ok, %{content: content, structured: Jason.decode!(content)}}
+        {:ok, %{content: content, structured: Formata.JSON.decode!(content)}}
       else
         {:error, %Error{}} = error -> error
         _ -> failure(:malformed_result, "Native command inspection result is not portable")

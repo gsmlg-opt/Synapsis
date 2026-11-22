@@ -239,7 +239,7 @@ defmodule Synapsis.Session.NativeSessionReadAdoptionFunctionalTest do
           source: "native_committed",
           coverage: "retained_runs",
           observation: "sequential",
-          runtime_version: "1.10.74",
+          runtime_version: "1.10.94",
           retained_runs: 0,
           observed_runs: 0,
           provider_attempts: 0,
@@ -307,7 +307,8 @@ defmodule Synapsis.Session.NativeSessionReadAdoptionFunctionalTest do
       "droppedMessages" => false,
       "contentTruncated" => false,
       "contentRedacted" => false,
-      "bytes" => byte_size(Jason.encode!(messages)) + byte_size(Jason.encode!(pending)),
+      "bytes" =>
+        byte_size(Formata.JSON.encode!(messages)) + byte_size(Formata.JSON.encode!(pending)),
       "pendingInputs" => pending,
       "offset" => offset,
       "hasMore" => offset == 0,
@@ -341,7 +342,7 @@ defmodule Synapsis.Session.NativeSessionReadAdoptionFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/messages", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -360,7 +361,8 @@ defmodule Synapsis.Session.NativeSessionReadAdoptionFunctionalTest do
       case call do
         {name, id, input} ->
           {%{"type" => "tool_use", "id" => id, "name" => ToolName.encode(name), "input" => %{}},
-           %{"type" => "input_json_delta", "partial_json" => Jason.encode!(input)}, "tool_use"}
+           %{"type" => "input_json_delta", "partial_json" => Formata.JSON.encode!(input)},
+           "tool_use"}
 
         nil ->
           {%{"type" => "text", "text" => ""},
@@ -377,7 +379,10 @@ defmodule Synapsis.Session.NativeSessionReadAdoptionFunctionalTest do
 
     conn
     |> Plug.Conn.put_resp_content_type("text/event-stream")
-    |> Plug.Conn.resp(200, Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n")))
+    |> Plug.Conn.resp(
+      200,
+      Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
+    )
   end
 
   defp receive_request(index) do
@@ -447,7 +452,7 @@ defmodule Synapsis.Session.NativeSessionReadAdoptionFunctionalTest do
 
     for {result, page} <- Enum.zip(results, pages) do
       assert result.is_error == false
-      assert Jason.decode!(result.content) == page
+      assert Formata.JSON.decode!(result.content) == page
 
       assert result.projection == %{
                "version" => 1,
@@ -461,7 +466,9 @@ defmodule Synapsis.Session.NativeSessionReadAdoptionFunctionalTest do
 
     for part <- parts do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
 
     assert {:ok, turns} = Store.list_turns(id)
@@ -535,5 +542,5 @@ defmodule Synapsis.Session.NativeSessionReadAdoptionFunctionalTest do
     assert for({Synapsis.Sessions, :get, [id]} <- observed, id in ids, do: id) == []
   end
 
-  defp json(value), do: value |> Jason.encode!() |> Jason.decode!()
+  defp json(value), do: value |> Formata.JSON.encode!() |> Formata.JSON.decode!()
 end

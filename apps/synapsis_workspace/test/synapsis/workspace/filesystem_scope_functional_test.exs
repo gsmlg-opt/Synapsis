@@ -493,7 +493,7 @@ defmodule Synapsis.Workspace.FilesystemScopeFunctionalTest do
     on_exit(fn -> send(publisher, :release_publication) end)
     monitor = Process.monitor(publisher)
     assert_receive {:workspace_changed, %{path: ^path, action: :created, resource_id: id}}
-    metadata = Jason.decode!(File.read!(metadata_path(ctx.root, path)))
+    metadata = Formata.JSON.decode!(File.read!(metadata_path(ctx.root, path)))
     assert metadata["id"] == id and metadata["version"] == 1
     assert File.read!(physical(ctx.root, path)) == "new\n"
 

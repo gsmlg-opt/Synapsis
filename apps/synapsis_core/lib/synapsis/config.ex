@@ -83,7 +83,7 @@ defmodule Synapsis.Config do
   defp load_json_file(path) do
     case File.read(path) do
       {:ok, content} ->
-        case Jason.decode(content) do
+        case Formata.JSON.decode(content) do
           {:ok, data} when is_map(data) -> data
           _ -> %{}
         end

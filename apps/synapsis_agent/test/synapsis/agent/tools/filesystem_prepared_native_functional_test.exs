@@ -734,7 +734,7 @@ defmodule Synapsis.Agent.Tools.FilesystemPreparedNativeFunctionalTest do
 
   defp fixture_case(file, id) do
     File.read!(Path.join(@fixtures, file <> ".json"))
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
     |> Map.fetch!("cases")
     |> Enum.find(&(&1["id"] == id))
   end
@@ -753,6 +753,6 @@ defmodule Synapsis.Agent.Tools.FilesystemPreparedNativeFunctionalTest do
       "is_error" => false
     }
 
-  defp json_value(value), do: value |> Jason.encode!() |> Jason.decode!()
+  defp json_value(value), do: value |> Formata.JSON.encode!() |> Formata.JSON.decode!()
   defp done(text), do: %{type: :response_completed, message: %{role: :assistant, content: text}}
 end

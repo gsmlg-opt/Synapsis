@@ -69,7 +69,7 @@ defmodule Synapsis.Session.NativeSessionDirectoryHistoryFunctionalTest do
     assert byte_size(result.content) <= 65_536
 
     assert byte_size(
-             Jason.encode!(%{
+             Formata.JSON.encode!(%{
                content: result.content,
                structured: result.projection["result"]["structured"]
              })
@@ -234,7 +234,7 @@ defmodule Synapsis.Session.NativeSessionDirectoryHistoryFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -301,7 +301,7 @@ defmodule Synapsis.Session.NativeSessionDirectoryHistoryFunctionalTest do
                  "id" => @call_id,
                  "type" => "function",
                  "name" => ToolName.encode(@name),
-                 "arguments" => Jason.encode!(input)
+                 "arguments" => Formata.JSON.encode!(input)
                }
              ]
            }
@@ -321,7 +321,7 @@ defmodule Synapsis.Session.NativeSessionDirectoryHistoryFunctionalTest do
     assert [result] = Enum.filter(parts, &match?(%ToolResult{}, &1))
     assert result.tool_use_id == @call_id
     assert result.is_error == false
-    assert Jason.decode!(result.content) == page
+    assert Formata.JSON.decode!(result.content) == page
 
     assert result.projection == %{
              "version" => 1,
@@ -335,7 +335,9 @@ defmodule Synapsis.Session.NativeSessionDirectoryHistoryFunctionalTest do
 
     for part <- parts do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
 
     assert {:ok, turns} = Store.list_turns(id)
@@ -431,7 +433,7 @@ defmodule Synapsis.Session.NativeSessionDirectoryHistoryFunctionalTest do
       ])
 
     on_exit(fn -> if Port.info(port), do: Port.close(port) end)
-    assert Port.command(port, Jason.encode!(content) <> "\n")
+    assert Port.command(port, Formata.JSON.encode!(content) <> "\n")
     collect_pretty(port, "")
   end
 
@@ -446,7 +448,7 @@ defmodule Synapsis.Session.NativeSessionDirectoryHistoryFunctionalTest do
     end
   end
 
-  defp json(value), do: value |> Jason.encode!() |> Jason.decode!()
+  defp json(value), do: value |> Formata.JSON.encode!() |> Formata.JSON.decode!()
 
   defp node_executable,
     do:

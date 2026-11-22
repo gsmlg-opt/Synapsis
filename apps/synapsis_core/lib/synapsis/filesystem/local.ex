@@ -869,7 +869,7 @@ defmodule Synapsis.Filesystem.Local do
   defp result_budget(result) do
     # The exact receipt is known before effects. Include interruption evidence's
     # existing reserve rather than accepting an unbounded planner receipt.
-    if byte_size(Jason.encode!(result)) + 256 <= @max_output,
+    if byte_size(Formata.JSON.encode!(result)) + 256 <= @max_output,
       do: :ok,
       else: {:error, :output_limit}
   end
@@ -1047,7 +1047,7 @@ defmodule Synapsis.Filesystem.Local do
           with {:ok, targets} <- targets(root, action, arguments),
                :ok <- mutation_budget(action, targets),
                {:ok, result} <- run(root, action, arguments),
-               true <- byte_size(Jason.encode!(result)) <= @max_output do
+               true <- byte_size(Formata.JSON.encode!(result)) <= @max_output do
             {:ok, result}
           else
             false -> {:error, :output_limit}
@@ -1109,7 +1109,7 @@ defmodule Synapsis.Filesystem.Local do
         })
       )
 
-    if byte_size(Jason.encode!(%{result | files: files})) + 256 <= @max_output,
+    if byte_size(Formata.JSON.encode!(%{result | files: files})) + 256 <= @max_output,
       do: :ok,
       else: {:error, :output_limit}
   end

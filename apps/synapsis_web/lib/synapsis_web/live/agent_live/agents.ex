@@ -542,7 +542,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
                     phx-hook="AgentModelPicker"
                     phx-update="ignore"
                     data-agent-id={@agent.id || "new"}
-                    data-options={Jason.encode!(provider_model_cascader_options(@providers))}
+                    data-options={Formata.JSON.encode!(provider_model_cascader_options(@providers))}
                     data-provider={@agent.provider || ""}
                     data-model={@agent.model || ""}
                     data-provider-input="agent-provider-hidden"
@@ -578,7 +578,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
                     phx-hook="AgentBackupModelPicker"
                     phx-update="ignore"
                     data-agent-id={@agent.id || "new"}
-                    data-options={Jason.encode!(provider_model_cascader_options(@providers))}
+                    data-options={Formata.JSON.encode!(provider_model_cascader_options(@providers))}
                     data-backup-model={@agent.fallback_models || ""}
                     data-value-input="agent-fallback-models-hidden"
                     data-state-input="agent-fallback-model-state"
@@ -1471,7 +1471,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
   end
 
   defp decode_provider_model_state(value) when is_binary(value) and value != "" do
-    case Jason.decode(value) do
+    case Formata.JSON.decode(value) do
       {:ok, %{} = state} -> {:ok, state}
       _ -> :error
     end
@@ -1816,7 +1816,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
   end
 
   defp provider_model_state_value(%AgentConfig{} = agent) do
-    Jason.encode!(%{
+    Formata.JSON.encode!(%{
       provider: agent.provider || "",
       model: agent.model || ""
     })
@@ -1825,7 +1825,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
   defp fallback_model_state_value(%AgentConfig{} = agent) do
     {provider, model} = backup_provider_model(agent.fallback_models)
 
-    Jason.encode!(%{
+    Formata.JSON.encode!(%{
       provider: provider || "",
       model: model || ""
     })

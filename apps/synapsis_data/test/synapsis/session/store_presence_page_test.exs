@@ -35,7 +35,7 @@ defmodule Synapsis.Session.StorePresencePageTest do
     assert page.has_more
     assert page.next_cursor == @first
     refute page.truncated
-    refute Jason.encode!(page) =~ ~r/payload|private|turn/
+    refute Formata.JSON.encode!(page) =~ ~r/payload|private|turn/
 
     assert {:ok, next} =
              Store.list_session_ids(cursor: page.next_cursor, limit: 1, deadline: ctx.deadline)

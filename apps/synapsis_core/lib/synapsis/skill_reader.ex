@@ -511,7 +511,7 @@ defmodule Synapsis.SkillReader do
         embedded
 
       _ ->
-        case Jason.decode(value(map, :metadata_json) || "{}") do
+        case Formata.JSON.decode(value(map, :metadata_json) || "{}") do
           {:ok, decoded} when is_map(decoded) -> decoded
           _ -> %{}
         end

@@ -189,7 +189,7 @@ defmodule Synapsis.Agent.Tools.HeadlessCodeModeFunctionalTest do
 
     for clock_output <- [first_clock, second_clock] do
       assert clock_output["type"] == "text"
-      assert %{"current_time" => time} = Jason.decode!(clock_output["text"])
+      assert %{"current_time" => time} = Formata.JSON.decode!(clock_output["text"])
       assert time =~ ~r/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC$/
     end
 

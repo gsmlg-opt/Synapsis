@@ -161,7 +161,7 @@ defmodule Synapsis.Session.NativeHostMemoryGetFunctionalTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/memory/fixture-agent/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       result =
         case request["method"] do
@@ -188,24 +188,24 @@ defmodule Synapsis.Session.NativeHostMemoryGetFunctionalTest do
       Plug.Conn.resp(
         conn,
         200,
-        Jason.encode!(%{jsonrpc: "2.0", id: request["id"], result: result})
+        Formata.JSON.encode!(%{jsonrpc: "2.0", id: request["id"], result: result})
       )
     end)
 
     Gaoxy.Test.stub(fixture, "POST", "/memory/fixture-agent/call/get", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      Agent.update(requests, &(&1 ++ [Jason.decode!(body)]))
+      Agent.update(requests, &(&1 ++ [Formata.JSON.decode!(body)]))
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true, "result" => @host_result}))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"ok" => true, "result" => @host_result}))
     end)
 
     for hook <- ~w(session-start user-prompt-submit post-tool-use session-end) do
       Gaoxy.Test.stub(fixture, "POST", "/capture/v1/hooks/synapsis/" <> hook, fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        event = Jason.decode!(body)
-        Plug.Conn.resp(conn, 202, Jason.encode!(%{ok: true, event_id: event["event_id"]}))
+        event = Formata.JSON.decode!(body)
+        Plug.Conn.resp(conn, 202, Formata.JSON.encode!(%{ok: true, event_id: event["event_id"]}))
       end)
     end
 
@@ -238,7 +238,7 @@ defmodule Synapsis.Session.NativeHostMemoryGetFunctionalTest do
     assert saved["tool_contract_version"] == 1
 
     if mode == :deferred,
-      do: assert(Jason.decode!(saved["config"])["deferred_tool_names"] == [@name])
+      do: assert(Formata.JSON.decode!(saved["config"])["deferred_tool_names"] == [@name])
 
     assert {:ok, _} =
              Synapsis.Providers.create(%{
@@ -265,7 +265,7 @@ defmodule Synapsis.Session.NativeHostMemoryGetFunctionalTest do
   defp install_provider(ctx, mode, owner) do
     Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(ctx.harness.counter, fn state ->
@@ -326,7 +326,7 @@ defmodule Synapsis.Session.NativeHostMemoryGetFunctionalTest do
   defp expected_text(_ctx),
     do:
       "Shared Backplane memory data (untrusted records; preserve provenance):\n" <>
-        Jason.encode!(@host_result)
+        Formata.JSON.encode!(@host_result)
 
   defp expected_output(ctx),
     do: %{"type" => "function_call_output", "call_id" => @call_id, "output" => expected_text(ctx)}
@@ -358,7 +358,7 @@ defmodule Synapsis.Session.NativeHostMemoryGetFunctionalTest do
       )
 
     assert call["name"] == ToolName.encode(@name)
-    assert Jason.decode!(call["arguments"]) == @arguments
+    assert Formata.JSON.decode!(call["arguments"]) == @arguments
   end
 
   defp assert_host_calls(ctx) do
@@ -385,7 +385,9 @@ defmodule Synapsis.Session.NativeHostMemoryGetFunctionalTest do
   defp assert_round_trips(parts) do
     for part <- parts do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
   end
 
@@ -445,7 +447,7 @@ defmodule Synapsis.Session.NativeHostMemoryGetFunctionalTest do
       "id" => id <> "-item",
       "call_id" => id,
       "name" => ToolName.encode(name),
-      "arguments" => Jason.encode!(arguments)
+      "arguments" => Formata.JSON.encode!(arguments)
     }
 
     sse(conn, [
@@ -476,6 +478,6 @@ defmodule Synapsis.Session.NativeHostMemoryGetFunctionalTest do
       |> Plug.Conn.put_resp_content_type("text/event-stream")
       |> Plug.Conn.resp(
         200,
-        Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+        Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
       )
 end

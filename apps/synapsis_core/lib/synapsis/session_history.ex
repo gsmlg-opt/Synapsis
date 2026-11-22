@@ -32,7 +32,7 @@ defmodule Synapsis.SessionHistory do
              session_id: id,
              turns: turns
            }),
-         {:ok, json} <- Jason.encode(result),
+         {:ok, json} <- Synapsis.JSON.encode(result),
          true <- byte_size(json) <= @output_limit do
       {:ok, result}
     else

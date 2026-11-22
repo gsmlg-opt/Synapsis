@@ -21,7 +21,7 @@ defmodule Synapsis.Agent.Tools.AutomationConfiguration do
     :catalog_revision
   ]
   @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
 
   def names, do: [@name]
   def revision, do: @revision
@@ -56,7 +56,10 @@ defmodule Synapsis.Agent.Tools.AutomationConfiguration do
          action: "automation.create",
          resource:
            "automation:" <>
-             Jason.encode!(%{session_id: context.session_id, agent_id: context.creator_agent_id})
+             Formata.JSON.encode!(%{
+               session_id: context.session_id,
+               agent_id: context.creator_agent_id
+             })
        }}
     end
   end
@@ -183,10 +186,10 @@ defmodule Synapsis.Agent.Tools.AutomationConfiguration do
         "activation" => receipt.activation
       })
 
-    value = %{content: Jason.encode!(result), structured: result}
+    value = %{content: Formata.JSON.encode!(result), structured: result}
 
     value =
-      if byte_size(Jason.encode!(value)) <= 65_536 do
+      if byte_size(Formata.JSON.encode!(value)) <= 65_536 do
         value
       else
         minimum =
@@ -201,9 +204,9 @@ defmodule Synapsis.Agent.Tools.AutomationConfiguration do
   end
 
   defp bounded_minimum(result) do
-    value = %{content: Jason.encode!(result), structured: result}
+    value = %{content: Formata.JSON.encode!(result), structured: result}
 
-    if byte_size(Jason.encode!(value)) <= 65_536 do
+    if byte_size(Formata.JSON.encode!(value)) <= 65_536 do
       value
     else
       # Only the delivery target is unbounded in the minimum receipt. Recheck

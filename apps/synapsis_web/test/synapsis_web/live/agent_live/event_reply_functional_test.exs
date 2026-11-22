@@ -285,7 +285,10 @@ defmodule SynapsisWeb.AgentLive.EventReplyFunctionalTest do
 
   defp send_frames(conn, frames) do
     {:ok, conn} =
-      Plug.Conn.chunk(conn, Enum.map_join(frames, "", &("data: " <> Jason.encode!(&1) <> "\n\n")))
+      Plug.Conn.chunk(
+        conn,
+        Enum.map_join(frames, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
+      )
 
     conn
   end

@@ -245,7 +245,7 @@ defmodule Synapsis.Session.NativeAutomationManagementFunctionalTest do
       following["input"]
       |> Enum.find(&(&1["type"] == "function_call_output" and &1["call_id"] == "manage-0"))
       |> Map.fetch!("output")
-      |> Jason.decode!()
+      |> Formata.JSON.decode!()
 
     assert acknowledgement["enqueued"] == true
     assert acknowledgement["finished"] == false
@@ -292,8 +292,8 @@ defmodule Synapsis.Session.NativeAutomationManagementFunctionalTest do
 
     Gaoxy.Test.stub(http, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
-      encoded = Jason.encode!(request["input"])
+      request = Formata.JSON.decode!(body)
+      encoded = Formata.JSON.encode!(request["input"])
 
       source =
         Enum.find(~w(routine heartbeat), &String.contains?(encoded, "automation-execute:#{&1}"))

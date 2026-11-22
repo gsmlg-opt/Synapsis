@@ -246,7 +246,7 @@ defmodule Synapsis.Agent.Tools.ExplicitSkillTest do
     assert public["artifact_digest"] == nil
     assert public["document_digest"] =~ "sha256:"
     assert public["content"] == ctx.record.system_prompt_fragment
-    encoded = Jason.encode!(part.projection)
+    encoded = Formata.JSON.encode!(part.projection)
 
     for private <- [
           "backend_context",

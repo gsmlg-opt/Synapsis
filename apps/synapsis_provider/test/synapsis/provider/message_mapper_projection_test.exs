@@ -63,9 +63,9 @@ defmodule Synapsis.Provider.MessageMapperProjectionTest do
     projection = put_in(projection, ["result", "structured"], %{"answer" => 42})
     part = %{part | projection: projection}
     assert {:ok, wire} = build(:anthropic, part)
-    refute Jason.encode!(wire) =~ "private-sidecar"
-    refute Jason.encode!(wire) =~ "backend_context"
-    refute Jason.encode!(wire) =~ "answer"
+    refute Formata.JSON.encode!(wire) =~ "private-sidecar"
+    refute Formata.JSON.encode!(wire) =~ "backend_context"
+    refute Formata.JSON.encode!(wire) =~ "answer"
     assert part.projection == projection
   end
 
@@ -99,8 +99,8 @@ defmodule Synapsis.Provider.MessageMapperProjectionTest do
            ]
 
     assert part.projection === original
-    refute Jason.encode!(wire) =~ "retained-"
-    refute Jason.encode!(wire) =~ "annotations"
+    refute Formata.JSON.encode!(wire) =~ "retained-"
+    refute Formata.JSON.encode!(wire) =~ "annotations"
   end
 
   test "malformed raw MCP images and metadata fail without discarding extra content" do
@@ -118,8 +118,8 @@ defmodule Synapsis.Provider.MessageMapperProjectionTest do
   test "projected text works across the three existing provider codecs" do
     for protocol <- [:anthropic, :openai_responses, :google] do
       assert {:ok, wire} = build(protocol, projected([text("projected")]))
-      assert Jason.encode!(wire) =~ "projected"
-      refute Jason.encode!(wire) =~ "legacy-must-not-be-used"
+      assert Formata.JSON.encode!(wire) =~ "projected"
+      refute Formata.JSON.encode!(wire) =~ "legacy-must-not-be-used"
     end
   end
 
@@ -223,13 +223,13 @@ defmodule Synapsis.Provider.MessageMapperProjectionTest do
 
     Gaoxy.Test.expect_once(fixture, "POST", "/v1/messages", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(owner, {:wire, Jason.decode!(body)})
+      send(owner, {:wire, Formata.JSON.decode!(body)})
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.resp(
         200,
-        Jason.encode!(%{
+        Formata.JSON.encode!(%{
           "stop_reason" => "end_turn",
           "content" => [%{"type" => "text", "text" => "ok"}]
         })

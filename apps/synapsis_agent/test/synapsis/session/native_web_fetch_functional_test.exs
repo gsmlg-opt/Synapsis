@@ -34,7 +34,7 @@ defmodule Synapsis.Session.NativeWebFetchFunctionalTest do
         "/v1/responses",
         fn conn ->
           {:ok, body, conn} = Plug.Conn.read_body(conn)
-          request = Jason.decode!(body)
+          request = Formata.JSON.decode!(body)
 
           index =
             Agent.get_and_update(harness.counter, fn state ->
@@ -156,7 +156,7 @@ defmodule Synapsis.Session.NativeWebFetchFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -266,7 +266,7 @@ defmodule Synapsis.Session.NativeWebFetchFunctionalTest do
              "version" => 1,
              "result" =>
                content1
-               |> Jason.decode!()
+               |> Formata.JSON.decode!()
                |> Map.put("content", content1)
                |> Map.put("is_error", false)
            }
@@ -288,7 +288,9 @@ defmodule Synapsis.Session.NativeWebFetchFunctionalTest do
     for {part, projection} <- [{part1, projection1}, {part2, projection2}] do
       assert part.projection == projection
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
 
     assert :ok = DynamicSupervisor.stop_session(harness.session.id)
@@ -370,7 +372,7 @@ defmodule Synapsis.Session.NativeWebFetchFunctionalTest do
       assert %{"type" => "function_call_output", "output" => output} = message
 
       if call.result["status"] == 200 do
-        document = Jason.decode!(output)
+        document = Formata.JSON.decode!(output)
         assert Map.take(document, ~w(status url content_type)) == Map.drop(call.result, ["body"])
         assert document["final_url"] == call.result["url"]
         assert document["text"] =~ call.result["body"]

@@ -201,7 +201,7 @@ defmodule Synapsis.Web.OllamaSearchFunctionalTest do
       __DIR__
     )
     |> File.read!()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 
   defp search(ctx, args, opts \\ []) do
@@ -257,11 +257,11 @@ defmodule Synapsis.Web.OllamaSearchFunctionalTest do
   defp install(ctx, payload, path \\ "/ordinary/api/experimental/web_search") do
     Gaoxy.Test.stub(ctx.fixture, "POST", path, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      Agent.update(ctx.counter, &(&1 ++ [Jason.decode!(body)]))
+      Agent.update(ctx.counter, &(&1 ++ [Formata.JSON.decode!(body)]))
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(payload))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
     end)
   end
 end

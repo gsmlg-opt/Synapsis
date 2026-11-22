@@ -196,7 +196,7 @@ defmodule Synapsis.Agent.ManagedAutomationLifecycleFunctionalTest do
 
     Gaoxy.Test.expect(http, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       prompt =
         request["input"]

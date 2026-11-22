@@ -28,7 +28,9 @@ defmodule Synapsis.VideoPartFunctionalTest do
              })
 
     assert {:ok, ^stored} = Part.dump(part)
-    assert {:ok, ^part} = stored |> Jason.encode!() |> Jason.decode!() |> Part.load()
+
+    assert {:ok, ^part} =
+             stored |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Part.load()
   end
 
   test "assistant message changeset casts a public video part" do

@@ -26,7 +26,7 @@ defmodule Synapsis.Agent.ResolverResourcesFunctionalTest do
 
     on_exit(fn -> AgentConfigs.delete(saved) end)
     assert {:ok, before} = Store.get(:agent, saved.id)
-    assert Jason.decode!(before["config"]) == config
+    assert Formata.JSON.decode!(before["config"]) == config
     assert :ok = Store.reload(:agent)
     assert AgentConfigs.get(saved.id).config == config
     assert {:ok, configured} = Resolver.resolve_configured(saved.name)

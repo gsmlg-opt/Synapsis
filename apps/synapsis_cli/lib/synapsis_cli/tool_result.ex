@@ -24,7 +24,7 @@ defmodule SynapsisCli.ToolResult do
         Enum.flat_map(@sidecars, fn {key, label} ->
           case Map.get(result, key) do
             nil -> []
-            value -> [label <> ": " <> Jason.encode!(value)]
+            value -> [label <> ": " <> Formata.JSON.encode!(value)]
           end
         end)
 
@@ -87,7 +87,7 @@ defmodule SynapsisCli.ToolResult do
 
     case Map.get(error, "details") do
       nil -> {:ok, lines}
-      details -> {:ok, lines ++ ["Error details: " <> Jason.encode!(details)]}
+      details -> {:ok, lines ++ ["Error details: " <> Formata.JSON.encode!(details)]}
     end
   end
 

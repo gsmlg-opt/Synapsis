@@ -119,7 +119,7 @@ defmodule Synapsis.Agent.Tools.ReadableFetchNativeFunctionalTest do
     assert opts[:timeout] == 4_000
     assert opts[:result_limit] == 65_536
     assert opts[:proof_document] == document
-    assert document |> Jason.encode!() |> Jason.decode!() == document
+    assert document |> Formata.JSON.encode!() |> Formata.JSON.decode!() == document
   end
 
   test "native Conversation commits the readable invocation and supplies its live effect deadline" do

@@ -75,7 +75,7 @@ defmodule Synapsis.Backplane.ClientTest do
 
     Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      message = Jason.decode!(body)
+      message = Formata.JSON.decode!(body)
 
       case message["method"] do
         "initialize" ->
@@ -159,7 +159,7 @@ defmodule Synapsis.Backplane.ClientTest do
 
     Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      method = Jason.decode!(body)["method"]
+      method = Formata.JSON.decode!(body)["method"]
       send(parent, {:mcp_method, method, Plug.Conn.get_req_header(conn, "mcp-session-id")})
 
       case method do
@@ -249,7 +249,7 @@ defmodule Synapsis.Backplane.ClientTest do
 
     Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      message = Jason.decode!(body)
+      message = Formata.JSON.decode!(body)
       cursor = get_in(message, ["params", "cursor"])
       send(parent, {:mcp_page, message["method"], cursor})
 
@@ -375,7 +375,7 @@ defmodule Synapsis.Backplane.ClientTest do
 
     Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      message = Jason.decode!(body)
+      message = Formata.JSON.decode!(body)
 
       case {message["method"], get_in(message, ["params", "cursor"])} do
         {"initialize", nil} ->
@@ -419,7 +419,7 @@ defmodule Synapsis.Backplane.ClientTest do
 
     Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      message = Jason.decode!(body)
+      message = Formata.JSON.decode!(body)
 
       case {message["method"], get_in(message, ["params", "cursor"])} do
         {"initialize", nil} ->
@@ -460,7 +460,7 @@ defmodule Synapsis.Backplane.ClientTest do
 
     Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      message = Jason.decode!(body)
+      message = Formata.JSON.decode!(body)
       cursor = get_in(message, ["params", "cursor"])
 
       case {message["method"], cursor} do
@@ -512,7 +512,7 @@ defmodule Synapsis.Backplane.ClientTest do
 
     Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      message = Jason.decode!(body)
+      message = Formata.JSON.decode!(body)
 
       case message["method"] do
         "initialize" ->
@@ -691,7 +691,7 @@ defmodule Synapsis.Backplane.ClientTest do
 
       Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        method = Jason.decode!(body)["method"]
+        method = Formata.JSON.decode!(body)["method"]
 
         case {oversized_phase, method} do
           {:initialize, "initialize"} ->
@@ -738,7 +738,7 @@ defmodule Synapsis.Backplane.ClientTest do
 
       send_slow_chunks(
         conn,
-        Jason.encode!(%{"data" => [%{"id" => String.duplicate("m", 100)}]}),
+        Formata.JSON.encode!(%{"data" => [%{"id" => String.duplicate("m", 100)}]}),
         8,
         20
       )
@@ -746,6 +746,43 @@ defmodule Synapsis.Backplane.ClientTest do
 
     assert {:error, %{reason: :timeout}} = Client.fetch_models(connection, timeout: 60)
     Gaoxy.Test.verify!(bypass)
+  end
+
+  test "bounds decompressed models before JSON decoding" do
+    bypass = Gaoxy.Test.open()
+    connection = connection!(bypass)
+
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      payload = Formata.JSON.encode!(%{"data" => [%{"id" => String.duplicate("m", 5_000)}]})
+
+      conn
+      |> Plug.Conn.put_resp_content_type("application/json")
+      |> Plug.Conn.put_resp_header("content-encoding", "gzip")
+      |> Plug.Conn.send_resp(200, :zlib.gzip(payload))
+    end)
+
+    assert {:error, :models_response_too_large} =
+             Client.fetch_models(connection, timeout: 500, max_models_response_bytes: 256)
+  end
+
+  test "does not follow discovery redirects" do
+    bypass = Gaoxy.Test.open()
+    connection = connection!(bypass)
+    owner = self()
+
+    Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
+      conn
+      |> Plug.Conn.put_resp_header("location", Gaoxy.Test.url(bypass, "/redirected"))
+      |> Plug.Conn.send_resp(302, "")
+    end)
+
+    Gaoxy.Test.stub(bypass, "GET", "/redirected", fn conn ->
+      send(owner, :redirect_followed)
+      json(conn, %{"data" => []})
+    end)
+
+    assert {:error, {:http_status, 302}} = Client.fetch_models(connection, timeout: 500)
+    refute_received :redirect_followed
   end
 
   test "accepts more than 100 models when the bounded response is valid" do
@@ -1310,7 +1347,7 @@ defmodule Synapsis.Backplane.ClientTest do
   defp json(conn, body) do
     conn
     |> Plug.Conn.put_resp_content_type("application/json")
-    |> Plug.Conn.send_resp(200, Jason.encode!(body))
+    |> Plug.Conn.send_resp(200, Formata.JSON.encode!(body))
   end
 
   defp chunked_json(conn, body) do
@@ -1319,7 +1356,7 @@ defmodule Synapsis.Backplane.ClientTest do
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.send_chunked(200)
 
-    send_chunks(conn, Jason.encode!(body), 73)
+    send_chunks(conn, Formata.JSON.encode!(body), 73)
   end
 
   defp oversized_mcp_response(conn, id) do
@@ -1365,7 +1402,7 @@ defmodule Synapsis.Backplane.ClientTest do
     Gaoxy.Test.expect(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      case Jason.decode!(body)["method"] do
+      case Formata.JSON.decode!(body)["method"] do
         "initialize" ->
           conn
           |> Plug.Conn.put_resp_header("mcp-session-id", "empty-session")

@@ -244,7 +244,7 @@ defmodule Synapsis.Provider.ExaSearchFunctionalTest do
 
   test "every pinned HTTP-bearing Exa callback preserves endpoint, body, headers and full provider map",
        ctx do
-    reference = @reference |> File.read!() |> Jason.decode!()
+    reference = @reference |> File.read!() |> Formata.JSON.decode!()
 
     callbacks =
       for group <- reference["groups"],
@@ -353,11 +353,11 @@ defmodule Synapsis.Provider.ExaSearchFunctionalTest do
 
     Gaoxy.Test.stub(ctx.fixture, "POST", path, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(owner, {:http, Jason.decode!(body), conn.req_headers, conn.query_string})
+      send(owner, {:http, Formata.JSON.decode!(body), conn.req_headers, conn.query_string})
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(payload))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
     end)
   end
 end

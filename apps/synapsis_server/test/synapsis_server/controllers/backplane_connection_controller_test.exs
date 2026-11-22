@@ -139,7 +139,7 @@ defmodule SynapsisServer.BackplaneConnectionControllerTest do
     Gaoxy.Test.stub(bypass, "GET", "/v1/models", fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(%{"data" => [%{"id" => "coding"}]}))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"data" => [%{"id" => "coding"}]}))
     end)
 
     Gaoxy.Test.stub(bypass, "GET", "/skill-protocol/v1/catalog", fn conn ->
@@ -147,13 +147,13 @@ defmodule SynapsisServer.BackplaneConnectionControllerTest do
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.resp(
         200,
-        Jason.encode!(%{"protocol_version" => "1", "data" => [], "next_cursor" => nil})
+        Formata.JSON.encode!(%{"protocol_version" => "1", "data" => [], "next_cursor" => nil})
       )
     end)
 
     Gaoxy.Test.stub(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       case request["method"] do
         "initialize" ->
@@ -162,7 +162,7 @@ defmodule SynapsisServer.BackplaneConnectionControllerTest do
           |> Plug.Conn.put_resp_content_type("application/json")
           |> Plug.Conn.resp(
             200,
-            Jason.encode!(%{
+            Formata.JSON.encode!(%{
               "jsonrpc" => "2.0",
               "id" => request["id"],
               "result" => %{
@@ -181,7 +181,7 @@ defmodule SynapsisServer.BackplaneConnectionControllerTest do
           |> Plug.Conn.put_resp_content_type("application/json")
           |> Plug.Conn.resp(
             200,
-            Jason.encode!(%{
+            Formata.JSON.encode!(%{
               "jsonrpc" => "2.0",
               "id" => request["id"],
               "result" => %{"tools" => []}

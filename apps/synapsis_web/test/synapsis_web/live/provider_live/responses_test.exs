@@ -121,7 +121,7 @@ defmodule SynapsisWeb.ProviderLive.ResponsesTest do
     Gaoxy.Test.expect_once(fixture, "POST", "/v1/responses", fn conn ->
       assert get_req_header(conn, "authorization") == ["Bearer " <> @secret]
       {:ok, body, conn} = read_body(conn)
-      send(owner, {:responses_request, Jason.decode!(body)})
+      send(owner, {:responses_request, Formata.JSON.decode!(body)})
 
       events = [
         %{"type" => "response.output_text.delta", "delta" => "Responses fixture reply"},
@@ -133,7 +133,10 @@ defmodule SynapsisWeb.ProviderLive.ResponsesTest do
 
       conn
       |> put_resp_content_type("text/event-stream")
-      |> send_resp(200, Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n")))
+      |> send_resp(
+        200,
+        Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
+      )
     end)
 
     render_hook(view, "chat.send", chat_params(provider, "local fixture question"))
@@ -197,7 +200,10 @@ defmodule SynapsisWeb.ProviderLive.ResponsesTest do
   end
 
   defp send_json(conn, data),
-    do: conn |> put_resp_content_type("application/json") |> send_resp(200, Jason.encode!(data))
+    do:
+      conn
+      |> put_resp_content_type("application/json")
+      |> send_resp(200, Formata.JSON.encode!(data))
 
   defp chat_params(provider, text),
     do: %{

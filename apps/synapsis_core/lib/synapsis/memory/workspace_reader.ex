@@ -259,11 +259,11 @@ defmodule Synapsis.Memory.WorkspaceReader do
 
   defp enumerate(root, scan) do
     budget = if scan.fresh or scan.pending == [], do: @max_entries, else: 0
-    Port.command(scan.port, Jason.encode!(%{budget: budget}) <> "\n")
+    Port.command(scan.port, Formata.JSON.encode!(%{budget: budget}) <> "\n")
 
     receive do
       {port, {:data, {:eol, json}}} when port == scan.port ->
-        case Jason.decode(json) do
+        case Formata.JSON.decode(json) do
           {:ok, %{"entries" => paths, "scanned" => scanned, "complete" => complete}} ->
             with {:ok, files} <- collect_files(root, paths) do
               pending = Enum.sort_by(scan.pending ++ files, & &1.path)
@@ -332,7 +332,7 @@ defmodule Synapsis.Memory.WorkspaceReader do
       else: {Enum.reverse(selected), pending}
   end
 
-  defp fits?(items), do: byte_size(Jason.encode!(items)) <= @max_output - 512
+  defp fits?(items), do: byte_size(Formata.JSON.encode!(items)) <= @max_output - 512
 
   defp search_files(_root, [], _query, _limit, results, _deadline),
     do: {:ok, Enum.reverse(results), []}
@@ -537,7 +537,7 @@ defmodule Synapsis.Memory.WorkspaceReader do
   end
 
   defp output(result) do
-    case Jason.encode(result) do
+    case Synapsis.JSON.encode(result) do
       {:ok, json} when byte_size(json) <= @max_output -> {:ok, result}
       _ -> {:error, :output_limit}
     end

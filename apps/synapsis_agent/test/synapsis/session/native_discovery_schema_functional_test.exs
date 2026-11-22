@@ -166,7 +166,7 @@ defmodule Synapsis.Session.NativeDiscoverySchemaFunctionalTest do
     assert mcp.projection["result"]["structured"] == @input
 
     assert %{"status" => "ok", "result" => decision_result, "provenance" => provenance} =
-             Jason.decode!(decision.content)
+             Formata.JSON.decode!(decision.content)
 
     assert decision_result == %{
              "model" => "fixture-decision-result",
@@ -193,7 +193,7 @@ defmodule Synapsis.Session.NativeDiscoverySchemaFunctionalTest do
         }
       end
 
-    assert Enum.sort_by(Jason.decode!(metadata_json), & &1["tool_name"]) ==
+    assert Enum.sort_by(Formata.JSON.decode!(metadata_json), & &1["tool_name"]) ==
              Enum.sort_by(expected_metadata, & &1["tool_name"])
 
     send(handler, :deliver)
@@ -244,7 +244,7 @@ defmodule Synapsis.Session.NativeDiscoverySchemaFunctionalTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       result =
         case request["method"] do
@@ -337,7 +337,7 @@ defmodule Synapsis.Session.NativeDiscoverySchemaFunctionalTest do
     Gaoxy.Test.stub(fixture, "POST", "/v1/decisions", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       Agent.update(effects, &Map.update!(&1, :decision, fn n -> n + 1 end))
-      send(owner, {:schema_decision_call, Jason.decode!(body)})
+      send(owner, {:schema_decision_call, Formata.JSON.decode!(body)})
 
       json_response(conn, %{
         "model" => "fixture-decision-result",
@@ -374,7 +374,7 @@ defmodule Synapsis.Session.NativeDiscoverySchemaFunctionalTest do
 
     Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(ctx.harness.counter, fn state ->
@@ -440,13 +440,13 @@ defmodule Synapsis.Session.NativeDiscoverySchemaFunctionalTest do
         &(&1["call_id"] == id and &1["type"] in ~w(function_call_output custom_tool_call_output))
       )
 
-  defp json(value), do: value |> Jason.encode!() |> Jason.decode!()
+  defp json(value), do: value |> Formata.JSON.encode!() |> Formata.JSON.decode!()
 
   defp json_response(conn, value),
     do:
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(value))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(value))
 
   defp calls(conn, calls) do
     items =
@@ -456,7 +456,7 @@ defmodule Synapsis.Session.NativeDiscoverySchemaFunctionalTest do
             "id" => id <> "-item",
             "call_id" => id,
             "name" => ToolName.encode(name),
-            "arguments" => Jason.encode!(args)
+            "arguments" => Formata.JSON.encode!(args)
           }
 
     events =
@@ -516,6 +516,6 @@ defmodule Synapsis.Session.NativeDiscoverySchemaFunctionalTest do
       |> Plug.Conn.put_resp_content_type("text/event-stream")
       |> Plug.Conn.resp(
         200,
-        Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+        Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
       )
 end

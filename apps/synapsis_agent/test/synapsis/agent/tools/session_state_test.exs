@@ -126,7 +126,9 @@ defmodule Synapsis.Agent.Tools.SessionStateTest do
     assert {:ok, %{structured: %{todos: [first, later]}} = result} =
              SessionState.execute(operation(ctx, @read, %{}))
 
-    assert Jason.decode!(result.content) == Jason.decode!(Jason.encode!(result.structured))
+    assert Formata.JSON.decode!(result.content) ==
+             Formata.JSON.decode!(Formata.JSON.encode!(result.structured))
+
     assert first == %{id: "first", content: "First", status: "pending", sort_order: 2}
     assert later == %{id: "later", content: "Later", status: "completed", sort_order: 8}
     assert {:ok, _} = ResultProjection.to_part("read-call", result, tool_name: @read)
@@ -142,13 +144,16 @@ defmodule Synapsis.Agent.Tools.SessionStateTest do
                SessionState.execute(operation(ctx, @write, %{"todos" => todos}))
 
       assert_receive {:todo_update, _, records}
-      assert byte_size(Jason.encode!(%{todos: todos})) < 1_048_576
+      assert byte_size(Formata.JSON.encode!(%{todos: todos})) < 1_048_576
 
       if accepted? do
         assert {:ok, result} = SessionState.execute(operation(ctx, @read, %{}))
-        assert byte_size(Jason.encode!(result)) <= 1_048_576
-        assert Jason.decode!(result.content) == Jason.decode!(Jason.encode!(result.structured))
-        assert length(Jason.decode!(result.content)["todos"]) == 100
+        assert byte_size(Formata.JSON.encode!(result)) <= 1_048_576
+
+        assert Formata.JSON.decode!(result.content) ==
+                 Formata.JSON.decode!(Formata.JSON.encode!(result.structured))
+
+        assert length(Formata.JSON.decode!(result.content)["todos"]) == 100
       else
         assert {:error, %Error{class: :budget_exceeded, details: %{code: "output_limit"}}} =
                  SessionState.execute(operation(ctx, @read, %{}))

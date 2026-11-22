@@ -10,7 +10,7 @@ defmodule Synapsis.Session.EventReplyFunctionalTest do
              __DIR__
            )
   @external_resource @fixture
-  @capture @fixture |> File.read!() |> Jason.decode!()
+  @capture @fixture |> File.read!() |> Formata.JSON.decode!()
 
   test "message helper matches all eighteen actual original whole-module observations" do
     assert @capture["referencePin"] == "488631c18fae7cc541ba8fc8beff6cbb0438787b"

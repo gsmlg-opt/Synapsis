@@ -87,7 +87,7 @@ defmodule Synapsis.Backplane.ProviderSourceTest do
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.resp(
         200,
-        Jason.encode!(%{"protocol_version" => "1", "data" => [], "next_cursor" => nil})
+        Formata.JSON.encode!(%{"protocol_version" => "1", "data" => [], "next_cursor" => nil})
       )
     end)
 

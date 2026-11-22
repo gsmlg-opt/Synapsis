@@ -120,7 +120,9 @@ defmodule Synapsis.Session.NativeSkillSearchFunctionalTest do
 
     for part <- uses ++ results do
       assert {:ok, dumped} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dumped |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dumped |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
 
     assert_durable(harness.session.id, uses, results)
@@ -227,7 +229,7 @@ defmodule Synapsis.Session.NativeSkillSearchFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      req = Jason.decode!(body)
+      req = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -290,7 +292,8 @@ defmodule Synapsis.Session.NativeSkillSearchFunctionalTest do
     uses = Enum.filter(req["input"], &(&1["type"] == "function_call"))
 
     assert Enum.map(uses, fn call ->
-             {call["call_id"], ToolName.decode(call["name"]), Jason.decode!(call["arguments"])}
+             {call["call_id"], ToolName.decode(call["name"]),
+              Formata.JSON.decode!(call["arguments"])}
            end) == calls
 
     actual = for message <- req["input"], message["type"] == "function_call_output", do: message

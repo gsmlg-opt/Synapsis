@@ -37,19 +37,20 @@ defmodule SynapsisServer.MixProject do
       {:synapsis_mcp, in_umbrella: true},
       {:synapsis_sandbox, in_umbrella: true},
       {:synapsis_samgita, in_umbrella: true},
-      {:phoenix, "~> 1.8.16"},
+      {:phoenix, "~> 1.8.17"},
       {:phoenix_html, "~> 4.2"},
-      {:phoenix_live_view, "~> 1.2.13"},
+      {:phoenix_live_view, "~> 1.2.15"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
-      {:jason, "~> 1.4"},
-      {:gaoxy_test, "~> 0.15.1", only: :test},
-      {:mint_web_socket, "~> 1.0", only: :test},
+      {:gaoxy_test, "~> 0.16.6", only: :test},
       {:dns_cluster, "~> 0.3.1"},
-      {:gaoxy_http, "~> 0.15.1"},
-      {:websock_adapter, "~> 0.15.1", hex: :gaoxy_websock_adapter, override: true},
+      {:gaoxy_http, "~> 0.16.6"},
+      {:websock_adapter, "~> 0.16.6", hex: :gaoxy_websock_adapter, override: true},
       {:cors_plug, "~> 3.0"},
-      {:duskmoon_bundler, "~> 10.1.6", runtime: Mix.env() in [:dev, :test]}
+      {:duskmoon_bundler, "~> 10.1.12", runtime: Mix.env() in [:dev, :test]},
+      {:formata, "~> 0.3.5"},
+      {:http_fetch, "~> 1.0.0-rc.20", only: :test},
+      {:http_web_socket, "~> 1.0.0-rc.20", only: :test}
     ]
   end
 end

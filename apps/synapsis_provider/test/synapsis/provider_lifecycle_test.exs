@@ -53,7 +53,7 @@ defmodule Synapsis.ProviderLifecycleTest do
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(%{"data" => [%{"id" => "late-model"}]}))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"data" => [%{"id" => "late-model"}]}))
     end)
 
     {:ok, provider} =

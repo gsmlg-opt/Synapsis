@@ -20,13 +20,13 @@ defmodule Synapsis.Memory.SharedHostAgentTest do
 
     Gaoxy.Test.expect_once(ctx.server, "POST", "/memory/synapsis/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      payload = Jason.decode!(body)
+      payload = Formata.JSON.decode!(body)
       send(owner, {:initialize, payload})
 
       Plug.Conn.resp(
         conn,
         200,
-        Jason.encode!(%{
+        Formata.JSON.encode!(%{
           jsonrpc: "2.0",
           id: payload["id"],
           result: %{instructions: "Search memory before exploration."}
@@ -92,7 +92,7 @@ defmodule Synapsis.Memory.SharedHostAgentTest do
 
   test "shared calls retain fixed not-found errors and do not retry transport failures", ctx do
     Gaoxy.Test.expect_once(ctx.server, "POST", "/memory/synapsis/call/get", fn conn ->
-      Plug.Conn.resp(conn, 404, Jason.encode!(%{ok: false, error: "not_found"}))
+      Plug.Conn.resp(conn, 404, Formata.JSON.encode!(%{ok: false, error: "not_found"}))
     end)
 
     assert {:error, :not_found} = HostAgent.call(ctx.source, "memory::get", %{"id" => "missing"})
@@ -167,12 +167,12 @@ defmodule Synapsis.Memory.SharedHostAgentTest do
   test "MCP result correlation and complete five-tool inventory are required", ctx do
     Gaoxy.Test.expect_once(ctx.server, "POST", "/memory/synapsis/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       Plug.Conn.resp(
         conn,
         200,
-        Jason.encode!(%{jsonrpc: "2.0", id: request["id"], result: %{tools: []}})
+        Formata.JSON.encode!(%{jsonrpc: "2.0", id: request["id"], result: %{tools: []}})
       )
     end)
 
@@ -184,7 +184,7 @@ defmodule Synapsis.Memory.SharedHostAgentTest do
       Plug.Conn.resp(
         conn,
         200,
-        Jason.encode!(%{jsonrpc: "2.0", id: "foreign", result: %{instructions: "foreign"}})
+        Formata.JSON.encode!(%{jsonrpc: "2.0", id: "foreign", result: %{instructions: "foreign"}})
       )
     end)
 
@@ -194,8 +194,8 @@ defmodule Synapsis.Memory.SharedHostAgentTest do
   defp expect_call(ctx, method, arguments, result) do
     Gaoxy.Test.expect_once(ctx.server, "POST", "/memory/synapsis/call/" <> method, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert Jason.decode!(body) == arguments
-      Plug.Conn.resp(conn, 200, Jason.encode!(%{ok: true, result: result}))
+      assert Formata.JSON.decode!(body) == arguments
+      Plug.Conn.resp(conn, 200, Formata.JSON.encode!(%{ok: true, result: result}))
     end)
   end
 end

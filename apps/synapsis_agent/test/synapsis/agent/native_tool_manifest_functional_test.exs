@@ -163,7 +163,7 @@ defmodule Synapsis.Agent.NativeToolManifestFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/messages", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       [{worker, _}] = Registry.lookup(Synapsis.Session.Registry, harness.session.id)
       {_, data} = :sys.get_state(worker, 1_000)
       runtime = :sys.get_state(data.runtime_pid, 1_000)
@@ -229,6 +229,9 @@ defmodule Synapsis.Agent.NativeToolManifestFunctionalTest do
 
     conn
     |> Plug.Conn.put_resp_content_type("text/event-stream")
-    |> Plug.Conn.resp(200, Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n")))
+    |> Plug.Conn.resp(
+      200,
+      Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
+    )
   end
 end

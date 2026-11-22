@@ -170,7 +170,7 @@ defmodule Synapsis.Agent.Tools.Approval do
 
   defp serializable_request(invocation, approval, evaluation) do
     if not Map.has_key?(invocation, :backend_context) and
-         match?({:ok, _}, Jason.encode(request_map(invocation, approval, evaluation))),
+         match?({:ok, _}, Synapsis.JSON.encode(request_map(invocation, approval, evaluation))),
        do: :ok,
        else: {:error, :invalid_approval_request}
   end

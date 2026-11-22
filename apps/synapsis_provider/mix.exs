@@ -31,11 +31,10 @@ defmodule SynapsisProvider.MixProject do
     [
       {:synapsis_data, in_umbrella: true},
       {:phoenix_pubsub, "~> 2.4.1"},
-      {:backplane_ai_protocol, "~> 1.10.87"},
-      {:req, "~> 0.7"},
-      {:finch, "~> 0.24"},
-      {:jason, "~> 1.4"},
-      {:gaoxy_test, "~> 0.15.1", only: :test}
+      {:backplane_ai_protocol, "~> 1.10.94"},
+      {:gaoxy_test, "~> 0.16.6", only: :test},
+      {:formata, "~> 0.3.5"},
+      {:http_fetch, "~> 1.0.0-rc.20"}
     ]
   end
 end

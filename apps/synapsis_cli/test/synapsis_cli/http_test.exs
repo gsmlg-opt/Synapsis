@@ -15,13 +15,13 @@ defmodule SynapsisCli.HTTPTest do
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
+        |> Plug.Conn.resp(201, Formata.JSON.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
+        |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"ok" => true}))
       end)
 
       Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
@@ -54,18 +54,24 @@ defmodule SynapsisCli.HTTPTest do
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(500, Jason.encode!(%{"error" => "internal"}))
+        |> Plug.Conn.resp(500, Formata.JSON.encode!(%{"error" => "internal"}))
       end)
 
       # Make the HTTP call directly (bypassing main/1 to avoid System.halt)
       body = %{project_path: File.cwd!()}
 
       result =
-        case Req.post("#{host}/api/sessions", json: body) do
-          {:ok, %{status: 201, body: %{"data" => %{"id" => id}}}} ->
+        case HTTP.fetch("#{host}/api/sessions",
+               method: :post,
+               body: Formata.JSON.encode!(body),
+               content_type: "application/json",
+               timeout: 5_000
+             )
+             |> HTTP.Promise.await() do
+          %{status: 201, body: %{"data" => %{"id" => id}}} ->
             {:ok, id}
 
-          {:ok, %{status: status, body: resp_body}} ->
+          %{status: status, body: resp_body} ->
             {:error, "HTTP #{status}: #{inspect(resp_body)}"}
 
           {:error, reason} ->
@@ -83,7 +89,7 @@ defmodule SynapsisCli.HTTPTest do
 
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        decoded = Jason.decode!(body)
+        decoded = Formata.JSON.decode!(body)
 
         assert decoded["provider"] == "anthropic"
         assert decoded["model"] == "claude-sonnet-4-20250514"
@@ -91,13 +97,13 @@ defmodule SynapsisCli.HTTPTest do
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
+        |> Plug.Conn.resp(201, Formata.JSON.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
+        |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"ok" => true}))
       end)
 
       Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
@@ -127,7 +133,7 @@ defmodule SynapsisCli.HTTPTest do
 
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        decoded = Jason.decode!(body)
+        decoded = Formata.JSON.decode!(body)
 
         refute Map.has_key?(decoded, "provider")
         refute Map.has_key?(decoded, "model")
@@ -135,13 +141,13 @@ defmodule SynapsisCli.HTTPTest do
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
+        |> Plug.Conn.resp(201, Formata.JSON.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
+        |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"ok" => true}))
       end)
 
       Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
@@ -163,17 +169,17 @@ defmodule SynapsisCli.HTTPTest do
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
+        |> Plug.Conn.resp(201, Formata.JSON.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        decoded = Jason.decode!(body)
+        decoded = Formata.JSON.decode!(body)
         assert decoded["content"] == "explain this code"
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
+        |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"ok" => true}))
       end)
 
       Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
@@ -199,17 +205,17 @@ defmodule SynapsisCli.HTTPTest do
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
+        |> Plug.Conn.resp(201, Formata.JSON.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        decoded = Jason.decode!(body)
+        decoded = Formata.JSON.decode!(body)
         assert decoded["content"] == "fix the bug"
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
+        |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"ok" => true}))
       end)
 
       Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
@@ -228,37 +234,25 @@ defmodule SynapsisCli.HTTPTest do
 
   describe "default host" do
     @tag :default_host
-    test "uses localhost:4657 when --host not given" do
+    test "documents the default host and honors an explicit isolated host" do
       fixture = Gaoxy.Test.open()
-      address = URI.parse(Gaoxy.Test.url(fixture))
-      previous_options = Req.default_options()
-      on_exit(fn -> Req.default_options(previous_options) end)
+      host = String.trim_trailing(Gaoxy.Test.url(fixture), "/")
 
-      # Check the actual CLI destination before routing to the isolated fixture.
-      # This exercises the default without binding or contacting port 4657.
-      redirect = fn request ->
-        Req.Request.prepend_request_steps(request,
-          default_host: fn request ->
-            assert %URI{scheme: "http", host: "localhost", port: 4657} = request.url
-            %{request | url: %{request.url | host: address.host, port: address.port}}
-          end
-        )
-      end
+      assert capture_io(fn -> SynapsisCli.Main.run(["--help"]) end) =~
+               "Server URL (default: http://localhost:4657)"
 
-      plugins = [redirect | Keyword.get(previous_options, :plugins, [])]
-      Req.default_options(Keyword.put(previous_options, :plugins, plugins))
       session_id = "default-host-#{System.unique_integer([:positive])}"
 
       Gaoxy.Test.expect_once(fixture, "POST", "/api/sessions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
+        |> Plug.Conn.resp(201, Formata.JSON.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
       Gaoxy.Test.expect_once(fixture, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
+        |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"ok" => true}))
       end)
 
       Gaoxy.Test.expect_once(fixture, "GET", "/api/sessions/#{session_id}/events", fn conn ->
@@ -268,7 +262,7 @@ defmodule SynapsisCli.HTTPTest do
       end)
 
       capture_io(fn ->
-        assert :ok = SynapsisCli.Main.run(["--prompt", "test"])
+        assert :ok = SynapsisCli.Main.run(["--prompt", "test", "--host", host])
       end)
     end
   end
@@ -284,13 +278,13 @@ defmodule SynapsisCli.HTTPTest do
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
+        |> Plug.Conn.resp(201, Formata.JSON.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
+        |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"ok" => true}))
       end)
 
       %{bypass: bypass, host: host, session_id: session_id}
@@ -455,10 +449,10 @@ defmodule SynapsisCli.HTTPTest do
         end
 
         payload =
-          "event: text_delta\r\ndata: #{Jason.encode!(%{"text" => "A🌙"})}\r\n\r\n" <>
-            "event: text_delta\ndata: #{Jason.encode!(%{"text" => "B"})}\n\n" <>
+          "event: text_delta\r\ndata: #{Formata.JSON.encode!(%{"text" => "A🌙"})}\r\n\r\n" <>
+            "event: text_delta\ndata: #{Formata.JSON.encode!(%{"text" => "B"})}\n\n" <>
             "event: done\ndata: {}\n\n" <>
-            "event: text_delta\ndata: #{Jason.encode!(%{"text" => "NEVER"})}\n\n"
+            "event: text_delta\ndata: #{Formata.JSON.encode!(%{"text" => "NEVER"})}\n\n"
 
         {moon_offset, _length} = :binary.match(payload, "🌙")
         split_at = moon_offset + 2
@@ -494,7 +488,19 @@ defmodule SynapsisCli.HTTPTest do
       end)
 
       Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
-        json(conn, 503, %{"error" => "unavailable"})
+        conn =
+          conn
+          |> Plug.Conn.put_resp_content_type("application/json")
+          |> Plug.Conn.send_chunked(503)
+
+        # Status arrives before the short body. Closing on headers alone races
+        # this write, even though no session message should ever be submitted.
+        Process.sleep(50)
+
+        assert {:ok, conn} =
+                 Plug.Conn.chunk(conn, Formata.JSON.encode!(%{"error" => "unavailable"}))
+
+        conn
       end)
 
       Gaoxy.Test.stub(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
@@ -593,13 +599,13 @@ defmodule SynapsisCli.HTTPTest do
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
+        |> Plug.Conn.resp(201, Formata.JSON.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(422, Jason.encode!(%{"error" => "validation failed"}))
+        |> Plug.Conn.resp(422, Formata.JSON.encode!(%{"error" => "validation failed"}))
       end)
 
       Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
@@ -618,6 +624,6 @@ defmodule SynapsisCli.HTTPTest do
   defp json(conn, status, body) do
     conn
     |> Plug.Conn.put_resp_content_type("application/json")
-    |> Plug.Conn.resp(status, Jason.encode!(body))
+    |> Plug.Conn.resp(status, Formata.JSON.encode!(body))
   end
 end

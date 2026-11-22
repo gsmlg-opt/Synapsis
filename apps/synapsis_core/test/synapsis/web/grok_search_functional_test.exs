@@ -145,11 +145,11 @@ defmodule Synapsis.Web.GrokSearchFunctionalTest do
       Gaoxy.Test.stub(fixture, "POST", path, fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
         headers = conn.req_headers |> Map.new() |> Map.take(Map.keys(source["headers"]))
-        Agent.update(counter, &(&1 ++ [{path, Jason.decode!(body), headers}]))
+        Agent.update(counter, &(&1 ++ [{path, Formata.JSON.decode!(body), headers}]))
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(group["httpPayload"]))
+        |> Plug.Conn.resp(200, Formata.JSON.encode!(group["httpPayload"]))
       end)
     end
   end
@@ -163,6 +163,6 @@ defmodule Synapsis.Web.GrokSearchFunctionalTest do
       __DIR__
     )
     |> File.read!()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 end

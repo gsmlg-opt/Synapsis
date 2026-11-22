@@ -122,7 +122,7 @@ defmodule Synapsis.Agent.Tools.ApprovalTest do
     assert request.action == "read"
     assert request.resource == "document:one"
     assert request.expires_at == ctx.context.tool_approval.expires_at
-    assert {:ok, _} = Jason.encode(request)
+    assert {:ok, _} = Synapsis.JSON.encode(request)
     refute Map.has_key?(request, :refresh)
     refute Map.has_key?(request.operation, :backend_context)
   end

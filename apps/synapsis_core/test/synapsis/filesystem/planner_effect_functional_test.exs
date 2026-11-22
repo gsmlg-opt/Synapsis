@@ -34,7 +34,7 @@ defmodule Synapsis.Filesystem.PlannerEffectFunctionalTest do
 
     fixture_bytes = File.read!(@fixture)
     assert sha256(fixture_bytes) == @fixture_sha256
-    fixture = Jason.decode!(fixture_bytes)
+    fixture = Formata.JSON.decode!(fixture_bytes)
     assert fixture["reference"]["commit"] == @reference_commit
     assert Enum.map(fixture["cases"], & &1["id"]) == @ordinary_ids
 

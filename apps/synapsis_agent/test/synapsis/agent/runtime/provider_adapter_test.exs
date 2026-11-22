@@ -40,7 +40,7 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
 
     Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(owner, {:wire_request, Jason.decode!(body)})
+      send(owner, {:wire_request, Formata.JSON.decode!(body)})
 
       sse(conn, [
         ResponsesFixture.text_delta("Hello"),
@@ -130,7 +130,7 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
       "/v1/responses",
       fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        send(owner, {:catalog_wire, Jason.decode!(body)})
+        send(owner, {:catalog_wire, Formata.JSON.decode!(body)})
         sse(conn, [ResponsesFixture.text_delta("ok"), ResponsesFixture.completed()])
       end,
       times: 2
@@ -231,7 +231,7 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
 
     Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(owner, {:resolved_catalog_http, Jason.decode!(body)})
+      send(owner, {:resolved_catalog_http, Formata.JSON.decode!(body)})
       sse(conn, [ResponsesFixture.text_delta("Current catalog"), ResponsesFixture.completed()])
     end)
 
@@ -312,7 +312,7 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
             {:ok, body, conn} = Plug.Conn.read_body(conn)
 
             assert [%{"type" => "text"}, %{"type" => "image", "source" => %{"data" => "AA=="}}] =
-                     Jason.decode!(body)["messages"] |> hd() |> Map.fetch!("content")
+                     Formata.JSON.decode!(body)["messages"] |> hd() |> Map.fetch!("content")
 
             events = [
               %{"type" => "message_start", "message" => %{"id" => "m"}},
@@ -335,7 +335,7 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
               %{"type" => "message_stop"}
             ]
 
-            body = Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+            body = Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
 
             conn
             |> Plug.Conn.put_resp_content_type("text/event-stream")
@@ -343,7 +343,9 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
 
           2 ->
             {:ok, body, conn} = Plug.Conn.read_body(conn)
-            assistant = Enum.find(Jason.decode!(body)["messages"], &(&1["role"] == "assistant"))
+
+            assistant =
+              Enum.find(Formata.JSON.decode!(body)["messages"], &(&1["role"] == "assistant"))
 
             assert [%{"type" => "thinking", "thinking" => "private", "signature" => "signed"}] =
                      assistant["content"]
@@ -384,7 +386,7 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
       Plug.Conn.resp(
         conn,
         200,
-        "data: " <> Jason.encode!(ResponsesFixture.text_delta("partial")) <> "\n\n"
+        "data: " <> Formata.JSON.encode!(ResponsesFixture.text_delta("partial")) <> "\n\n"
       )
     end)
 
@@ -422,7 +424,7 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
   end
 
   for mode <- [:halt, :owner_death, :timeout, :relay_death, :provider_death] do
-    test "#{mode} cleans up the relay and its linked provider task", ctx do
+    test "#{mode} cleans up the relay, linked provider task and cancellation watcher", ctx do
       owner = self()
 
       Gaoxy.Test.expect_once(ctx.fixture, "POST", "/v1/responses", fn conn ->
@@ -463,8 +465,25 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
 
       assert_receive {:http_waiting, handler}, 2_000
       children = Task.Supervisor.children(Synapsis.Provider.TaskSupervisor) -- baseline
-      assert length(children) == 2
-      monitors = Enum.map(children, &{&1, Process.monitor(&1)})
+      assert [_, _, _] = children
+
+      assert [relay] =
+               Enum.filter(children, fn pid ->
+                 case Process.info(pid, :monitors) do
+                   {:monitors, monitors} -> {:process, consumer.pid} in monitors
+                   nil -> false
+                 end
+               end)
+
+      # The relay monitors the consumer and links its provider task. The HTTP
+      # cancellation watcher instead monitors that provider task's lifetime.
+      assert {:links, relay_links} = Process.info(relay, :links)
+      assert [provider] = Enum.filter(children -- [relay], &(&1 in relay_links))
+      assert [watcher] = children -- [relay, provider]
+      assert {:monitors, watcher_monitors} = Process.info(watcher, :monitors)
+      assert {:process, provider} in watcher_monitors
+
+      monitors = Enum.map([relay, provider, watcher], &{&1, Process.monitor(&1)})
 
       case unquote(mode) do
         :halt ->
@@ -476,16 +495,7 @@ defmodule Synapsis.Agent.Runtime.ProviderAdapterTest do
           Task.shutdown(consumer, :brutal_kill)
 
         mode when mode in [:relay_death, :provider_death] ->
-          relay =
-            Enum.find(children, fn pid ->
-              case Process.info(pid, :monitors) do
-                {:monitors, monitors} -> {:process, consumer.pid} in monitors
-                nil -> false
-              end
-            end)
-
-          assert is_pid(relay)
-          victim = %{relay_death: relay, provider_death: hd(children -- [relay])}[mode]
+          victim = %{relay_death: relay, provider_death: provider}[mode]
           Process.exit(victim, :kill)
 
           assert {:ok, [%{type: :response_failed, error: %{class: :execution_failure}} | _]} =

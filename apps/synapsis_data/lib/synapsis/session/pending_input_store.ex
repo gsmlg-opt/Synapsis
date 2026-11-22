@@ -105,7 +105,7 @@ defmodule Synapsis.Session.PendingInputStore do
         {:ok, nil}
 
       value when is_map(value) and not is_struct(value) ->
-        case Jason.encode(value) do
+        case Synapsis.JSON.encode(value) do
           {:ok, _} -> {:ok, value}
           _ -> {:error, :invalid_input_provenance}
         end

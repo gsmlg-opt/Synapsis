@@ -411,7 +411,7 @@ defmodule Synapsis.Web.SearchFunctionalTest do
           Plug.Conn.fetch_query_params(conn).query_params
         else
           {:ok, body, _conn} = Plug.Conn.read_body(conn)
-          Jason.decode!(body)
+          Formata.JSON.decode!(body)
         end
 
       Agent.update(context.counter, &[{method, path, request} | &1])
@@ -419,7 +419,7 @@ defmodule Synapsis.Web.SearchFunctionalTest do
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(payload))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
     end)
   end
 end

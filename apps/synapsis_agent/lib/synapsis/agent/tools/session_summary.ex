@@ -21,7 +21,7 @@ defmodule Synapsis.Agent.Tools.SessionSummary do
   @name "synapsis::session_summarize"
   @context_keys [:session_id, :run_id, :incarnation, :catalog_revision]
   @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
   @output_limit 65_536
 
   def names, do: [@name]
@@ -69,11 +69,11 @@ defmodule Synapsis.Agent.Tools.SessionSummary do
       result = %{
         content:
           "Generated #{length(summary.candidates)} memory candidate(s) for review; candidates were not saved.\n" <>
-            Jason.encode!(summary),
+            Formata.JSON.encode!(summary),
         structured: summary
       }
 
-      if byte_size(Jason.encode!(result)) <= @output_limit,
+      if byte_size(Formata.JSON.encode!(result)) <= @output_limit,
         do: {:ok, result},
         else: failure(:output_limit)
     else

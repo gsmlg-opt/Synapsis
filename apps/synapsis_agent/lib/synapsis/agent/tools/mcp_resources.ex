@@ -217,7 +217,7 @@ defmodule Synapsis.Agent.Tools.MCPResources do
 
   defp output(public) do
     with :ok <- Validation.term(public),
-         {:ok, text} <- Jason.encode(public),
+         {:ok, text} <- Synapsis.JSON.encode(public),
          result = %{content: text, structured: public},
          :ok <- Validation.term(result) do
       {:ok, result}

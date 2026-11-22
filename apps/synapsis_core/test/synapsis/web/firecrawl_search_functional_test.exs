@@ -107,7 +107,7 @@ defmodule Synapsis.Web.FirecrawlSearchFunctionalTest do
         __DIR__
       )
 
-    reference = fixture_path |> File.read!() |> Jason.decode!()
+    reference = fixture_path |> File.read!() |> Formata.JSON.decode!()
 
     vectors =
       for group <- reference["groups"],
@@ -181,11 +181,11 @@ defmodule Synapsis.Web.FirecrawlSearchFunctionalTest do
   defp install(ctx, payload, owner) do
     Gaoxy.Test.stub(ctx.fixture, "POST", "/v2/search", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(owner, {:firecrawl_http, Jason.decode!(body)})
+      send(owner, {:firecrawl_http, Formata.JSON.decode!(body)})
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(payload))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
     end)
   end
 

@@ -15,7 +15,7 @@ defmodule Synapsis.Agent.Tools.ExplicitSkill do
   @name "synapsis::skill"
   @context_keys [:snapshot, :run_id, :incarnation, :catalog_revision]
   @native_context_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
 
   def names, do: [@name]
   def permission_level(@name), do: :none

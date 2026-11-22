@@ -92,7 +92,7 @@ defmodule Synapsis.Agent.DaemonProfilesFunctionalTest do
     oracle =
       @read_pages
       |> File.read!()
-      |> Jason.decode!()
+      |> Formata.JSON.decode!()
       |> Map.fetch!("cases")
       |> Enum.find(&(&1["id"] == "one-based-slice"))
       |> Map.fetch!("result")
@@ -246,7 +246,9 @@ defmodule Synapsis.Agent.DaemonProfilesFunctionalTest do
 
     for part <- parts(completed.session_id, ToolUse) ++ [result] do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
 
     assert {:ok, resolved} = Synapsis.Agent.Resolver.resolve_configured(saved.name)
@@ -276,7 +278,7 @@ defmodule Synapsis.Agent.DaemonProfilesFunctionalTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       index = Agent.get_and_update(counter, &{&1, &1 + 1})
       send(owner, {:named_profile_request, index, request})
       if index == 0, do: function_call(conn, tool, arguments), else: answer(conn)
@@ -284,7 +286,7 @@ defmodule Synapsis.Agent.DaemonProfilesFunctionalTest do
   end
 
   defp function_call(conn, name, arguments) do
-    encoded = Jason.encode!(arguments)
+    encoded = Formata.JSON.encode!(arguments)
 
     item = %{
       "type" => "function_call",
@@ -329,6 +331,6 @@ defmodule Synapsis.Agent.DaemonProfilesFunctionalTest do
       |> Plug.Conn.put_resp_content_type("text/event-stream")
       |> Plug.Conn.resp(
         200,
-        Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+        Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
       )
 end

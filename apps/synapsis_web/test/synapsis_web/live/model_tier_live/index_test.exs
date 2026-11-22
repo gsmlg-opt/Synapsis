@@ -63,7 +63,7 @@ defmodule SynapsisWeb.ModelTierLive.IndexTest do
     [initial] =
       html |> LazyHTML.query("[data-form-id]") |> LazyHTML.attribute("data-initial-values")
 
-    values = Jason.decode!(initial)
+    values = Formata.JSON.decode!(initial)
     assert values["model"] == "pending-model"
     assert values["name"] == "Pending name"
     assert values["context_window"] == 384_000
@@ -101,7 +101,7 @@ defmodule SynapsisWeb.ModelTierLive.IndexTest do
       |> LazyHTML.query("[data-initial-values]")
       |> LazyHTML.attribute("data-initial-values")
 
-    assert Jason.decode!(values)["provider_id"] == replacement.id
+    assert Formata.JSON.decode!(values)["provider_id"] == replacement.id
     render_click(element(view, "[phx-click='import_model'][phx-value-model='replacement-model']"))
     assert {:ok, _} = Models.get_by_identity(replacement.id, "replacement-model")
   end
@@ -158,7 +158,7 @@ defmodule SynapsisWeb.ModelTierLive.IndexTest do
              "model" => "pending-model",
              "name" => "Pending name",
              "context_window" => 384_000
-           } = Jason.decode!(json)
+           } = Formata.JSON.decode!(json)
 
     react_form_submit(view, "model-form", %{"provider_id" => replacement.id})
 

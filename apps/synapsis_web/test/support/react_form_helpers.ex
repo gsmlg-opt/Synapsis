@@ -15,7 +15,7 @@ defmodule SynapsisWeb.ReactFormHelpers do
       |> LazyHTML.query("[data-form-id]")
       |> LazyHTML.attribute("data-initial-values")
       |> hd()
-      |> Jason.decode!()
+      |> Formata.JSON.decode!()
 
     native = native_values(html)
     values = native |> merge(initial) |> merge(changes)

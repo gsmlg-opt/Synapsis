@@ -35,12 +35,13 @@ defmodule SynapsisAgent.MixProject do
       {:synapsis_provider, in_umbrella: true},
       {:synapsis_mcp, in_umbrella: true},
       {:synapsis_workspace, in_umbrella: true},
-      {:backplane_agent_runtime, "~> 1.10.74"},
-      {:jsonschex, "~> 0.10.0"},
+      {:backplane_agent_runtime, "~> 1.10.94"},
       {:crontab, "~> 1.2.1"},
       {:tzdata, "~> 1.2.2"},
-      {:gaoxy_test, "~> 0.15.2", only: :test},
-      {:synapsis_sandbox, in_umbrella: true, only: :test}
+      {:gaoxy_test, "~> 0.16.6", only: :test},
+      {:synapsis_sandbox, in_umbrella: true, only: :test},
+      {:formata, "~> 0.3.5"},
+      {:http_fetch, "~> 1.0.0-rc.20", only: :test}
     ]
   end
 end

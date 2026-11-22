@@ -9,7 +9,8 @@ defmodule Synapsis.Provider.TestSupport.ResponsesFixture do
       "id" => "item_#{call_id}",
       "call_id" => call_id,
       "name" => name,
-      "arguments" => if(is_binary(arguments), do: arguments, else: Jason.encode!(arguments))
+      "arguments" =>
+        if(is_binary(arguments), do: arguments, else: Formata.JSON.encode!(arguments))
     }
   end
 
@@ -59,7 +60,7 @@ defmodule Synapsis.Provider.TestSupport.ResponsesFixture do
           {[event], calls}
       end)
 
-    body = Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+    body = Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
 
     if conn.state == :chunked do
       {:ok, conn} = Plug.Conn.chunk(conn, body)

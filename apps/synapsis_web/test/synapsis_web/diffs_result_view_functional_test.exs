@@ -90,7 +90,7 @@ defmodule SynapsisWeb.DiffsResultViewFunctionalTest do
 
       assert ToolResultView.present(%{
                part
-               | projection: Jason.decode!(Jason.encode!(part.projection))
+               | projection: Formata.JSON.decode!(Formata.JSON.encode!(part.projection))
              }) == display
     end
   end

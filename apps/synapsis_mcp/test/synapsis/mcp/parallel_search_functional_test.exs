@@ -224,7 +224,7 @@ defmodule Synapsis.MCP.ParallelSearchFunctionalTest do
       __DIR__
     )
     |> File.read!()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 
   defp config(ctx) do
@@ -299,7 +299,7 @@ defmodule Synapsis.MCP.ParallelSearchFunctionalTest do
 
     Gaoxy.Test.stub(ctx.fixture, "POST", path, fn conn ->
       {:ok, raw, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(raw)
+      request = Formata.JSON.decode!(raw)
       entries = registry_entries()
 
       protocol_info =
@@ -349,12 +349,14 @@ defmodule Synapsis.MCP.ParallelSearchFunctionalTest do
           result =
             case Keyword.get(opts, :tool_content, "structured") do
               "text" ->
-                %{"content" => [%{"type" => "text", "text" => Jason.encode!(payload)}]}
+                %{"content" => [%{"type" => "text", "text" => Formata.JSON.encode!(payload)}]}
 
               "structured-priority" ->
                 %{
                   "structuredContent" => payload,
-                  "content" => [%{"type" => "text", "text" => Jason.encode!(%{"results" => []})}]
+                  "content" => [
+                    %{"type" => "text", "text" => Formata.JSON.encode!(%{"results" => []})}
+                  ]
                 }
 
               "structured" ->
@@ -378,17 +380,20 @@ defmodule Synapsis.MCP.ParallelSearchFunctionalTest do
       "json" ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(envelope))
+        |> Plug.Conn.resp(200, Formata.JSON.encode!(envelope))
 
       "sse" ->
         conn
         |> Plug.Conn.put_resp_content_type("text/event-stream")
-        |> Plug.Conn.resp(200, "event: message\ndata: " <> Jason.encode!(envelope) <> "\n\n")
+        |> Plug.Conn.resp(
+          200,
+          "event: message\ndata: " <> Formata.JSON.encode!(envelope) <> "\n\n"
+        )
 
       "sse-multiline" ->
         body =
           envelope
-          |> Jason.encode!(pretty: true)
+          |> Formata.JSON.encode!(pretty: true)
           |> String.split("\n")
           |> Enum.map_join("\n", &("data: " <> &1))
 

@@ -27,16 +27,6 @@ defmodule SynapsisServer.NativeRuntimeHealthFunctionalTest do
 
     %{local: {:ok, {_address, port}}} = Gaoxy.info(listener, __MODULE__)
 
-    assert {:ok, conn} =
-             Mint.HTTP.connect(:http, "127.0.0.1", port,
-               mode: :passive,
-               protocols: [:http1],
-               transport_opts: [timeout: @timeout]
-             )
-
-    socket = Mint.HTTP.get_socket(conn)
-    on_exit(fn -> :gen_tcp.close(socket) end)
-
     scheduler_entries =
       Synapsis.Agent.Heartbeat.LocalScheduler.status().entries
       |> Enum.map(fn entry ->
@@ -49,11 +39,16 @@ defmodule SynapsisServer.NativeRuntimeHealthFunctionalTest do
 
     version = :synapsis_server |> Application.spec(:vsn) |> to_string()
 
-    assert {:ok, conn, ref} =
-             Mint.HTTP.request(conn, "GET", "/api/health", [{"accept", "application/json"}], nil)
+    assert %HTTP.Response{status: status, headers: response_headers} =
+             response =
+             HTTP.fetch("http://127.0.0.1:#{port}/api/health",
+               headers: [{"accept", "application/json"}],
+               timeout: @timeout
+             )
+             |> HTTP.Promise.await()
 
-    {status, headers, body} =
-      receive_response(conn, ref, System.monotonic_time(:millisecond) + @timeout, nil, [], [])
+    headers = HTTP.Headers.to_list(response_headers)
+    body = HTTP.Response.read_all(response)
 
     assert status == 200
     assert {"content-type", "application/json; charset=utf-8"} in headers
@@ -74,28 +69,8 @@ defmodule SynapsisServer.NativeRuntimeHealthFunctionalTest do
              "endpoint" => "ok",
              "version" => ^version,
              "scheduler_entries" => ^scheduler_entries
-           } = payload = Jason.decode!(IO.iodata_to_binary(body))
+           } = payload = Formata.JSON.decode!(IO.iodata_to_binary(body))
 
     refute Map.has_key?(payload, "tool_registry")
-  end
-
-  defp receive_response(conn, ref, deadline, status, headers, body) do
-    remaining = deadline - System.monotonic_time(:millisecond)
-    assert remaining > 0, "timed out waiting for the health response"
-    assert {:ok, conn, responses} = Mint.HTTP.recv(conn, 0, remaining)
-
-    {status, headers, body} =
-      Enum.reduce(responses, {status, headers, body}, fn
-        {:status, ^ref, value}, {_status, headers, body} -> {value, headers, body}
-        {:headers, ^ref, value}, {status, headers, body} -> {status, headers ++ value, body}
-        {:data, ^ref, value}, {status, headers, body} -> {status, headers, [body, value]}
-        _, acc -> acc
-      end)
-
-    if {:done, ref} in responses do
-      {status, headers, body}
-    else
-      receive_response(conn, ref, deadline, status, headers, body)
-    end
   end
 end

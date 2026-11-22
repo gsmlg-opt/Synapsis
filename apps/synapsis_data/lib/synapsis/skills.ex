@@ -176,7 +176,7 @@ defmodule Synapsis.Skills do
             {:ok, %{}}
 
           encoded when is_binary(encoded) ->
-            case Jason.decode(encoded) do
+            case Formata.JSON.decode(encoded) do
               {:ok, metadata} when is_map(metadata) -> {:ok, metadata}
               _invalid -> {:error, :invalid_metadata}
             end

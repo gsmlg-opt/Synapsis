@@ -105,7 +105,7 @@ defmodule Synapsis.Session.NativeBrowserEmulationResizeFunctionalTest do
       assert native["structured"] == receipt(final, result.tool_use_id)
       assert Map.drop(native, ~w(content structured is_error)) == native["structured"]
       assert result.content == native["content"]
-      assert Jason.decode!(result.content) == receipt(final, result.tool_use_id)
+      assert Formata.JSON.decode!(result.content) == receipt(final, result.tool_use_id)
     end
 
     assert_part_round_trips(parts)
@@ -225,7 +225,7 @@ defmodule Synapsis.Session.NativeBrowserEmulationResizeFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/resize-observed", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      payload = Jason.decode!(body)
+      payload = Formata.JSON.decode!(body)
       Agent.update(harness.counter, &%{&1 | observations: &1.observations ++ [payload]})
       Plug.Conn.resp(conn, 200, "resize accepted")
     end)
@@ -239,7 +239,7 @@ defmodule Synapsis.Session.NativeBrowserEmulationResizeFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/messages", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -290,7 +290,7 @@ defmodule Synapsis.Session.NativeBrowserEmulationResizeFunctionalTest do
       ]
     }
 
-  defp observe_fn(phase), do: "() => window.observeResize(" <> Jason.encode!(phase) <> ")"
+  defp observe_fn(phase), do: "() => window.observeResize(" <> Formata.JSON.encode!(phase) <> ")"
 
   defp observe(request, phase),
     do: act(request, %{"kind" => "evaluate", "fn" => observe_fn(phase)})
@@ -334,7 +334,7 @@ defmodule Synapsis.Session.NativeBrowserEmulationResizeFunctionalTest do
     result["content"]
     |> Enum.find(&(&1["type"] == "text"))
     |> Map.fetch!("text")
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 
   defp assert_wire_history(request, uses, results) do
@@ -413,7 +413,9 @@ defmodule Synapsis.Session.NativeBrowserEmulationResizeFunctionalTest do
   defp assert_part_round_trips(parts) do
     for part <- parts do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
   end
 
@@ -459,9 +461,9 @@ defmodule Synapsis.Session.NativeBrowserEmulationResizeFunctionalTest do
 
     for part <- parts do
       message = Enum.find(results, &(&1.tool_call_id == part.tool_use_id))
-      native = message.result |> Jason.encode!() |> Jason.decode!()
+      native = message.result |> Formata.JSON.encode!() |> Formata.JSON.decode!()
       assert native == part.projection["result"]
-      assert native["structured"] == Jason.decode!(native["content"])
+      assert native["structured"] == Formata.JSON.decode!(native["content"])
     end
   end
 
@@ -514,7 +516,8 @@ defmodule Synapsis.Session.NativeBrowserEmulationResizeFunctionalTest do
       case call do
         {id, input} ->
           {%{"type" => "tool_use", "id" => id, "name" => ToolName.encode(@name), "input" => %{}},
-           %{"type" => "input_json_delta", "partial_json" => Jason.encode!(input)}, "tool_use"}
+           %{"type" => "input_json_delta", "partial_json" => Formata.JSON.encode!(input)},
+           "tool_use"}
 
         nil ->
           {%{"type" => "text", "text" => ""},
@@ -533,7 +536,7 @@ defmodule Synapsis.Session.NativeBrowserEmulationResizeFunctionalTest do
     |> Plug.Conn.put_resp_content_type("text/event-stream")
     |> Plug.Conn.resp(
       200,
-      Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+      Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
     )
   end
 end

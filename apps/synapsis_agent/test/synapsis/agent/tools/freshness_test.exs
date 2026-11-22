@@ -45,7 +45,7 @@ defmodule Synapsis.Agent.Tools.FreshnessTest do
     assert Map.keys(evidence.providers) == [provider.id]
     assert Map.keys(evidence.credentials) == [credential.id]
     assert :ok = Freshness.check(evidence, evidence)
-    assert {:ok, json} = Jason.encode(evidence)
+    assert {:ok, json} = Synapsis.JSON.encode(evidence)
     refute json =~ "fixture-secret"
     refute json =~ "base_url"
     refute json =~ "api_key"

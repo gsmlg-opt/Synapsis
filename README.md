@@ -55,7 +55,8 @@ Phoenix LiveView owns the pages. The `@synapsis/hooks` workspace connects DuskMo
 | Web framework | Phoenix 1.8+ (Gaoxy), Phoenix LiveView 1.0+ |
 | UI components | [`duskmoon_phoenix`](https://github.com/duskmoon-dev/duskmoon-web) 2.0 RC, `@duskmoon-dev/core` |
 | Storage | Embedded Concord 3.x (Turso KV) + TOML/Markdown files (UUID IDs) |
-| HTTP client | Req + Finch (SSE streaming) |
+| HTTP client | `http_fetch` (SSE streaming) and `http_web_socket` |
+| Data formats | Formata (JSON, TOML, YAML and JSON Schema validation) |
 | Background work | Supervised Tasks + node-local cron scheduler |
 | JS build | DuskmoonBundler + Tailwind CSS v4 (`@duskmoon-dev/core`) |
 

@@ -175,7 +175,7 @@ defmodule Synapsis.MCPConfigs do
             {:ok, %{}}
 
           encoded when is_binary(encoded) ->
-            case Jason.decode(encoded) do
+            case Formata.JSON.decode(encoded) do
               {:ok, metadata} when is_map(metadata) -> {:ok, metadata}
               _invalid -> {:error, :invalid_metadata}
             end
@@ -198,7 +198,7 @@ defmodule Synapsis.MCPConfigs do
                Map.get(connection, :connection_options_json)
              ) do
           encoded when is_binary(encoded) ->
-            case Jason.decode(encoded) do
+            case Formata.JSON.decode(encoded) do
               {:ok, options} when is_map(options) -> {:ok, options}
               _invalid -> {:error, :invalid_connection_options}
             end
@@ -249,7 +249,7 @@ defmodule Synapsis.MCPConfigs do
       tools when is_list(tools) ->
         config
         |> Map.drop(["backplane_tools", :backplane_tools])
-        |> Map.put("backplane_tools_json", Jason.encode!(tools))
+        |> Map.put("backplane_tools_json", Formata.JSON.encode!(tools))
 
       _other ->
         config
@@ -258,7 +258,7 @@ defmodule Synapsis.MCPConfigs do
 
   defp decode_backplane_tools(%{"config" => %{"backplane_tools_json" => json} = config} = map)
        when is_binary(json) do
-    case Jason.decode(json) do
+    case Formata.JSON.decode(json) do
       {:ok, tools} when is_list(tools) ->
         Map.put(
           map,

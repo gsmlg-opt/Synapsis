@@ -1437,7 +1437,7 @@ defmodule Synapsis.Agent.Daemon.Execution do
     expected_keys = MapSet.new(["recent_summary" | @dream_list_fields])
 
     with trimmed when trimmed != "" <- String.trim(result),
-         {:ok, decoded} when is_map(decoded) <- Jason.decode(trimmed),
+         {:ok, decoded} when is_map(decoded) <- Formata.JSON.decode(trimmed),
          true <- MapSet.new(Map.keys(decoded)) == expected_keys,
          summary when is_binary(summary) <- decoded["recent_summary"],
          true <- String.trim(summary) != "",

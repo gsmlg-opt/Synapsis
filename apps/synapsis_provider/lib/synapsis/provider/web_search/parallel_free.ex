@@ -60,7 +60,7 @@ defmodule Synapsis.Provider.WebSearch.ParallelFree do
   defp payload(%{"content" => content}) when is_list(content) do
     Enum.reduce_while(content, {:error, :provider_response}, fn
       %{"type" => "text", "text" => text}, result when is_binary(text) ->
-        case Jason.decode(text) do
+        case Formata.JSON.decode(text) do
           {:ok, payload} when is_map(payload) -> {:halt, {:ok, payload}}
           _ -> {:cont, result}
         end

@@ -58,7 +58,7 @@ defmodule Synapsis.RoutineRunsWebhookFunctionalTest do
     assert entry.automation_completion_status == "succeeded"
     assert entry.automation_delivery == delivery
     assert entry.automation_ref == %{"source" => "routine", "id" => ctx.id}
-    assert byte_size(Jason.encode!(page)) <= 65_536
+    assert byte_size(Formata.JSON.encode!(page)) <= 65_536
     assert {:ok, ^run} = Synapsis.AgentRun.Store.fetch(run.id)
     assert {:ok, other} = RoutineRuns.page(ctx.name, "heartbeat", ctx.id)
     assert other.runs == []

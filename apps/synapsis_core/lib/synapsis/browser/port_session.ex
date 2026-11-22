@@ -233,7 +233,7 @@ defmodule Synapsis.Browser.PortSession do
   # caller to retry a refused write. Retry only this unsent close frame/id.
   defp request(state, :close, _params, from, timeout) do
     id = Integer.to_string(state.sequence + 1)
-    frame = Jason.encode!(%{version: 1, id: id, method: "close", params: %{}}) <> "\n"
+    frame = Formata.JSON.encode!(%{version: 1, id: id, method: "close", params: %{}}) <> "\n"
 
     request = %{
       kind: :close,
@@ -257,7 +257,8 @@ defmodule Synapsis.Browser.PortSession do
     id = Integer.to_string(state.sequence + 1)
     method = if is_tuple(kind), do: "call", else: Atom.to_string(kind)
 
-    with {:ok, encoded} <- Jason.encode(%{version: 1, id: id, method: method, params: params}),
+    with {:ok, encoded} <-
+           Synapsis.JSON.encode(%{version: 1, id: id, method: method, params: params}),
          true <- byte_size(encoded) + 1 <= @frame_limit,
          true <- write(state.port, encoded <> "\n") do
       request = %{
@@ -323,7 +324,7 @@ defmodule Synapsis.Browser.PortSession do
       {offset, 1} when offset < @frame_limit ->
         <<line::binary-size(offset), _newline, rest::binary>> = bytes
 
-        with {:ok, frame} <- Jason.decode(line),
+        with {:ok, frame} <- Formata.JSON.decode(line),
              {:ok, state} <- receive_frame(frame, state) do
           consume(rest, state)
         else

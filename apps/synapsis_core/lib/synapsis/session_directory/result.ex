@@ -23,7 +23,7 @@ defmodule Synapsis.SessionDirectory.Result do
       fit_rich(entries, page)
     else
       with {:ok, result} <- fit(entries, page),
-           {:ok, text} <- Jason.encode(result, pretty: true) do
+           {:ok, text} <- Synapsis.JSON.encode(result, pretty: true) do
         {:ok, %{text: text, page: result}}
       end
     end
@@ -95,9 +95,11 @@ defmodule Synapsis.SessionDirectory.Result do
         |> Enum.filter(&Map.has_key?(envelope, &1))
         |> Enum.map_join(",\n", fn key ->
           value =
-            if key == :sessions, do: sessions, else: Jason.encode!(Map.fetch!(envelope, key))
+            if key == :sessions,
+              do: sessions,
+              else: Formata.JSON.encode!(Map.fetch!(envelope, key))
 
-          "  " <> Jason.encode!(Atom.to_string(key)) <> ": " <> value
+          "  " <> Formata.JSON.encode!(Atom.to_string(key)) <> ": " <> value
         end)
 
       {:ok, "{\n" <> fields <> "\n}"}
@@ -112,7 +114,7 @@ defmodule Synapsis.SessionDirectory.Result do
     Enum.reduce_while(entries, {:ok, []}, fn entry, {:ok, rows} ->
       fragment = Map.fetch!(entry.history_candidate, variant)
 
-      case Jason.decode(fragment.json) do
+      case Formata.JSON.decode(fragment.json) do
         {:ok, row} when is_map(row) ->
           row = Map.new(row, fn {key, value} -> {Map.get(@row_keys, key, key), value} end)
           {:cont, {:ok, [row | rows]}}
@@ -128,7 +130,7 @@ defmodule Synapsis.SessionDirectory.Result do
   end
 
   # Legacy directory values are only strings, booleans, nil and integers. On
-  # that tree Jason's two-space pretty encoding has JSON.stringify byte size.
+  # that tree Formata.JSON's two-space pretty encoding has JSON.stringify byte size.
   # Fitting is synchronous: no storage or helper work follows final validation.
   def fit(entries, page) do
     {entries, omitted?} =
@@ -170,7 +172,7 @@ defmodule Synapsis.SessionDirectory.Result do
   end
 
   defp fits?(entries, page, count, omitted?) do
-    case Jason.encode(result(entries, page, count, omitted?), pretty: true) do
+    case Synapsis.JSON.encode(result(entries, page, count, omitted?), pretty: true) do
       {:ok, json} -> byte_size(json) <= @limit
       _ -> false
     end

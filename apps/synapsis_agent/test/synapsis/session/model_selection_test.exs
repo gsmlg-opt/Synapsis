@@ -50,7 +50,7 @@ defmodule Synapsis.Session.ModelSelectionTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       send(owner, {:target_request, request})
 
       if message_text(List.last(request["input"])) == "hold switched turn" do

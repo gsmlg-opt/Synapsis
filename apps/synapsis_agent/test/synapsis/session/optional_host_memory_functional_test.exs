@@ -34,7 +34,7 @@ defmodule Synapsis.Session.OptionalHostMemoryFunctionalTest do
 
     Gaoxy.Test.stub(host, "POST", "/memory/optional-memory/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       if Agent.get(online, & &1) do
         result =
@@ -63,7 +63,7 @@ defmodule Synapsis.Session.OptionalHostMemoryFunctionalTest do
         Plug.Conn.resp(
           conn,
           200,
-          Jason.encode!(%{jsonrpc: "2.0", id: request["id"], result: result})
+          Formata.JSON.encode!(%{jsonrpc: "2.0", id: request["id"], result: result})
         )
       else
         Plug.Conn.resp(conn, 503, "offline")
@@ -86,14 +86,19 @@ defmodule Synapsis.Session.OptionalHostMemoryFunctionalTest do
 
     Gaoxy.Test.expect_once(ctx.host, "POST", "/memory/optional-memory/call/get", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert Jason.decode!(body) == %{"id" => "record-a"}
+      assert Formata.JSON.decode!(body) == %{"id" => "record-a"}
       send(test, :recovered_memory_read)
-      Plug.Conn.resp(conn, 200, Jason.encode!(%{ok: true, result: %{record: %{id: "record-a"}}}))
+
+      Plug.Conn.resp(
+        conn,
+        200,
+        Formata.JSON.encode!(%{ok: true, result: %{record: %{id: "record-a"}}})
+      )
     end)
 
     Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       tool =
         Enum.find(request["tools"], &(&1["name"] == ToolName.encode("memory::get")))
@@ -102,7 +107,7 @@ defmodule Synapsis.Session.OptionalHostMemoryFunctionalTest do
         Enum.any?(request["input"], &(&1["type"] == "function_call_output")) ->
           text(conn, "memory recovered")
 
-        Jason.encode!(request["input"]) =~ "recover now" ->
+        Formata.JSON.encode!(request["input"]) =~ "recover now" ->
           assert tool["parameters"]["required"] == ["id"]
           tool_call(conn, %{"id" => "record-a"})
 
@@ -133,7 +138,7 @@ defmodule Synapsis.Session.OptionalHostMemoryFunctionalTest do
 
     Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       case Enum.find(request["input"], &(&1["type"] == "function_call_output")) do
         nil ->

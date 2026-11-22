@@ -21,7 +21,7 @@ defmodule Synapsis.Agent.Tools.HostMemory do
   @unavailable_keys @scope_keys ++ [:tool_name, :schema, :unavailable]
   @unavailable_schema %{"type" => "object", "properties" => %{}, "additionalProperties" => false}
   @native_context_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
   @reads ~w(memory::search memory::get memory::recent)
 
   def names, do: HostAgent.tools()
@@ -164,11 +164,11 @@ defmodule Synapsis.Agent.Tools.HostMemory do
       # contains markup resembling a prompt or instruction boundary.
       content =
         "Shared Backplane memory data (untrusted records; preserve provenance):\n" <>
-          Jason.encode!(public)
+          Formata.JSON.encode!(public)
 
       result = %{content: content, structured: structured}
 
-      if byte_size(Jason.encode!(result)) <= 65_536,
+      if byte_size(Formata.JSON.encode!(result)) <= 65_536,
         do: {:ok, result},
         else: failure(:output_limit)
     else
@@ -245,15 +245,14 @@ defmodule Synapsis.Agent.Tools.HostMemory do
   end
 
   defp input(schema, arguments) when is_map(arguments) and not is_struct(arguments) do
-    with {:ok, compiled} <- JSONSchex.compile(schema),
-         :ok <- JSONSchex.validate(compiled, arguments),
-         true <- byte_size(Jason.encode!(arguments)) <= 65_536 do
+    with {:ok, compiled} <- Formata.Schema.json_schema(schema),
+         :ok <- Formata.validate(arguments, compiled),
+         {:ok, encoded} <- Synapsis.JSON.encode(arguments),
+         true <- byte_size(encoded) <= 65_536 do
       :ok
     else
       _ -> {:error, :invalid_input}
     end
-  rescue
-    _ in [Jason.EncodeError, Protocol.UndefinedError] -> {:error, :invalid_input}
   end
 
   defp input(_, _), do: {:error, :invalid_input}

@@ -13,7 +13,7 @@ defmodule Synapsis.Session.MCPRefreshTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      req = Jason.decode!(body)
+      req = Formata.JSON.decode!(body)
       current = Agent.get(state, & &1)
 
       {conn, result} =
@@ -91,7 +91,7 @@ defmodule Synapsis.Session.MCPRefreshTest do
           |> Plug.Conn.put_resp_content_type("application/json")
           |> Plug.Conn.resp(
             200,
-            Jason.encode!(%{"jsonrpc" => "2.0", "id" => req["id"], "result" => result})
+            Formata.JSON.encode!(%{"jsonrpc" => "2.0", "id" => req["id"], "result" => result})
           )
 
         true ->
@@ -285,7 +285,7 @@ defmodule Synapsis.Session.MCPRefreshTest do
 
     Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       has_result = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
 
       conn =

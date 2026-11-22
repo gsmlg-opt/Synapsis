@@ -243,7 +243,7 @@ defmodule Synapsis.Session.WorkerSubagentsTest do
   defp install_provider(harness, fun) do
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      fun.(conn, Jason.decode!(body))
+      fun.(conn, Formata.JSON.decode!(body))
     end)
   end
 

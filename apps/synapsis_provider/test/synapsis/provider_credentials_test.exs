@@ -195,7 +195,7 @@ defmodule Synapsis.ProviderCredentialsTest do
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(%{data: [%{id: "obsolete-model"}]}))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(%{data: [%{id: "obsolete-model"}]}))
     end)
 
     {:ok, provider} =
@@ -255,7 +255,7 @@ defmodule Synapsis.ProviderCredentialsTest do
         assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer new-session-secret"]
         {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-        if Jason.decode!(body)["stream"] do
+        if Formata.JSON.decode!(body)["stream"] do
           ResponsesFixture.send_sse(conn, [
             ResponsesFixture.text_delta("fresh"),
             ResponsesFixture.completed()
@@ -265,7 +265,7 @@ defmodule Synapsis.ProviderCredentialsTest do
           |> Plug.Conn.put_resp_content_type("application/json")
           |> Plug.Conn.resp(
             200,
-            Jason.encode!(ResponsesFixture.response([ResponsesFixture.message("fresh")]))
+            Formata.JSON.encode!(ResponsesFixture.response([ResponsesFixture.message("fresh")]))
           )
         end
       end,

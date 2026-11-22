@@ -474,7 +474,7 @@ defmodule Synapsis.Session.Worker do
                active: data.runtime_active
              }
            },
-           {:ok, json} <- Jason.encode(result),
+           {:ok, json} <- Synapsis.JSON.encode(result),
            true <- byte_size(json) <= 65_536,
            :ok <- public_status_remaining(deadline) do
         {:ok, result}

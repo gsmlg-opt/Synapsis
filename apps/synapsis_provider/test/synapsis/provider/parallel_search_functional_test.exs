@@ -297,7 +297,7 @@ defmodule Synapsis.Provider.ParallelSearchFunctionalTest do
       __DIR__
     )
     |> File.read!()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 
   defp config(ctx),
@@ -360,13 +360,13 @@ defmodule Synapsis.Provider.ParallelSearchFunctionalTest do
 
       send(
         owner,
-        {:parallel_http, conn.request_path, conn.query_string, Jason.decode!(body),
+        {:parallel_http, conn.request_path, conn.query_string, Formata.JSON.decode!(body),
          conn.req_headers}
       )
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(payload))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
     end)
   end
 end

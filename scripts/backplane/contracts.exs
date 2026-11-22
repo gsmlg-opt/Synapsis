@@ -14,9 +14,9 @@ defmodule Synapsis.BackplaneContractCapture do
     Tools
   }
 
-  @version "1.10.74"
+  @version "1.10.94"
   @root Path.expand("../..", __DIR__)
-  @default_out "apps/synapsis_agent/test/fixtures/backplane/1.10.74/contracts.json"
+  @default_out "apps/synapsis_agent/test/fixtures/backplane/1.10.94/contracts.json"
   @families [
     :local,
     :interactive,
@@ -257,7 +257,7 @@ defmodule Synapsis.BackplaneContractCapture do
       outer_checksum: outer_checksum,
       dependency_packages:
         Map.new(
-          ~w(backplane_ai_protocol backplane_mcp_protocol backplane_skill_protocol backplane_plugin_protocol backplane_json_schema ex_json_pointer)a,
+          ~w(backplane_ai_protocol backplane_mcp_protocol backplane_skill_protocol backplane_plugin_protocol formata)a,
           fn package ->
             {:hex, ^package, version, inner, _, _, "hexpm", outer} = lock[package]
             Application.load(package)
@@ -324,14 +324,14 @@ defmodule Synapsis.BackplaneContractCapture do
   defp json(value) when is_atom(value), do: Atom.to_string(value)
   defp json(value) when is_binary(value) or is_number(value), do: value
 
-  def encode(snapshot), do: Jason.encode!(ordered(snapshot), pretty: true) <> "\n"
+  def encode(snapshot), do: Formata.JSON.encode!(ordered(snapshot), pretty: true) <> "\n"
 
   defp ordered(value) when is_map(value),
     do:
       value
       |> Enum.sort()
       |> Enum.map(fn {key, child} -> {key, ordered(child)} end)
-      |> Jason.OrderedObject.new()
+      |> Formata.JSON.OrderedObject.new()
 
   defp ordered(value) when is_list(value), do: Enum.map(value, &ordered/1)
   defp ordered(value), do: value

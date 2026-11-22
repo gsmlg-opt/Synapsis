@@ -114,7 +114,7 @@ defmodule Synapsis.Config.Store.ServerTest do
     on_exit(fn -> clear_config_store(:mcp) end)
 
     catalog =
-      Jason.encode!(%{
+      Formata.JSON.encode!(%{
         "backplane_tools" => [
           %{
             "name" => "complete_catalog",
@@ -126,7 +126,7 @@ defmodule Synapsis.Config.Store.ServerTest do
     mcp = %{"id" => "mcp-large-catalog", "name" => "large-catalog", "config" => catalog}
 
     assert {:ok, ^mcp} = Store.put(:mcp, mcp)
-    assert {:ok, decoded} = Store.file_path(:mcp) |> File.read!() |> Toml.decode()
+    assert {:ok, decoded} = Store.file_path(:mcp) |> File.read!() |> Formata.decode(:toml)
     assert hd(decoded["mcps"])["config"] == catalog
     assert :ok = Store.reload(:mcp)
     assert {:ok, ^mcp} = Store.get(:mcp, mcp["id"])

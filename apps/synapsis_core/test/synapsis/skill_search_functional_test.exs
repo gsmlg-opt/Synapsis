@@ -83,7 +83,7 @@ defmodule Synapsis.SkillSearchFunctionalTest do
   end
 
   test "all frozen ordinary source results agree without changing original metadata entries" do
-    fixture = @fixture |> File.read!() |> Jason.decode!()
+    fixture = @fixture |> File.read!() |> Formata.JSON.decode!()
     assert fixture["referencePin"] == "488631c18fae7cc541ba8fc8beff6cbb0438787b"
     assert length(fixture["observations"]) == 22
 

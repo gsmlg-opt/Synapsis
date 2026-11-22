@@ -95,7 +95,7 @@ defmodule Synapsis.Agent.StreamAccumulator do
 
       %{tool: name, tool_use_id: id} ->
         input =
-          case Jason.decode(acc.pending_tool_input) do
+          case Formata.JSON.decode(acc.pending_tool_input) do
             {:ok, parsed} when is_map(parsed) -> parsed
             _ -> nil
           end
@@ -160,7 +160,7 @@ defmodule Synapsis.Agent.StreamAccumulator do
 
   defp finalize_pending_tool(%{pending_tool_use: %{tool: name, tool_use_id: id}} = acc) do
     input =
-      case Jason.decode(acc.pending_tool_input) do
+      case Formata.JSON.decode(acc.pending_tool_input) do
         {:ok, parsed} when is_map(parsed) -> parsed
         _ -> nil
       end
@@ -221,7 +221,7 @@ defmodule Synapsis.Agent.StreamAccumulator do
   end
 
   defp decode_tool_input(input) do
-    case Jason.decode(input || "") do
+    case Formata.JSON.decode(input || "") do
       {:ok, parsed} when is_map(parsed) -> parsed
       _ -> nil
     end

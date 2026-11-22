@@ -265,8 +265,8 @@ defmodule Synapsis.Agent.Runtime.ToolResultContractFunctionalTest do
 
     assert returned ==
              ordinary_result()
-             |> Jason.encode!()
-             |> Jason.decode!()
+             |> Formata.JSON.encode!()
+             |> Formata.JSON.decode!()
 
     send(provider, {:contract_provider_events, [done()]})
     assert_receive {:agent_runtime, ^run_id, %{type: :run_completed}}, 10_000

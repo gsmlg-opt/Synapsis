@@ -232,6 +232,6 @@ defmodule SynapsisWeb.CredentialLive.IndexTest do
     |> LazyHTML.query("[data-form-id='credential-form']")
     |> LazyHTML.attribute("data-initial-values")
     |> hd()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 end

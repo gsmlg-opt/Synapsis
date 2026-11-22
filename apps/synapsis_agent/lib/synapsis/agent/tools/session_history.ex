@@ -11,7 +11,7 @@ defmodule Synapsis.Agent.Tools.SessionHistory do
   @output_limit 1_048_576
   @context_keys [:session_id, :agent_id, :run_id, :incarnation, :catalog_revision]
   @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
 
   def names, do: @names
   def revision, do: @revision
@@ -50,7 +50,10 @@ defmodule Synapsis.Agent.Tools.SessionHistory do
         )
 
       {:ok,
-       %{action: "session.history.read", resource: "session_history:" <> Jason.encode!(resource)}}
+       %{
+         action: "session.history.read",
+         resource: "session_history:" <> Formata.JSON.encode!(resource)
+       }}
     end
   end
 
@@ -71,7 +74,7 @@ defmodule Synapsis.Agent.Tools.SessionHistory do
            Domain.read_rendered(operation.arguments, trusted, domain_options(deadline)) do
       native = %{content: text, structured: page}
 
-      if byte_size(Jason.encode!(native)) <= @output_limit and
+      if byte_size(Formata.JSON.encode!(native)) <= @output_limit and
            :erlang.external_size(native) <= @output_limit and
            deadline > System.monotonic_time(:millisecond),
          do: {:ok, native},

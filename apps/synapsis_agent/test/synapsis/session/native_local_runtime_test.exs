@@ -166,7 +166,7 @@ defmodule Synapsis.Session.NativeLocalRuntimeTest do
 
     Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       messages = request["input"]
 
       Agent.update(

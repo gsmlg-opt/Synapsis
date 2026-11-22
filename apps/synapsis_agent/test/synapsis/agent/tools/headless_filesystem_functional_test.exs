@@ -534,5 +534,5 @@ defmodule Synapsis.Agent.Tools.HeadlessFilesystemFunctionalTest do
     assert {:ok, ^aggregate} = Store.load(fixture.store, fixture.identity.run_id)
   end
 
-  defp json_value(value), do: value |> Jason.encode!() |> Jason.decode!()
+  defp json_value(value), do: value |> Formata.JSON.encode!() |> Formata.JSON.decode!()
 end

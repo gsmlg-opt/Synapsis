@@ -31,7 +31,7 @@ defmodule SynapsisWorkspace.MixProject do
     [
       {:synapsis_data, in_umbrella: true},
       {:synapsis_core, in_umbrella: true},
-      {:jason, "~> 1.4"}
+      {:formata, "~> 0.3.5"}
     ]
   end
 end

@@ -60,7 +60,7 @@ defmodule Synapsis.Session.NativeResponsesImageFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -147,7 +147,9 @@ defmodule Synapsis.Session.NativeResponsesImageFunctionalTest do
            } = part
 
     assert {:ok, dump} = Synapsis.Part.dump(part)
-    assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+    assert {:ok, ^part} =
+             dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
 
     assert summary ==
              "Image: tiny.png\nDetail: original\nMIME type: image/png\nBytes: #{byte_size(bytes)}"
@@ -230,7 +232,7 @@ defmodule Synapsis.Session.NativeResponsesImageFunctionalTest do
              "type" => "function_call",
              "call_id" => @call_id,
              "name" => "view_image",
-             "arguments" => Jason.encode!(@arguments)
+             "arguments" => Formata.JSON.encode!(@arguments)
            }
 
     assert [output] = Enum.filter(request["input"], &(&1["type"] == "function_call_output"))
@@ -262,7 +264,7 @@ defmodule Synapsis.Session.NativeResponsesImageFunctionalTest do
       "id" => @item_id,
       "call_id" => @call_id,
       "name" => "view_image",
-      "arguments" => Jason.encode!(@arguments)
+      "arguments" => Formata.JSON.encode!(@arguments)
     }
 
     sse(conn, [
@@ -274,7 +276,7 @@ defmodule Synapsis.Session.NativeResponsesImageFunctionalTest do
       %{
         "type" => "response.function_call_arguments.delta",
         "item_id" => @item_id,
-        "delta" => Jason.encode!(@arguments)
+        "delta" => Formata.JSON.encode!(@arguments)
       },
       %{"type" => "response.output_item.done", "output_index" => 0, "item" => item},
       completed([item])
@@ -297,6 +299,9 @@ defmodule Synapsis.Session.NativeResponsesImageFunctionalTest do
   defp sse(conn, events) do
     conn
     |> Plug.Conn.put_resp_content_type("text/event-stream")
-    |> Plug.Conn.resp(200, Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n")))
+    |> Plug.Conn.resp(
+      200,
+      Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
+    )
   end
 end

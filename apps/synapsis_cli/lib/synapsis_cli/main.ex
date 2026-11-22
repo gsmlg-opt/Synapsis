@@ -3,6 +3,8 @@ defmodule SynapsisCli.Main do
 
   @default_host "http://localhost:4657"
   @max_sse_frame_bytes 16 * 1024 * 1024
+  @max_sse_error_bytes 64 * 1024
+  @sse_error_drain_timeout 1_000
 
   def main(args) do
     case run(args) do
@@ -162,12 +164,12 @@ defmodule SynapsisCli.Main do
   end
 
   defp api_request(:get, host, path, _body, opts),
-    do: normalize_api_response(Req.get("#{host}#{path}", request_options(opts, 30_000)))
+    do: normalize_api_response(http_request("#{host}#{path}", request_options(opts, 30_000)))
 
   defp api_request(:post, host, path, body, opts),
     do:
       normalize_api_response(
-        Req.post("#{host}#{path}", [json: body] ++ request_options(opts, 30_000))
+        http_post("#{host}#{path}", [json: body] ++ request_options(opts, 30_000))
       )
 
   defp normalize_api_response({:ok, %{status: status, body: body}}) when status in 200..299,
@@ -177,7 +179,7 @@ defmodule SynapsisCli.Main do
   defp normalize_api_response({:error, _reason}), do: {:error, :connection_failed}
 
   defp print_api_response(status, body) do
-    IO.puts(Jason.encode!(%{status: status, data: body}))
+    IO.puts(Formata.JSON.encode!(%{status: status, data: body}))
     :ok
   end
 
@@ -250,7 +252,7 @@ defmodule SynapsisCli.Main do
 
   @doc false
   def request_options(opts, timeout) do
-    base = [receive_timeout: timeout, request_timeout: timeout, retry: false, redirect: false]
+    base = [timeout: timeout, connect_timeout: timeout, retry: false, redirect: :manual]
 
     transport_options =
       []
@@ -261,7 +263,7 @@ defmodule SynapsisCli.Main do
     if transport_options == [] do
       base
     else
-      base ++ [connect_options: [transport_opts: transport_options]]
+      base ++ [ssl: transport_options]
     end
   end
 
@@ -327,7 +329,7 @@ defmodule SynapsisCli.Main do
     # When neither provider nor model is specified, let the server choose
     # based on its config (sends body without provider/model keys)
 
-    case Req.post("#{host}/api/sessions", [json: body] ++ request_options(opts, 30_000)) do
+    case http_post("#{host}/api/sessions", [json: body] ++ request_options(opts, 30_000)) do
       {:ok, %{status: 201, body: %{"data" => %{"id" => id}}}} ->
         {:ok, id}
 
@@ -342,7 +344,7 @@ defmodule SynapsisCli.Main do
   defp send_message(host, session_id, content, opts) do
     request_opts = [json: %{content: content}] ++ request_options(opts, 30_000)
 
-    case Req.post("#{host}/api/sessions/#{session_id}/messages", request_opts) do
+    case http_post("#{host}/api/sessions/#{session_id}/messages", request_opts) do
       {:ok, %{status: 200}} -> :ok
       {:ok, %{status: status}} -> {:error, {:http_error, status}}
       {:error, _reason} -> {:error, :connection_failed}
@@ -394,26 +396,148 @@ defmodule SynapsisCli.Main do
       printed_reply_messages: MapSet.new()
     }
 
-    into = fn {:data, data}, {request, response} ->
-      state = Req.Response.get_private(response, :synapsis_cli_sse, initial_state)
-
-      {directive, state} =
-        case response_error(response) do
-          nil -> process_sse_chunk(data, state, owner, request_ref)
-          error -> {:halt, %{state | terminal: error}}
-        end
-
-      response = Req.Response.put_private(response, :synapsis_cli_sse, state)
-      {directive, {request, response}}
-    end
-
     request_opts =
-      [headers: [{"accept", "text/event-stream"}], into: into] ++
+      [headers: [{"accept", "text/event-stream"}], stream_response: true] ++
         request_options(opts, 300_000)
 
-    case Req.get(url, request_opts) do
-      {:ok, response} -> stream_result(response, initial_state)
-      {:error, _reason} -> {:error, :connection_failed}
+    promise = HTTP.fetch(url, request_opts)
+
+    try do
+      case HTTP.Promise.await(promise) do
+        %HTTP.Response{} = response ->
+          case response_error(response) do
+            nil -> read_sse(response.body, initial_state, owner, request_ref)
+            error -> discard_sse_error_body(response.body, error)
+          end
+
+        {:error, _reason} ->
+          {:error, :connection_failed}
+      end
+    after
+      HTTP.RequestCompletion.abort_and_await(HTTP.Promise.completion(promise), 1_000)
+    end
+  end
+
+  # Let short error responses finish before cancellation closes the connection.
+  # The known HTTP status remains authoritative if the discarded body stalls or
+  # exceeds this separate byte/time budget; no prompt is submitted on this path.
+  defp discard_sse_error_body(body, error) when is_binary(body), do: error
+
+  defp discard_sse_error_body(stream, error) when is_pid(stream) do
+    monitor = Process.monitor(stream)
+    deadline = System.monotonic_time(:millisecond) + @sse_error_drain_timeout
+
+    try do
+      send(stream, {:read_chunk, self(), :ack})
+      discard_sse_error_chunks(stream, monitor, @max_sse_error_bytes, deadline, error)
+    after
+      Process.demonitor(monitor, [:flush])
+    end
+  end
+
+  defp discard_sse_error_chunks(stream, monitor, left, deadline, error) do
+    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    receive do
+      {:stream_chunk, ^stream, data, ack} when byte_size(data) <= left ->
+        send(stream, {:stream_chunk_ack, ack})
+        discard_sse_error_chunks(stream, monitor, left - byte_size(data), deadline, error)
+
+      {:stream_chunk, ^stream, _data, _ack} ->
+        error
+
+      {:stream_end, ^stream} ->
+        error
+
+      {:stream_error, ^stream, _reason} ->
+        error
+
+      {:DOWN, ^monitor, :process, ^stream, _reason} ->
+        error
+    after
+      remaining -> error
+    end
+  end
+
+  defp read_sse(body, state, owner, request_ref) when is_binary(body) do
+    case process_sse_chunk(body, state, owner, request_ref) do
+      {:halt, state} -> state.terminal
+      {:cont, _state} -> {:error, :sse_closed_before_terminal}
+    end
+  end
+
+  defp read_sse(stream, state, owner, request_ref) when is_pid(stream) do
+    monitor = Process.monitor(stream)
+
+    try do
+      send(stream, {:read_chunk, self(), :ack})
+      receive_sse(stream, monitor, state, owner, request_ref)
+    after
+      Process.demonitor(monitor, [:flush])
+    end
+  end
+
+  defp receive_sse(stream, monitor, state, owner, request_ref) do
+    receive do
+      {:stream_chunk, ^stream, data, ack} ->
+        case process_sse_chunk(data, state, owner, request_ref) do
+          {:halt, state} ->
+            state.terminal
+
+          {:cont, state} ->
+            send(stream, {:stream_chunk_ack, ack})
+            receive_sse(stream, monitor, state, owner, request_ref)
+        end
+
+      {:stream_end, ^stream} ->
+        {:error, :sse_closed_before_terminal}
+
+      {:stream_error, ^stream, _reason} ->
+        {:error, :connection_failed}
+
+      {:DOWN, ^monitor, :process, ^stream, _reason} ->
+        {:error, :connection_failed}
+    after
+      300_000 -> {:error, :connection_failed}
+    end
+  end
+
+  defp http_post(url, options) do
+    {json, options} = Keyword.pop!(options, :json)
+
+    http_request(
+      url,
+      [
+        method: :post,
+        body: Formata.JSON.encode!(json),
+        headers: [{"content-type", "application/json"}]
+      ] ++ options
+    )
+  end
+
+  defp http_request(url, options) do
+    promise = HTTP.fetch(url, options)
+
+    try do
+      case HTTP.Promise.await(promise) do
+        %HTTP.Response{} = response ->
+          body = HTTP.Response.read_all(response)
+
+          body =
+            case Formata.JSON.decode(body) do
+              {:ok, json} -> json
+              {:error, _} -> body
+            end
+
+          {:ok, %{status: response.status, body: body}}
+
+        {:error, _} = error ->
+          error
+      end
+    rescue
+      error in HTTP.ResponseError -> {:error, error.reason}
+    after
+      HTTP.RequestCompletion.abort_and_await(HTTP.Promise.completion(promise), 1_000)
     end
   end
 
@@ -451,15 +575,6 @@ defmodule SynapsisCli.Main do
     end
   end
 
-  defp stream_result(response, initial_state) do
-    state = Req.Response.get_private(response, :synapsis_cli_sse, initial_state)
-
-    case state.terminal || response_error(response) do
-      nil -> {:error, :sse_closed_before_terminal}
-      result -> result
-    end
-  end
-
   defp response_error(%{status: status}) when status not in 200..299,
     do: {:error, {:http_error, status}}
 
@@ -468,9 +583,13 @@ defmodule SynapsisCli.Main do
   end
 
   defp event_stream_response?(response) do
-    response
-    |> Req.Response.get_header("content-type")
-    |> Enum.any?(&String.starts_with?(String.downcase(&1), "text/event-stream"))
+    case HTTP.Response.get_header(response, "content-type") do
+      value when is_binary(value) ->
+        String.starts_with?(String.downcase(value), "text/event-stream")
+
+      _ ->
+        false
+    end
   end
 
   defp cancel_sse(stream, result) do
@@ -563,7 +682,7 @@ defmodule SynapsisCli.Main do
   # event reply owns this one subscription; queued envelopes for another event
   # cannot replace that occurrence or print into immutable stdout.
   defp process_sse_event({"text_delta", payload} = event, state) do
-    case Jason.decode(payload) do
+    case Formata.JSON.decode(payload) do
       {:ok,
        %{"reply_presentation" => %{"version" => 1, "policy" => "manual_event_message"} = view}} ->
         {:continue, present_event_reply(state, view, false)}
@@ -574,14 +693,14 @@ defmodule SynapsisCli.Main do
   end
 
   defp process_sse_event({"reply_presentation", payload}, state) do
-    case Jason.decode(payload) do
+    case Formata.JSON.decode(payload) do
       {:ok, view} when is_map(view) -> {:continue, present_event_reply(state, view, false)}
       _ -> {:continue, state}
     end
   end
 
   defp process_sse_event({"session_state", payload}, state) do
-    case Jason.decode(payload) do
+    case Formata.JSON.decode(payload) do
       {:ok, %{"status" => status, "reply_presentation" => view}}
       when status in ~w(running streaming tool_executing) and is_map(view) ->
         {:continue, present_event_reply(state, view, true)}
@@ -677,7 +796,7 @@ defmodule SynapsisCli.Main do
   defp print_event_reply(_message, state), do: state
 
   defp process_sse_event({"text_delta", payload}) do
-    case Jason.decode(payload) do
+    case Formata.JSON.decode(payload) do
       {:ok, %{"text" => text}} when is_binary(text) -> IO.write(text)
       _invalid -> :ok
     end
@@ -686,7 +805,7 @@ defmodule SynapsisCli.Main do
   end
 
   defp process_sse_event({"reasoning", payload}) do
-    case Jason.decode(payload) do
+    case Formata.JSON.decode(payload) do
       {:ok, %{"text" => text}} when is_binary(text) ->
         IO.write(IO.ANSI.light_black() <> text <> IO.ANSI.reset())
 
@@ -698,7 +817,7 @@ defmodule SynapsisCli.Main do
   end
 
   defp process_sse_event({"tool_use", payload}) do
-    case Jason.decode(payload) do
+    case Formata.JSON.decode(payload) do
       {:ok, %{"tool" => tool}} when is_binary(tool) ->
         IO.puts("\n#{IO.ANSI.cyan()}[tool: #{tool}]#{IO.ANSI.reset()}")
 
@@ -710,7 +829,7 @@ defmodule SynapsisCli.Main do
   end
 
   defp process_sse_event({"tool_result", payload}) do
-    case Jason.decode(payload) do
+    case Formata.JSON.decode(payload) do
       {:ok, %{"projection" => projection} = event} when not is_nil(projection) ->
         {is_error, preview} = SynapsisCli.ToolResult.preview(event)
         color = if is_error, do: IO.ANSI.red(), else: IO.ANSI.green()
@@ -728,7 +847,7 @@ defmodule SynapsisCli.Main do
   end
 
   defp process_sse_event({"error", payload}) do
-    case Jason.decode(payload) do
+    case Formata.JSON.decode(payload) do
       {:ok, %{"message" => message}} when is_binary(message) ->
         IO.puts(:stderr, "\n#{IO.ANSI.red()}Error: #{message}#{IO.ANSI.reset()}")
         {:halt, {:error, {:sse_error, message}}}
@@ -744,7 +863,7 @@ defmodule SynapsisCli.Main do
   end
 
   defp process_sse_event({"session_status", payload}) do
-    case Jason.decode(payload) do
+    case Formata.JSON.decode(payload) do
       {:ok, %{"status" => "idle"}} -> {:halt, :ok}
       _other -> :continue
     end
@@ -801,7 +920,7 @@ defmodule SynapsisCli.Main do
       -p, --prompt TEXT            Prompt to send (non-interactive mode)
       -m, --model MODEL            Model to use (server config default if omitted)
       --provider PROVIDER          Provider to use: anthropic, openai, google, local
-      -h, --host URL               Server URL (default: http://localhost:4657)
+      -h, --host URL               Server URL (default: #{@default_host})
       --credential-env VAR         Read a Backplane credential from VAR
       --trust-mcp-annotations      Trust read-only hints for autonomous MCP use
       --client-cert PATH           Client certificate for mTLS

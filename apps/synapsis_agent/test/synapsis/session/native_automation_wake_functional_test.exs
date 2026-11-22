@@ -210,7 +210,7 @@ defmodule Synapsis.Session.NativeAutomationWakeFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       handler = self()
       Agent.update(harness.log, &(&1 ++ [{request, handler}]))
       prompt = List.last(user_texts(request))
@@ -282,7 +282,7 @@ defmodule Synapsis.Session.NativeAutomationWakeFunctionalTest do
         Enum.find(messages, &(&1.role == :tool and &1[:tool_call_id] == "native-wake-#{index}"))
 
       assert result.result.structured == %{"ok" => true}
-      assert Jason.decode!(result.result.content) == %{"ok" => true}
+      assert Formata.JSON.decode!(result.result.content) == %{"ok" => true}
     end
   end
 
@@ -294,7 +294,7 @@ defmodule Synapsis.Session.NativeAutomationWakeFunctionalTest do
           &(&1["type"] == "function_call_output" and &1["call_id"] == "native-wake-#{index}")
         )
 
-      assert Jason.decode!(content(result["content"])) == %{"ok" => true}
+      assert Formata.JSON.decode!(content(result["content"])) == %{"ok" => true}
     end
   end
 
@@ -302,7 +302,7 @@ defmodule Synapsis.Session.NativeAutomationWakeFunctionalTest do
     for index <- 1..count do
       result = tool_result(harness.session.id, "native-wake-#{index}")
       assert result.is_error == false
-      assert Jason.decode!(result.content) == %{"ok" => true}
+      assert Formata.JSON.decode!(result.content) == %{"ok" => true}
       assert result.projection["version"] == 1
       assert result.projection["result"]["structured"] == %{"ok" => true}
       assert_durable_result(harness.session.id, result)

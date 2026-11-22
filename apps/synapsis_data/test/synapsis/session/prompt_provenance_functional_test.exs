@@ -81,7 +81,9 @@ defmodule Synapsis.Session.PromptProvenanceFunctionalTest do
     assert consumed.id == input_id
     assert consumed.status == "consumed"
     assert consumed.input_provenance == captured
-    assert consumed.input_provenance |> Jason.encode!() |> Jason.decode!() == captured
+
+    assert consumed.input_provenance |> Formata.JSON.encode!() |> Formata.JSON.decode!() ==
+             captured
   end
 
   defp fresh_read(session_id) do

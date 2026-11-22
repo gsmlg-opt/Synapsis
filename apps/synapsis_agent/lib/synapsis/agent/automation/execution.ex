@@ -140,7 +140,7 @@ defmodule Synapsis.Agent.Automation.Execution do
             {:error, reason} -> Map.put(event, "error", bounded_error(reason))
           end
 
-        {:post, target, Jason.encode!(event)}
+        {:post, target, Formata.JSON.encode!(event)}
     end
   end
 

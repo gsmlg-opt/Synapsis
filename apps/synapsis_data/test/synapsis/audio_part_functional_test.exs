@@ -28,7 +28,9 @@ defmodule Synapsis.AudioPartFunctionalTest do
              })
 
     assert {:ok, ^stored} = Part.dump(part)
-    assert {:ok, ^part} = stored |> Jason.encode!() |> Jason.decode!() |> Part.load()
+
+    assert {:ok, ^part} =
+             stored |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Part.load()
   end
 
   test "assistant message changeset casts a public audio part" do
@@ -137,7 +139,10 @@ defmodule Synapsis.AudioPartFunctionalTest do
 
     assert {:ok, dumped} = Part.dump(part)
     assert dumped["name"] == nil
-    assert {:ok, ^part} = dumped |> Jason.encode!() |> Jason.decode!() |> Part.load()
+
+    assert {:ok, ^part} =
+             dumped |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Part.load()
+
     encoded = Message.encode(message)
 
     assert Enum.at(encoded.parts, 1) == %{
@@ -147,7 +152,7 @@ defmodule Synapsis.AudioPartFunctionalTest do
              name: nil
            }
 
-    json = encoded |> Jason.encode!() |> Jason.decode!()
+    json = encoded |> Formata.JSON.encode!() |> Formata.JSON.decode!()
 
     assert json["parts"] == [
              %{"type" => "text", "text" => "before"},

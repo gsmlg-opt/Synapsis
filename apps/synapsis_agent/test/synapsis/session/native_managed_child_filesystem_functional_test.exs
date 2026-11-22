@@ -248,7 +248,7 @@ defmodule Synapsis.Session.NativeManagedChildFilesystemFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      wire = Jason.decode!(body)
+      wire = Formata.JSON.decode!(body)
       Agent.update(harness.counter, &%{&1 | provider_requests: &1.provider_requests ++ [wire]})
       users = user_texts(wire)
 
@@ -480,7 +480,7 @@ defmodule Synapsis.Session.NativeManagedChildFilesystemFunctionalTest do
     for {id, name, arguments} <- calls do
       assert Enum.count(wire_calls, fn call ->
                call["call_id"] == id and ToolName.decode(call["name"]) == name and
-                 Jason.decode!(call["arguments"]) == arguments
+                 Formata.JSON.decode!(call["arguments"]) == arguments
              end) == 1
     end
   end
@@ -509,7 +509,7 @@ defmodule Synapsis.Session.NativeManagedChildFilesystemFunctionalTest do
     captured =
       @read_pages
       |> File.read!()
-      |> Jason.decode!()
+      |> Formata.JSON.decode!()
       |> Map.fetch!("cases")
       |> Enum.find(&(&1["id"] == "one-based-slice"))
       |> Map.fetch!("result")
@@ -601,7 +601,9 @@ defmodule Synapsis.Session.NativeManagedChildFilesystemFunctionalTest do
 
     for part <- uses ++ results do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
   end
 

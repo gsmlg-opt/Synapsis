@@ -35,7 +35,7 @@ defmodule Synapsis.Web.SearchUnicodeFunctionalTest do
     assert second["siteName"] == ""
     assert result["truncated"] == true
     assert utf16_units(first["title"]) + utf16_units(first["snippet"]) == remaining
-    assert String.valid?(Jason.encode!(result))
+    assert String.valid?(Formata.JSON.encode!(result))
   end
 
   test "generic combining text can stop between components as the fixed UTF16 budget does", ctx do
@@ -74,7 +74,7 @@ defmodule Synapsis.Web.SearchUnicodeFunctionalTest do
   end
 
   test "complete pinned generic normalization matches ordinary Unicode HTTP projections" do
-    reference = Jason.decode!(File.read!(@reference))
+    reference = Formata.JSON.decode!(File.read!(@reference))
     assert length(reference["genericCases"]) == 12
 
     for row <- reference["genericCases"] do
@@ -107,7 +107,7 @@ defmodule Synapsis.Web.SearchUnicodeFunctionalTest do
 
           conn
           |> Plug.Conn.put_resp_content_type("application/json")
-          |> Plug.Conn.resp(200, Jason.encode!(payload))
+          |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
         end)
 
         config = %{
@@ -128,7 +128,7 @@ defmodule Synapsis.Web.SearchUnicodeFunctionalTest do
         assert_receive {:unicode_http, ^id}
         expected = Map.drop(row["normalizedUnwrappedResult"], ~w(externalContent tookMs))
         assert Map.delete(result, "tookMs") == expected, row["id"]
-        assert String.valid?(Jason.encode!(result))
+        assert String.valid?(Formata.JSON.encode!(result))
       after
         Gaoxy.Test.close(fixture)
       end
@@ -154,7 +154,7 @@ defmodule Synapsis.Web.SearchUnicodeFunctionalTest do
     Gaoxy.Test.stub(ctx.fixture, "GET", "/res/v1/web/search", fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(%{"web" => %{"results" => rows}}))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"web" => %{"results" => rows}}))
     end)
   end
 

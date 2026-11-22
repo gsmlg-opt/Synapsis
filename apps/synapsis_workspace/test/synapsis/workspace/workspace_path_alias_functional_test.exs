@@ -52,7 +52,10 @@ defmodule Synapsis.Workspace.WorkspacePathAliasFunctionalTest do
     assert by_id.path == canonical and by_id.content == "second" and by_id.version == 2
     assert File.read!(Path.join(root, "shared/alias.txt")) == "second"
     assert File.ls!(Path.join(root, ".synapsis/meta")) == ["shared__alias.txt.json"]
-    metadata = Jason.decode!(File.read!(Path.join(root, ".synapsis/meta/shared__alias.txt.json")))
+
+    metadata =
+      Formata.JSON.decode!(File.read!(Path.join(root, ".synapsis/meta/shared__alias.txt.json")))
+
     assert metadata["path"] == canonical and metadata["id"] == id and metadata["version"] == 2
     assert metadata["metadata"] == %{"label" => "keep"}
     refute_receive {:workspace_changed, _}, 0

@@ -224,13 +224,13 @@ defmodule SynapsisCli.ToolResultTest do
     Gaoxy.Test.expect_once(fixture, "POST", "/api/sessions", fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
+      |> Plug.Conn.resp(201, Formata.JSON.encode!(%{"data" => %{"id" => session_id}}))
     end)
 
     Gaoxy.Test.expect_once(fixture, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"ok" => true}))
     end)
 
     Gaoxy.Test.expect_once(fixture, "GET", "/api/sessions/#{session_id}/events", fn conn ->
@@ -238,7 +238,7 @@ defmodule SynapsisCli.ToolResultTest do
       |> Plug.Conn.put_resp_content_type("text/event-stream")
       |> Plug.Conn.resp(
         200,
-        "event: tool_result\ndata: #{Jason.encode!(event)}\n\nevent: done\ndata: \n\n"
+        "event: tool_result\ndata: #{Formata.JSON.encode!(event)}\n\nevent: done\ndata: \n\n"
       )
     end)
 

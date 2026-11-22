@@ -405,7 +405,7 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
            }
 
     refute Enum.any?(public["agents"], &(&1["id"] == disabled.id))
-    refute Jason.encode!(public) =~ secret
+    refute Formata.JSON.encode!(public) =~ secret
     refute Map.has_key?(public, "allowAny")
     assert length(intents(runtime)) == 1
 
@@ -424,8 +424,8 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
 
     assert [%{"output" => content} | _] = replay
     assert content == result.content
-    assert Jason.decode!(content) == public
-    refute Jason.encode!(requests) =~ secret
+    assert Formata.JSON.decode!(content) == public
+    refute Formata.JSON.encode!(requests) =~ secret
   end
 
   @tag :agent_directory_production
@@ -484,7 +484,9 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
     assert [first, last, get, denied_ui, denied_hidden] = results(ctx.id)
     assert Enum.all?([first, last, get], &(&1.is_error == false))
     assert denied_ui.is_error and denied_hidden.is_error
-    assert first.projection["result"]["structured"] == Jason.decode!(Jason.encode!(expected))
+
+    assert first.projection["result"]["structured"] ==
+             Formata.JSON.decode!(Formata.JSON.encode!(expected))
 
     assert [%{"id" => beta_id, "source" => "heartbeat"}] =
              last.projection["result"]["structured"]["routines"]
@@ -499,7 +501,7 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
     assert descriptor.backend_context.requester_name == ctx.harness.agent_name
     assert descriptor.backend_context.session_id == ctx.id
     requests = Agent.get(ctx.harness.counter, & &1.provider_requests)
-    refute Jason.encode!(requests) =~ "PRIVATE_AUTOMATION_PROMPT"
+    refute Formata.JSON.encode!(requests) =~ "PRIVATE_AUTOMATION_PROMPT"
     assert {:ok, turns} = Store.list_turns(ctx.id)
     durable = for turn <- turns, part <- turn.parts, part[:type] == "tool_result", do: part
     assert Enum.map(durable, & &1[:projection]) == Enum.map(results(ctx.id), & &1.projection)
@@ -640,7 +642,7 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
 
     Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       Agent.update(ctx.harness.counter, fn state ->
         %{state | provider_requests: state.provider_requests ++ [request]}
@@ -732,7 +734,7 @@ defmodule Synapsis.Session.NativeDomainRuntimeTest do
     for content <- replay do
       assert content == result.content
       json = content |> String.split("\n", parts: 2) |> List.last()
-      assert Jason.decode!(json) == result.projection["result"]["structured"]
+      assert Formata.JSON.decode!(json) == result.projection["result"]["structured"]
     end
   end
 end

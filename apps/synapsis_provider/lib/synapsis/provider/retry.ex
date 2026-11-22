@@ -14,7 +14,8 @@ defmodule Synapsis.Provider.Retry do
         Process.sleep(backoff)
         with_retry(fun, retries - 1)
 
-      {:error, %Req.TransportError{}} when retries > 0 ->
+      {:error, %HTTP.RequestError{phase: phase, request_started: false}}
+      when phase in [:connect, :tls_setup] and retries > 0 ->
         backoff = @backoff_base * (@max_retries - retries + 1)
         Process.sleep(backoff)
         with_retry(fun, retries - 1)

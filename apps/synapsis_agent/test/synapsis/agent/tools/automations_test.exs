@@ -162,8 +162,11 @@ defmodule Synapsis.Agent.Tools.AutomationsTest do
     assert status in ["pending", "ok", "failed"]
     assert Map.keys(result.structured) == [:scheduler]
     assert Enum.sort(Map.keys(result.structured.scheduler)) == ~w(engine reload_status running)a
-    assert Jason.decode!(result.content) == Jason.decode!(Jason.encode!(result.structured))
-    refute Jason.encode!(result) =~ @private
+
+    assert Formata.JSON.decode!(result.content) ==
+             Formata.JSON.decode!(Formata.JSON.encode!(result.structured))
+
+    refute Formata.JSON.encode!(result) =~ @private
     assert Process.alive?(scheduler)
   end
 
@@ -188,9 +191,11 @@ defmodule Synapsis.Agent.Tools.AutomationsTest do
     assert get.structured.routine == hd(last.structured.routines)
 
     for result <- [page, last, get] do
-      assert Jason.decode!(result.content) == Jason.decode!(Jason.encode!(result.structured))
-      assert byte_size(Jason.encode!(result)) <= 65_536
-      refute Jason.encode!(result) =~ @private
+      assert Formata.JSON.decode!(result.content) ==
+               Formata.JSON.decode!(Formata.JSON.encode!(result.structured))
+
+      assert byte_size(Formata.JSON.encode!(result)) <= 65_536
+      refute Formata.JSON.encode!(result) =~ @private
       assert {:ok, _} = ResultProjection.to_part("automation", {:ok, result}, tool_name: @name)
     end
 
@@ -310,7 +315,7 @@ defmodule Synapsis.Agent.Tools.AutomationsTest do
         do: put_routine(:routine, "Routine #{n}", %{schedule: String.duplicate("s", 500)})
 
     assert {:ok, page} = Synapsis.RoutineConfigs.directory("main", limit: 100)
-    assert byte_size(Jason.encode!(page)) < 65_536
+    assert byte_size(Formata.JSON.encode!(page)) < 65_536
     op = operation(ctx, %{"action" => "list", "limit" => 100})
 
     assert %Error{class: :budget_exceeded, details: %{code: "output_too_large"}} =

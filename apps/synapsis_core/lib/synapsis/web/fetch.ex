@@ -207,7 +207,7 @@ defmodule Synapsis.Web.Fetch do
     limit = Keyword.get(opts, :result_limit, 1_048_576)
 
     with true <- is_integer(limit) and limit > 0,
-         {:ok, content} <- Jason.encode(result),
+         {:ok, content} <- Synapsis.JSON.encode(result),
          true <-
            byte_size(content) <= 262_144 and
              :erlang.external_size(

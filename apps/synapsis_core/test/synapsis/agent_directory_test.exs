@@ -74,7 +74,7 @@ defmodule Synapsis.AgentDirectoryTest do
              next_cursor: nil
            }
 
-    refute Jason.encode!(expected) =~ @private
+    refute Formata.JSON.encode!(expected) =~ @private
     refute Map.has_key?(expected, :allowAny)
     refute Map.has_key?(expected, :children)
     refute Map.has_key?(expected, :spawn_allowed)
@@ -288,14 +288,14 @@ defmodule Synapsis.AgentDirectoryTest do
     assert :ets.insert(@table, entries)
     assert {:ok, %{count: 100, has_more: true} = page} = AgentDirectory.list(%{}, ctx.context)
     assert length(page.agents) == 100
-    assert byte_size(Jason.encode!(page)) <= 65_536
+    assert byte_size(Formata.JSON.encode!(page)) <= 65_536
 
     for {id, record} <- entries,
         do: assert(:ets.insert(@table, {id, Map.put(record, :label, String.duplicate("L", 800))}))
 
     assert {:error, :output_too_large} = AgentDirectory.list(%{}, ctx.context)
     assert {:ok, small} = AgentDirectory.list(%{"limit" => 1}, ctx.context)
-    assert byte_size(Jason.encode!(small)) <= 65_536
+    assert byte_size(Formata.JSON.encode!(small)) <= 65_536
   end
 
   test "expired deadline performs no storage reads", ctx do

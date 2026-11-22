@@ -22,7 +22,7 @@ defmodule Synapsis.Agent.Tools.Browser do
   @read_actions ~w(status profiles tabs snapshot screenshot doctor console requests errors text)
   @context_keys ~w(identity agent_id agent_name config project_root fingerprint session_binding record)a
   @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
   @cache_limit 64
 
   def names, do: [@name]
@@ -95,7 +95,7 @@ defmodule Synapsis.Agent.Tools.Browser do
          action: "browser." <> action,
          resource:
            "browser:" <>
-             Jason.encode!([
+             Formata.JSON.encode!([
                context.agent_id,
                context.agent_name,
                profile,
@@ -547,7 +547,7 @@ defmodule Synapsis.Agent.Tools.Browser do
   end
 
   defp output_content(%{"content" => content}, _public), do: {:ok, content}
-  defp output_content(_result, public), do: Jason.encode(public)
+  defp output_content(_result, public), do: Synapsis.JSON.encode(public)
 
   defp resource_record(binding, config, project_root, fingerprint, cache) do
     case cache[owner_key(binding)] do

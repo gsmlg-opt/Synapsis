@@ -590,7 +590,7 @@ defmodule Synapsis.Agent.Heartbeat.NativeTypedScheduleFunctionalTest do
 
     Gaoxy.Test.stub(http, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       number =
         Agent.get_and_update(log, fn previous -> {length(previous) + 1, previous ++ [request]} end)
@@ -661,7 +661,7 @@ defmodule Synapsis.Agent.Heartbeat.NativeTypedScheduleFunctionalTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           400,
-          Jason.encode!(%{error: %{message: "confirmed schedule failure"}})
+          Formata.JSON.encode!(%{error: %{message: "confirmed schedule failure"}})
         )
       else
         DeterministicProvider.send_sse(conn, chunks)

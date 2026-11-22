@@ -50,7 +50,7 @@ defmodule Synapsis.SkillWorkshop.Contract do
   def run(_, _), do: {:error, :content_contract}
 
   defp encode(request) do
-    case Jason.encode(request) do
+    case Synapsis.JSON.encode(request) do
       {:ok, body} when byte_size(body) + 1 <= @frame_bytes -> {:ok, body <> "\n"}
       _ -> {:error, :content_contract}
     end
@@ -137,7 +137,7 @@ defmodule Synapsis.SkillWorkshop.Contract do
         with true <- remaining(session.deadline) > 0,
              [json, ""] <-
                chunks |> Enum.reverse() |> IO.iodata_to_binary() |> :binary.split("\n", [:global]),
-             {:ok, envelope} <- Jason.decode(json),
+             {:ok, envelope} <- Formata.JSON.decode(json),
              true <- valid_envelope?(envelope, session.os_pid) do
           {:ok, envelope, down?}
         else

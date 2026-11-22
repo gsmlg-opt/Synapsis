@@ -127,9 +127,9 @@ defmodule Synapsis.Provider.ParallelFreeSearchFunctionalTest do
     for tool_result <- [
           %{
             "structuredContent" => payload,
-            "content" => [%{"type" => "text", "text" => Jason.encode!(%{"results" => []})}]
+            "content" => [%{"type" => "text", "text" => Formata.JSON.encode!(%{"results" => []})}]
           },
-          %{"content" => [%{"type" => "text", "text" => Jason.encode!(payload)}]}
+          %{"content" => [%{"type" => "text", "text" => Formata.JSON.encode!(payload)}]}
         ] do
       assert ParallelFree.result(config, args, tool_result, "local-search-session") ==
                {:ok, expected}

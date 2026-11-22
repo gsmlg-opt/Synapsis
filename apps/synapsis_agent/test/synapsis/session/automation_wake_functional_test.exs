@@ -372,7 +372,7 @@ defmodule Synapsis.Session.AutomationWakeFunctionalTest do
 
     Gaoxy.Test.stub(http, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       handler = self()
 
       index =

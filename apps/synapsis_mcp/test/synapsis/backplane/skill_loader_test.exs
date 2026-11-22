@@ -238,6 +238,6 @@ defmodule Synapsis.Backplane.SkillLoaderTest do
   defp json(conn, body) do
     conn
     |> Plug.Conn.put_resp_content_type("application/json")
-    |> Plug.Conn.send_resp(200, Jason.encode!(body))
+    |> Plug.Conn.send_resp(200, Formata.JSON.encode!(body))
   end
 end

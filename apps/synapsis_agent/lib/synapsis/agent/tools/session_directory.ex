@@ -13,7 +13,7 @@ defmodule Synapsis.Agent.Tools.SessionDirectory do
   @output_limit 262_144
   @context_keys [:session_id, :agent_id, :run_id, :incarnation, :catalog_revision]
   @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
 
   def names, do: @names
   def revision, do: @revision
@@ -51,7 +51,7 @@ defmodule Synapsis.Agent.Tools.SessionDirectory do
       {:ok,
        %{
          action: "session.directory.list",
-         resource: "session_directory:" <> Jason.encode!(resource)
+         resource: "session_directory:" <> Formata.JSON.encode!(resource)
        }}
     end
   end
@@ -76,7 +76,7 @@ defmodule Synapsis.Agent.Tools.SessionDirectory do
              domain_options(operation.arguments, deadline)
            ),
          native = %{content: text, structured: page},
-         true <- byte_size(Jason.encode!(native)) <= @output_limit,
+         true <- byte_size(Formata.JSON.encode!(native)) <= @output_limit,
          :ok <- remaining(deadline) do
       {:ok, native}
     else

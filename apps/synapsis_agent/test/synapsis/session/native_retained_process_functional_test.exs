@@ -246,7 +246,7 @@ defmodule Synapsis.Session.NativeRetainedProcessFunctionalTest do
     assert by_id["control-eof"].projection["result"]["output"] == "control=<done>\n"
 
     for part <- results, String.starts_with?(part.tool_use_id, "inspection-") do
-      assert Jason.decode!(part.content) == part.projection["result"]["structured"]
+      assert Formata.JSON.decode!(part.content) == part.projection["result"]["structured"]
     end
 
     assert_history(h, uses, results)
@@ -270,7 +270,7 @@ defmodule Synapsis.Session.NativeRetainedProcessFunctionalTest do
 
     Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(h.counter, fn state ->
@@ -362,7 +362,7 @@ defmodule Synapsis.Session.NativeRetainedProcessFunctionalTest do
     |> tool_results()
     |> Enum.find(&(&1["call_id"] == "inspection-" <> id))
     |> Map.fetch!("content")
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 
   defp session_id({_, request, _}, id) do
@@ -410,7 +410,9 @@ defmodule Synapsis.Session.NativeRetainedProcessFunctionalTest do
 
     for part <- parts do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
 
     {uses, results}
@@ -460,7 +462,7 @@ defmodule Synapsis.Session.NativeRetainedProcessFunctionalTest do
 
     assert Enum.map(
              calls,
-             &{&1["call_id"], ToolName.decode(&1["name"]), Jason.decode!(&1["arguments"])}
+             &{&1["call_id"], ToolName.decode(&1["name"]), Formata.JSON.decode!(&1["arguments"])}
            ) == Enum.map(uses, &{&1.tool_use_id, &1.tool, &1.input})
 
     assert Enum.map(tool_results(request), &{&1["call_id"], &1["output"]}) ==

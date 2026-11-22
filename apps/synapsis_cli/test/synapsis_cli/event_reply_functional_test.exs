@@ -313,13 +313,13 @@ defmodule SynapsisCli.EventReplyFunctionalTest do
     conn
   end
 
-  defp frame(event, data), do: "event: #{event}\r\ndata: #{Jason.encode!(data)}\r\n\r\n"
+  defp frame(event, data), do: "event: #{event}\r\ndata: #{Formata.JSON.encode!(data)}\r\n\r\n"
 
   defp json(conn, status, data),
     do:
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(status, Jason.encode!(data))
+      |> Plug.Conn.resp(status, Formata.JSON.encode!(data))
 
   defp uuid do
     <<a::binary-size(8), b::binary-size(4), c::binary-size(4), d::binary-size(4),

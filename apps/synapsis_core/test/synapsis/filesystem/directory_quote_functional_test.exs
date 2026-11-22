@@ -78,7 +78,7 @@ defmodule Synapsis.Filesystem.DirectoryQuoteFunctionalTest do
     assert {:ok, page} = Local.list_directory(root, "names", %{})
     assert {:ok, page} == result(expected)
 
-    assert page.details.content |> String.split("\n") |> Enum.map(&Jason.decode!/1) ==
+    assert page.details.content |> String.split("\n") |> Enum.map(&Formata.JSON.decode!/1) ==
              ["a\u000Bb", ~S(a\u000B), directory <> "/", "e\u001Ff"]
 
     assert File.ls!(Path.join(root, "names")) |> MapSet.new() ==

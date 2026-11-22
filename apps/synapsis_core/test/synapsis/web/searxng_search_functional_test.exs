@@ -229,7 +229,7 @@ defmodule Synapsis.Web.SearxngSearchFunctionalTest do
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(payload))
+        |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
       end)
     end
   end
@@ -254,6 +254,6 @@ defmodule Synapsis.Web.SearxngSearchFunctionalTest do
       __DIR__
     )
     |> File.read!()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 end

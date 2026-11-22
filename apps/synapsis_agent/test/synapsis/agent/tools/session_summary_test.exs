@@ -125,8 +125,8 @@ defmodule Synapsis.Agent.Tools.SessionSummaryTest do
     assert "Generated 1 memory candidate(s) for review; candidates were not saved.\n" <> json =
              content
 
-    assert Jason.decode!(json) == Jason.decode!(Jason.encode!(result))
-    assert byte_size(Jason.encode!(%{content: content, structured: result})) <= 65_536
+    assert Formata.JSON.decode!(json) == Formata.JSON.decode!(Formata.JSON.encode!(result))
+    assert byte_size(Formata.JSON.encode!(%{content: content, structured: result})) <= 65_536
     assert result.source == "durable_session"
     assert [%{summary: ^text}] = result.candidates
     assert Synapsis.Memory.list_semantic() == before
@@ -153,7 +153,8 @@ defmodule Synapsis.Agent.Tools.SessionSummaryTest do
     assert "Generated 0 memory candidate(s) for review; candidates were not saved.\n" <> json =
              result.content
 
-    assert Jason.decode!(json) == Jason.decode!(Jason.encode!(result.structured))
+    assert Formata.JSON.decode!(json) ==
+             Formata.JSON.decode!(Formata.JSON.encode!(result.structured))
   end
 
   test "native admission rejects grants revisions and invalid selectors before intent or dispatch",

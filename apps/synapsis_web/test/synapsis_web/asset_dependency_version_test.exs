@@ -8,7 +8,7 @@ defmodule SynapsisWeb.AssetDependencyVersionTest do
       ["apps/*/package.json", "packages/*/package.json"]
       |> Enum.flat_map(&Path.wildcard(Path.join(project_root, &1)))
       |> Enum.flat_map(fn manifest ->
-        package_json = manifest |> File.read!() |> Jason.decode!()
+        package_json = manifest |> File.read!() |> Formata.JSON.decode!()
 
         case get_in(package_json, ["dependencies", "phoenix_live_view"]) do
           nil ->
@@ -36,7 +36,7 @@ defmodule SynapsisWeb.AssetDependencyVersionTest do
     |> Path.expand()
     |> Path.join("package.json")
     |> File.read!()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
     |> Map.fetch!("version")
   end
 

@@ -22,7 +22,7 @@ defmodule Synapsis.SessionStatusTest do
     assert Enum.sort(Map.keys(result.session)) ==
              ~w(agent id inserted_at model provider status title updated_at)a
 
-    assert byte_size(Jason.encode!(result)) <= 65_536
+    assert byte_size(Formata.JSON.encode!(result)) <= 65_536
   end
 
   test "explicit target reads exact persisted metadata", ctx do

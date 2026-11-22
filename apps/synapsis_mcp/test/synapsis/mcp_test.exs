@@ -31,7 +31,7 @@ defmodule Synapsis.MCPTest do
 
     Gaoxy.Test.stub(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       send(test_pid, {:mcp_request, request["method"]})
       handle(conn, request)
     end)
@@ -63,7 +63,10 @@ defmodule Synapsis.MCPTest do
 
     conn
     |> Plug.Conn.put_resp_header("content-type", "application/json")
-    |> Plug.Conn.resp(200, Jason.encode!(%{"jsonrpc" => "2.0", "id" => id, "result" => result}))
+    |> Plug.Conn.resp(
+      200,
+      Formata.JSON.encode!(%{"jsonrpc" => "2.0", "id" => id, "result" => result})
+    )
   end
 
   defp handle(conn, _notification), do: Plug.Conn.resp(conn, 202, "")
@@ -112,7 +115,7 @@ defmodule Synapsis.MCPTest do
       case Agent.get(health, & &1) do
         # A gateway mid-reload answers with an HTML error page.
         :down -> Plug.Conn.resp(conn, 500, "<html>CompileError</html>")
-        :up -> handle(conn, Jason.decode!(body))
+        :up -> handle(conn, Formata.JSON.decode!(body))
       end
     end)
 

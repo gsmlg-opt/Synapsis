@@ -108,6 +108,6 @@ defmodule SynapsisServer.AgentEventsControllerTest do
     [event_line, data_line] = String.split(frame, "\n", trim: true)
     "event: " <> event = event_line
     "data: " <> data = data_line
-    {event, Jason.decode!(data)}
+    {event, Formata.JSON.decode!(data)}
   end
 end

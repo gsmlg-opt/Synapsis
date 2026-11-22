@@ -118,7 +118,7 @@ defmodule Synapsis.Session.NativeMCPPDFLinkFunctionalTest do
 
     assert {:ok, saved_agent} = ConfigStore.get(:agent, harness.agent_config.id)
     assert saved_agent["tools"] == [name]
-    assert Jason.decode!(saved_agent["config"])["mcp_selection"] == policy
+    assert Formata.JSON.decode!(saved_agent["config"])["mcp_selection"] == policy
 
     assert :ok =
              Synapsis.Provider.Registry.register(harness.provider.name, %{
@@ -206,7 +206,7 @@ defmodule Synapsis.Session.NativeMCPPDFLinkFunctionalTest do
   defp install_source(fixture, requests) do
     Gaoxy.Test.stub(fixture, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       Agent.update(requests, &(&1 ++ [request]))
 
       result =
@@ -242,7 +242,7 @@ defmodule Synapsis.Session.NativeMCPPDFLinkFunctionalTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(
           200,
-          Jason.encode!(%{"jsonrpc" => "2.0", "id" => request["id"], "result" => result})
+          Formata.JSON.encode!(%{"jsonrpc" => "2.0", "id" => request["id"], "result" => result})
         )
       else
         Plug.Conn.resp(conn, 202, "")
@@ -256,7 +256,7 @@ defmodule Synapsis.Session.NativeMCPPDFLinkFunctionalTest do
   defp install_provider(harness, name, owner) do
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/messages", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -273,7 +273,7 @@ defmodule Synapsis.Session.NativeMCPPDFLinkFunctionalTest do
              "id" => @call_id,
              "name" => ToolName.encode(name),
              "input" => %{}
-           }, %{"type" => "input_json_delta", "partial_json" => Jason.encode!(@arguments)},
+           }, %{"type" => "input_json_delta", "partial_json" => Formata.JSON.encode!(@arguments)},
            "tool_use"}
         else
           {%{"type" => "text", "text" => ""}, %{"type" => "text_delta", "text" => @completion},
@@ -292,7 +292,7 @@ defmodule Synapsis.Session.NativeMCPPDFLinkFunctionalTest do
       |> Plug.Conn.put_resp_content_type("text/event-stream")
       |> Plug.Conn.resp(
         200,
-        Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+        Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
       )
     end)
   end
@@ -364,7 +364,9 @@ defmodule Synapsis.Session.NativeMCPPDFLinkFunctionalTest do
 
     for part <- [use, result] do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
   end
 

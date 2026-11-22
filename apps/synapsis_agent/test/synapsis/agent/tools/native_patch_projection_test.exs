@@ -48,7 +48,7 @@ defmodule Synapsis.Agent.Tools.NativePatchProjectionTest do
       assert part.content ==
                "Patch failed (#{class})\nCompleted - Added: completed.ex\nUnknown outcome: uncertain.ex"
 
-      refute Jason.encode!(part.projection) =~ "private"
+      refute Formata.JSON.encode!(part.projection) =~ "private"
       refute part.content =~ "Patch applied"
       assert {:ok, ^part} = project(part.projection["result"])
     end
@@ -163,7 +163,9 @@ defmodule Synapsis.Agent.Tools.NativePatchProjectionTest do
       assert {:ok, host} = ProviderMessages.to_host(history(result))
       assert List.last(host).parts == [part]
       assert {:ok, dump} = Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Part.load()
 
       Store.ensure_started()
       session_id = Ecto.UUID.generate()
@@ -203,7 +205,7 @@ defmodule Synapsis.Agent.Tools.NativePatchProjectionTest do
     assert {:ok, generic} = ProviderMessages.tool_result_part("other", failed(:unknown_outcome))
     assert generic.content == "Tool execution failed"
     assert generic.projection["result"]["error"]["details"] == %{}
-    refute Jason.encode!(generic.projection) =~ "completed.ex"
+    refute Formata.JSON.encode!(generic.projection) =~ "completed.ex"
   end
 
   test "malformed file evidence and ambiguous keys fail closed" do

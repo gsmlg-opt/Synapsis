@@ -114,7 +114,7 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
   def install!(fixture, scenario, ctx \\ %{}) do
     fun = fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       maybe_record(ctx[:counter], request)
       handle_request(conn, scenario, request, ctx)
     end
@@ -159,7 +159,7 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProvider do
   end
 
   defp handle_request(conn, :timeout, _request, _ctx) do
-    # Surface a timeout-class failure without sleeping past Req receive_timeout.
+    # Surface a timeout-class failure without waiting for the client's deadline.
     Plug.Conn.send_resp(conn, 408, "Request Timeout")
   end
 

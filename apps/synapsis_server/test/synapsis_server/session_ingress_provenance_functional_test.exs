@@ -22,7 +22,7 @@ defmodule SynapsisServer.SessionIngressProvenanceFunctionalTest do
         ctx.conn
         |> recycle()
         |> put_req_header("content-type", "application/json")
-        |> post("/api/sessions/#{id}/messages", Jason.encode!(payload))
+        |> post("/api/sessions/#{id}/messages", Formata.JSON.encode!(payload))
 
       assert json_response(response, 200) == %{"status" => "ok"}
     end
@@ -175,7 +175,7 @@ defmodule SynapsisServer.SessionIngressProvenanceFunctionalTest do
 
     Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/messages", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       handler = self()
 
       index =
@@ -212,7 +212,7 @@ defmodule SynapsisServer.SessionIngressProvenanceFunctionalTest do
       |> Plug.Conn.put_resp_content_type("text/event-stream")
       |> Plug.Conn.resp(
         200,
-        Enum.map_join(frames, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+        Enum.map_join(frames, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
       )
     end)
 
@@ -292,7 +292,9 @@ defmodule SynapsisServer.SessionIngressProvenanceFunctionalTest do
       end
 
       turn =
-        Enum.find(selected, &(&1.id == context["input_id"])) |> Jason.encode!() |> Jason.decode!()
+        Enum.find(selected, &(&1.id == context["input_id"]))
+        |> Formata.JSON.encode!()
+        |> Formata.JSON.decode!()
 
       assert turn["role"] == "user"
       assert turn["input_provenance"] == context

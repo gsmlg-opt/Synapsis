@@ -78,8 +78,13 @@ defmodule SynapsisServer.AppServerTest do
   end
 
   test "other routes still reach the router", %{port: port} do
-    {:ok, response} = Req.get("http://127.0.0.1:#{port}/api/health", retry: false)
+    %HTTP.Response{} =
+      response =
+      HTTP.fetch("http://127.0.0.1:#{port}/api/health", timeout: 5_000, retry: false)
+      |> HTTP.Promise.await()
+
     assert response.status in [200, 503]
-    assert is_map(response.body)
+    assert {:ok, body} = HTTP.Response.json(response)
+    assert is_map(body)
   end
 end

@@ -38,7 +38,10 @@ defmodule Synapsis.Agent.Tools.ResultTest do
                }
 
         assert {:ok, dump} = Part.dump(part)
-        assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Part.load()
+
+        assert {:ok, ^part} =
+                 dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Part.load()
+
         assert {:ok, part.projection} == ResultProjection.from_part(part)
       end
     end
@@ -198,7 +201,7 @@ defmodule Synapsis.Agent.Tools.ResultTest do
       assert part.is_error
       assert part.content == "Tool execution failed"
       assert part.projection["result"]["error"]["class"] == Atom.to_string(class)
-      refute Jason.encode!(part.projection) =~ "private native diagnostic"
+      refute Formata.JSON.encode!(part.projection) =~ "private native diagnostic"
       refute Map.has_key?(part.projection["result"], "content")
     end
   end
@@ -235,7 +238,9 @@ defmodule Synapsis.Agent.Tools.ResultTest do
       assert public["omitted_output_bytes"] == 12
       assert public["output_budget_unit"] == "estimated_token_bytes"
       assert {:ok, dump} = Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Part.load()
     end
   end
 
@@ -289,9 +294,9 @@ defmodule Synapsis.Agent.Tools.ResultTest do
              "message" => "Command cleanup could not be confirmed"
            }
 
-    refute Jason.encode!(part.projection) =~ "private"
-    refute Jason.encode!(part.projection) =~ "process_group_id"
-    refute Jason.encode!(part.projection) =~ "cause"
+    refute Formata.JSON.encode!(part.projection) =~ "private"
+    refute Formata.JSON.encode!(part.projection) =~ "process_group_id"
+    refute Formata.JSON.encode!(part.projection) =~ "cause"
   end
 
   test "malformed native command shapes and unknown enums fail without text fallback" do
@@ -404,7 +409,10 @@ defmodule Synapsis.Agent.Tools.ResultTest do
              ~w(text image audio resource_link resource text)
 
     assert {:ok, stored} = Part.dump(part)
-    assert {:ok, loaded} = stored |> Jason.encode!() |> Jason.decode!() |> Part.load()
+
+    assert {:ok, loaded} =
+             stored |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Part.load()
+
     assert loaded == part
     assert {:ok, part.projection} == ResultProjection.from_part(loaded)
   end
@@ -452,7 +460,7 @@ defmodule Synapsis.Agent.Tools.ResultTest do
                "details" => %{"retryable" => false}
              }
 
-      refute Jason.encode!(part.projection) =~ "diagnostic-secret"
+      refute Formata.JSON.encode!(part.projection) =~ "diagnostic-secret"
       refute Map.has_key?(part.projection["result"]["error"], "cause")
 
       assert {:ok, normalized} =
@@ -497,9 +505,9 @@ defmodule Synapsis.Agent.Tools.ResultTest do
              ResultProjection.to_part("call", rejected, operation: operation)
 
     assert part.content == "Tool denied by capability policy"
-    refute Jason.encode!(part.projection) =~ "arguments"
-    refute Jason.encode!(part.projection) =~ "identity"
-    refute Jason.encode!(part.projection) =~ "private diagnostics"
+    refute Formata.JSON.encode!(part.projection) =~ "arguments"
+    refute Formata.JSON.encode!(part.projection) =~ "identity"
+    refute Formata.JSON.encode!(part.projection) =~ "private diagnostics"
 
     assert {:error, %Error{}} = ResultProjection.to_part("call", rejected)
 
@@ -914,7 +922,10 @@ defmodule Synapsis.Agent.Tools.ResultTest do
              ]
 
       assert {:ok, dumped} = Part.dump(part)
-      assert {:ok, loaded} = dumped |> Jason.encode!() |> Jason.decode!() |> Part.load()
+
+      assert {:ok, loaded} =
+               dumped |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Part.load()
+
       assert loaded == part
       assert {:ok, part.projection} == ResultProjection.from_part(loaded)
     end

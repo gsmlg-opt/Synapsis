@@ -228,11 +228,11 @@ defmodule Synapsis.Agent.Tools.ProcessInspectionFunctionalTest do
 
   defp host(fixture, args) do
     assert {:ok, output} = ProcessInspection.execute(operation(fixture, @name, args))
-    assert Jason.decode!(output.content) == output.structured
+    assert Formata.JSON.decode!(output.content) == output.structured
     output.structured
   end
 
-  defp portable(value), do: value |> Jason.encode!() |> Jason.decode!()
+  defp portable(value), do: value |> Formata.JSON.encode!() |> Formata.JSON.decode!()
   defp payload(action, result), do: %{"action" => action, "result" => result}
 
   defp portable_output(value) do

@@ -18,7 +18,7 @@ defmodule Synapsis.Agent.Runtime.SessionUsage do
   alias Backplane.AgentRuntime.Usage
   alias Synapsis.Runtime.Store, as: Journal
 
-  @version "1.10.74"
+  @version "1.10.94"
   @metrics ~w(input_tokens cached_tokens output_tokens reasoning_tokens)a
   @inventory_limit 32 * 1_024 * 1_024
 

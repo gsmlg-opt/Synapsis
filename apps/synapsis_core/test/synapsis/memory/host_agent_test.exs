@@ -22,7 +22,7 @@ defmodule Synapsis.Memory.HostAgentTest do
 
     Gaoxy.Test.expect_once(ctx.server, "POST", "/memory/synapsis/call/recall", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(parent, {:request, Jason.decode!(body), conn.req_headers})
+      send(parent, {:request, Formata.JSON.decode!(body), conn.req_headers})
 
       reply(
         conn,
@@ -61,7 +61,7 @@ defmodule Synapsis.Memory.HostAgentTest do
 
     Gaoxy.Test.expect_once(ctx.server, "POST", "/memory/synapsis/call/recall", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(parent, {:clean_request, conn.req_headers, Jason.decode!(body)})
+      send(parent, {:clean_request, conn.req_headers, Formata.JSON.decode!(body)})
       reply(conn, online([]))
     end)
 
@@ -78,34 +78,7 @@ defmodule Synapsis.Memory.HostAgentTest do
     test "host HTTP bypasses global #{hook} hooks while reaching the real fixture", ctx do
       parent = self()
 
-      defaults =
-        case @hook do
-          :adapter ->
-            [
-              adapter: fn request ->
-                send(parent, {:inherited_global_hook, :adapter})
-                Req.Finch.run(request)
-              end
-            ]
-
-          :plugin ->
-            [
-              plugins: [
-                fn request ->
-                  send(parent, {:inherited_global_hook, :plugin})
-                  request
-                end
-              ]
-            ]
-
-          :finch_request ->
-            [
-              finch_request: fn request, _finch_request, _finch_name, _finch_options ->
-                send(parent, {:inherited_global_hook, :finch_request})
-                request |> Req.Request.delete_option(:finch_request) |> Req.Finch.run()
-              end
-            ]
-        end
+      defaults = [{@hook, fn _ -> send(parent, {:inherited_global_hook, @hook}) end}]
 
       set_req_defaults(defaults)
 
@@ -274,10 +247,10 @@ defmodule Synapsis.Memory.HostAgentTest do
   test "rejects malformed envelopes and domain errors without leaking payloads", _ctx do
     for {body, reason} <- [
           {"not-json secret", :invalid_json},
-          {Jason.encode!(%{"ok" => false, "error" => "token-secret"}), :host_error},
-          {Jason.encode!(%{"result" => online([])}), :malformed_result},
-          {Jason.encode!(%{"ok" => true, "result" => []}), :malformed_result},
-          {Jason.encode!(%{"ok" => "true", "result" => online([])}), :malformed_result}
+          {Formata.JSON.encode!(%{"ok" => false, "error" => "token-secret"}), :host_error},
+          {Formata.JSON.encode!(%{"result" => online([])}), :malformed_result},
+          {Formata.JSON.encode!(%{"ok" => true, "result" => []}), :malformed_result},
+          {Formata.JSON.encode!(%{"ok" => "true", "result" => online([])}), :malformed_result}
         ] do
       ctx = fixture()
 
@@ -566,9 +539,9 @@ defmodule Synapsis.Memory.HostAgentTest do
   end
 
   test "owner loss and deadline kill even suspended HTTP workers", ctx do
-    Code.ensure_loaded!(Req)
-    :erlang.trace_pattern({Req, :request, 1}, true, [:local])
-    on_exit(fn -> :erlang.trace_pattern({Req, :request, 1}, false, [:local]) end)
+    Code.ensure_loaded!(HTTP)
+    :erlang.trace_pattern({HTTP, :fetch, 2}, true, [:local])
+    on_exit(fn -> :erlang.trace_pattern({HTTP, :fetch, 2}, false, [:local]) end)
 
     for {operation, input} <- [recall: "q", get: @record_id],
         trigger <- [:owner_loss, :deadline] do
@@ -588,7 +561,7 @@ defmodule Synapsis.Memory.HostAgentTest do
       :erlang.trace(caller, true, [:call, :procs, :set_on_spawn, {:tracer, self()}])
       on_exit(fn -> Process.exit(caller, :kill) end)
       send(caller, :go)
-      assert_receive {:trace, worker, :call, {Req, :request, _}}, 1000
+      assert_receive {:trace, worker, :call, {HTTP, :fetch, _}}, 1000
       :erlang.suspend_process(worker)
       on_exit(fn -> Process.exit(worker, :kill) end)
       monitor = Process.monitor(worker)
@@ -604,7 +577,7 @@ defmodule Synapsis.Memory.HostAgentTest do
 
     Gaoxy.Test.expect_once(ctx.server, "POST", "/memory/synapsis/call/get", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(parent, {:get_request, Jason.decode!(body), conn.req_headers})
+      send(parent, {:get_request, Formata.JSON.decode!(body), conn.req_headers})
 
       result =
         exact()
@@ -721,7 +694,7 @@ defmodule Synapsis.Memory.HostAgentTest do
       ctx = fixture()
 
       Gaoxy.Test.expect_once(ctx.server, "POST", "/memory/synapsis/call/get", fn conn ->
-        Plug.Conn.resp(conn, status, Jason.encode!(%{"ok" => false, "error" => code}))
+        Plug.Conn.resp(conn, status, Formata.JSON.encode!(%{"ok" => false, "error" => code}))
       end)
 
       assert {:error, ^reason} = HostAgent.get(ctx.source, @record_id)
@@ -794,7 +767,7 @@ defmodule Synapsis.Memory.HostAgentTest do
       end
     end)
 
-    Req.default_options(options)
+    Application.put_env(:req, :default_options, options)
   end
 
   defp fixture do
@@ -824,5 +797,5 @@ defmodule Synapsis.Memory.HostAgentTest do
   end
 
   defp reply(conn, result),
-    do: Plug.Conn.resp(conn, 200, Jason.encode!(%{"ok" => true, "result" => result}))
+    do: Plug.Conn.resp(conn, 200, Formata.JSON.encode!(%{"ok" => true, "result" => result}))
 end

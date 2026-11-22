@@ -14,7 +14,7 @@ defmodule Synapsis.MCP.ToolCallContractTest do
 
     Gaoxy.Test.stub(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       case request do
         %{"method" => "initialize", "id" => id} ->
@@ -119,6 +119,9 @@ defmodule Synapsis.MCP.ToolCallContractTest do
   defp reply(conn, id, result) do
     conn
     |> Plug.Conn.put_resp_header("content-type", "application/json")
-    |> Plug.Conn.resp(200, Jason.encode!(%{"jsonrpc" => "2.0", "id" => id, "result" => result}))
+    |> Plug.Conn.resp(
+      200,
+      Formata.JSON.encode!(%{"jsonrpc" => "2.0", "id" => id, "result" => result})
+    )
   end
 end

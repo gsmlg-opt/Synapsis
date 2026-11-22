@@ -172,7 +172,7 @@ defmodule SynapsisCli.SSETest do
       long_content = String.duplicate("x", 600)
 
       data =
-        "event: tool_result\ndata: #{Jason.encode!(%{"content" => long_content, "is_error" => false})}"
+        "event: tool_result\ndata: #{Formata.JSON.encode!(%{"content" => long_content, "is_error" => false})}"
 
       output =
         ExUnit.CaptureIO.capture_io(fn ->
@@ -301,13 +301,13 @@ defmodule SynapsisCli.SSETest do
     |> Enum.each(fn block ->
       case parse_sse_event(block) do
         {"text_delta", payload} ->
-          case Jason.decode(payload) do
+          case Formata.JSON.decode(payload) do
             {:ok, %{"text" => text}} -> IO.write(text)
             _ -> :ok
           end
 
         {"reasoning", payload} ->
-          case Jason.decode(payload) do
+          case Formata.JSON.decode(payload) do
             {:ok, %{"text" => text}} ->
               IO.write(IO.ANSI.light_black() <> text <> IO.ANSI.reset())
 
@@ -316,7 +316,7 @@ defmodule SynapsisCli.SSETest do
           end
 
         {"tool_use", payload} ->
-          case Jason.decode(payload) do
+          case Formata.JSON.decode(payload) do
             {:ok, %{"tool" => tool}} ->
               IO.puts("\n#{IO.ANSI.cyan()}[tool: #{tool}]#{IO.ANSI.reset()}")
 
@@ -325,7 +325,7 @@ defmodule SynapsisCli.SSETest do
           end
 
         {"tool_result", payload} ->
-          case Jason.decode(payload) do
+          case Formata.JSON.decode(payload) do
             {:ok, %{"content" => content, "is_error" => is_error}} ->
               color = if is_error, do: IO.ANSI.red(), else: IO.ANSI.green()
               IO.puts("#{color}#{String.slice(content, 0, 500)}#{IO.ANSI.reset()}")
@@ -335,7 +335,7 @@ defmodule SynapsisCli.SSETest do
           end
 
         {"error", payload} ->
-          case Jason.decode(payload) do
+          case Formata.JSON.decode(payload) do
             {:ok, %{"message" => msg}} ->
               IO.puts(:stderr, "\n#{IO.ANSI.red()}Error: #{msg}#{IO.ANSI.reset()}")
 
@@ -347,7 +347,7 @@ defmodule SynapsisCli.SSETest do
           IO.puts("")
 
         {"session_status", payload} ->
-          case Jason.decode(payload) do
+          case Formata.JSON.decode(payload) do
             {:ok, %{"status" => "idle"}} -> :done
             _ -> :ok
           end

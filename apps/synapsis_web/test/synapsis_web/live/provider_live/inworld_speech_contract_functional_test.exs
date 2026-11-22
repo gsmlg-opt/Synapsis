@@ -100,7 +100,7 @@ defmodule SynapsisWeb.ProviderLive.InworldSpeechContractFunctionalTest do
         {:return_inworld_catalog, ^token} ->
           conn
           |> Plug.Conn.put_resp_content_type("application/json")
-          |> Plug.Conn.resp(200, Jason.encode!(%{"voices" => @voices}))
+          |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"voices" => @voices}))
       after
         10_000 -> raise "ordinary Inworld catalog was not released"
       end
@@ -371,7 +371,7 @@ defmodule SynapsisWeb.ProviderLive.InworldSpeechContractFunctionalTest do
         do: assert(Map.fetch!(saved, key) === Map.fetch!(previous, key))
 
     assert {:ok, []} = Models.list(provider_id: previous.id)
-    assert {:ok, toml} = Toml.decode(File.read!(Store.file_path(:provider)))
+    assert {:ok, toml} = Formata.decode(File.read!(Store.file_path(:provider)), :toml)
     assert Enum.find(toml["providers"], &(&1["id"] == previous.id))["config"] === expected
     assert :ok = Store.reload(:provider)
     assert {:ok, reloaded} = Providers.get(previous.id)
@@ -401,13 +401,13 @@ defmodule SynapsisWeb.ProviderLive.InworldSpeechContractFunctionalTest do
       )
 
   defp trace_http do
-    Code.ensure_loaded!(Req)
-    :erlang.trace_pattern({Req, :request, 1}, true, [:local])
+    Code.ensure_loaded!(HTTP)
+    :erlang.trace_pattern({HTTP, :fetch, 2}, true, [:local])
     :erlang.trace(:all, true, [:call, {:tracer, self()}])
 
     on_exit(fn ->
       :erlang.trace(:all, false, [:call])
-      :erlang.trace_pattern({Req, :request, 1}, false, [:local])
+      :erlang.trace_pattern({HTTP, :fetch, 2}, false, [:local])
     end)
   end
 
@@ -419,7 +419,7 @@ defmodule SynapsisWeb.ProviderLive.InworldSpeechContractFunctionalTest do
 
   defp drain_http(calls) do
     receive do
-      {:trace, pid, :call, {Req, :request, arguments}} -> drain_http([{pid, arguments} | calls])
+      {:trace, pid, :call, {HTTP, :fetch, arguments}} -> drain_http([{pid, arguments} | calls])
     after
       0 -> Enum.reverse(calls)
     end
@@ -428,8 +428,8 @@ defmodule SynapsisWeb.ProviderLive.InworldSpeechContractFunctionalTest do
   defp assert_no_http, do: assert(http_calls() == [])
 
   defp assert_one_catalog_http do
-    assert [{_task, [%Req.Request{} = request]}] = http_calls()
-    assert request.method == :get
-    assert request.url.path == "/Current/Catalog/voices/v1/voices"
+    assert [{_task, [url, options]}] = http_calls()
+    assert Keyword.fetch!(options, :method) in [:get, "GET"]
+    assert URI.parse(url).path == "/Current/Catalog/voices/v1/voices"
   end
 end

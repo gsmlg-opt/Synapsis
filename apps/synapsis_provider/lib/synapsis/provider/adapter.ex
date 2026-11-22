@@ -25,6 +25,7 @@ defmodule Synapsis.Provider.Adapter do
   @anthropic_api_version "2023-06-01"
   @stream_timeout_ms 300_000
   @request_timeout_ms 60_000
+  @max_error_body 1024 * 1024
   @stream_guard_key :synapsis_stream_guard
   @stream_guard_violation_key :synapsis_stream_guard_violation
   @codec_state_key :synapsis_codec_state
@@ -229,52 +230,72 @@ defmodule Synapsis.Provider.Adapter do
     )
 
     try do
-      response =
-        Req.post!(url,
-          headers: headers,
-          json: body,
-          receive_timeout: @stream_timeout_ms,
-          compressed: false,
-          retry: false,
-          redirect: false,
-          into: fn {:data, data}, {req, response} ->
-            if response.status in 200..299 do
-              state = response_codec_state(response, codec_state)
-              guard = response_stream_guard(response, stream_guard)
+      result =
+        Transport.HTTP.with_response(
+          url,
+          [
+            method: :post,
+            headers: headers,
+            body: Formata.JSON.encode!(body),
+            timeout: @stream_timeout_ms
+          ],
+          fn response, deadline ->
+            state = %{
+              status: response.status,
+              headers: HTTP.Headers.to_list(response.headers),
+              body: "",
+              private: %{}
+            }
 
-              case Backplane.AiProtocol.Codec.stream_feed(protocol, state, data) do
-                {:ok, state, events} ->
-                  case emit_mapped_events(events, caller, guard, tool_aliases) do
-                    {:ok, guard} ->
-                      {:cont, {req, put_stream_response_state(response, state, guard)}}
+            Transport.HTTP.reduce_body(response, state, deadline, fn data, response ->
+              if response.status in 200..299 do
+                state = response_codec_state(response, codec_state)
+                guard = response_stream_guard(response, stream_guard)
 
-                    {:violation, guard} ->
-                      response =
-                        response
-                        |> put_stream_response_state(state, guard)
-                        |> mark_stream_guard_violation()
+                case Backplane.AiProtocol.Codec.stream_feed(protocol, state, data) do
+                  {:ok, state, events} ->
+                    case emit_mapped_events(events, caller, guard, tool_aliases) do
+                      {:ok, guard} ->
+                        {:cont, put_stream_response_state(response, state, guard)}
 
-                      {:halt, {req, response}}
-                  end
+                      {:violation, guard} ->
+                        response =
+                          response
+                          |> put_stream_response_state(state, guard)
+                          |> mark_stream_guard_violation()
 
-                {:error, error, state} ->
-                  response =
-                    response
-                    |> put_stream_response_state(state, guard)
-                    |> put_codec_error(error)
+                        {:halt, response}
+                    end
 
-                  {:halt, {req, response}}
+                  {:error, error, state} ->
+                    response =
+                      response
+                      |> put_stream_response_state(state, guard)
+                      |> put_codec_error(error)
+
+                    {:halt, response}
+                end
+              else
+                if byte_size(response.body) + byte_size(data) <= @max_error_body,
+                  do: {:cont, %{response | body: response.body <> data}},
+                  else: {:error, :response_too_large}
               end
-            else
-              {:cont, {req, %{response | body: (response.body || "") <> data}}}
-            end
+            end)
           end
         )
 
-      emit_response_telemetry(session_id, request_id, response, start_time)
-      finish_stream_response(protocol, request, config, response, caller, tool_aliases)
+      case result do
+        {:ok, response} ->
+          emit_response_telemetry(session_id, request_id, response, start_time)
+          finish_stream_response(protocol, request, config, response, caller, tool_aliases)
+
+        {:error, reason} ->
+          error = RuntimeError.exception(transport_error_message(reason))
+          emit_error_telemetry(session_id, request_id, error, start_time)
+          send(caller, {:provider_error, Exception.message(error)})
+      end
     rescue
-      error in [Req.TransportError, RuntimeError, Jason.DecodeError] ->
+      error in [RuntimeError, Formata.Error] ->
         emit_error_telemetry(session_id, request_id, error, start_time)
         send(caller, {:provider_error, Exception.message(error)})
     end
@@ -574,7 +595,12 @@ defmodule Synapsis.Provider.Adapter do
   defp perform_complete(protocol, request, config) do
     {url, headers, body} = request_parts(protocol, request, config, false)
 
-    case Req.post(url, headers: headers, json: body, receive_timeout: @request_timeout_ms) do
+    case Transport.HTTP.request(url,
+           method: :post,
+           headers: headers,
+           body: Formata.JSON.encode!(body),
+           timeout: @request_timeout_ms
+         ) do
       {:ok, %{status: 401} = response} ->
         if protocol == :openai_responses and (config[:oauth] == true or config["oauth"] == true) do
           {:retry_auth, response}
@@ -586,7 +612,7 @@ defmodule Synapsis.Provider.Adapter do
         decode_complete_response(protocol, request, config, response)
 
       {:error, exception} ->
-        {:error, Exception.message(exception)}
+        {:error, transport_error_message(exception)}
     end
   end
 
@@ -780,6 +806,11 @@ defmodule Synapsis.Provider.Adapter do
     )
   end
 
+  defp transport_error_message(%HTTP.RequestError{reason: reason}), do: inspect(reason)
+  defp transport_error_message(%{__exception__: true} = error), do: Exception.message(error)
+  defp transport_error_message(reason), do: inspect(reason)
+
+  defp resp_headers(%{headers: %HTTP.Headers{} = headers}), do: HTTP.Headers.to_list(headers)
   defp resp_headers(%{headers: headers}) when is_list(headers), do: headers
 
   defp resp_headers(%{headers: headers}) when is_map(headers) do
@@ -792,7 +823,7 @@ defmodule Synapsis.Provider.Adapter do
   defp resp_headers(_), do: []
 
   defp resp_body(%{body: body}) when is_binary(body), do: body
-  defp resp_body(%{body: body}) when is_map(body), do: Jason.encode!(body)
+  defp resp_body(%{body: body}) when is_map(body), do: Formata.JSON.encode!(body)
   defp resp_body(_), do: nil
 
   # ---------------------------------------------------------------------------

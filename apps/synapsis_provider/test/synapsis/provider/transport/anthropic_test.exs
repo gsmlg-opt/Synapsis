@@ -20,7 +20,7 @@ defmodule Synapsis.Provider.Transport.AnthropicTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(%{
+          Formata.JSON.encode!(%{
             "data" => [
               %{"id" => "claude-sonnet", "display_name" => "Claude Sonnet"},
               %{"id" => "compatible-model", "context_length" => 64_000},
@@ -44,7 +44,7 @@ defmodule Synapsis.Provider.Transport.AnthropicTest do
       Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "model-a"}]}))
+        |> Plug.Conn.send_resp(200, Formata.JSON.encode!(%{"data" => [%{"id" => "model-a"}]}))
       end)
 
       config = %{api_key: "test-key", base_url: "http://localhost:#{port}/v1"}
@@ -55,7 +55,10 @@ defmodule Synapsis.Provider.Transport.AnthropicTest do
       Gaoxy.Test.expect_once(bypass, "GET", "/llm/anthropic/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "versioned-model"}]}))
+        |> Plug.Conn.send_resp(
+          200,
+          Formata.JSON.encode!(%{"data" => [%{"id" => "versioned-model"}]})
+        )
       end)
 
       config = %{api_key: "test-key", base_url: "http://localhost:#{port}/llm/anthropic"}

@@ -370,7 +370,7 @@ defmodule Synapsis.Session.NativeAutomationWebhookFunctionalTest do
     assert result.is_error == false, "native #{tool} result: #{result.content}"
     assert_wire(following, [result])
     assert_persisted(session.id, [result])
-    decoded = Jason.decode!(result.content)
+    decoded = Formata.JSON.decode!(result.content)
     assert result.projection["result"]["structured"] == decoded
     {decoded, result}
   end
@@ -453,7 +453,7 @@ defmodule Synapsis.Session.NativeAutomationWebhookFunctionalTest do
       Gaoxy.Test.stub(receiver, "POST", path, fn conn ->
         assert Plug.Conn.get_req_header(conn, "content-type") == ["application/json"]
         assert {:ok, body, conn} = Plug.Conn.read_body(conn)
-        send(owner, {:webhook_received, path, Jason.decode!(body), self()})
+        send(owner, {:webhook_received, path, Formata.JSON.decode!(body), self()})
 
         receive do
           :acknowledge_webhook -> Plug.Conn.send_resp(conn, 204, "")
@@ -465,7 +465,7 @@ defmodule Synapsis.Session.NativeAutomationWebhookFunctionalTest do
 
     Gaoxy.Test.stub(http, "POST", "/v1/responses", fn conn ->
       assert {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       Agent.update(log, &(&1 ++ [request]))
 
       cond do

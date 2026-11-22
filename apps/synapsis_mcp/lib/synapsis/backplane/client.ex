@@ -659,69 +659,143 @@ defmodule Synapsis.Backplane.Client do
   end
 
   defp request_bounded(method, url, headers, request_body, response_bound, opts) do
-    request_opts =
-      [
-        method: method,
-        url: url,
-        headers: headers,
-        raw: true,
-        into: bounded_into(response_bound)
-      ] ++ request_opts(opts)
+    timeout = option(opts, :timeout, @default_timeout)
+    deadline = System.monotonic_time(:millisecond) + timeout
+    body = if request_body == nil, do: nil, else: Formata.JSON.encode!(request_body)
 
-    request_opts =
-      if request_body == nil,
-        do: request_opts,
-        else: [{:json, request_body} | request_opts]
+    {watcher, watcher_ref, signal} = abort_watcher()
 
-    case Req.request(request_opts) do
-      {:ok, %Req.Response{} = response} -> bounded_response(response, response_bound)
-      {:error, reason} -> {:error, reason}
+    try do
+      promise =
+        HTTP.fetch(url,
+          method: method,
+          headers:
+            if(request_body == nil,
+              do: headers,
+              else: headers ++ [{"content-type", "application/json"}]
+            ),
+          body: body,
+          timeout: timeout,
+          connect_timeout: timeout,
+          stream_response: true,
+          response_stream_idle_timeout: timeout,
+          response_stream_ack_timeout: timeout,
+          redirect: :manual,
+          retry: false,
+          http2_unprocessed_retry: false,
+          error_mode: :structured,
+          max_decoded_body_size: elem(response_bound, 0),
+          signal: signal
+        )
+
+      try do
+        case HTTP.Promise.await(promise, :infinity) do
+          %HTTP.Response{} = response ->
+            with {:ok, body} <- bounded_body(response, response_bound, deadline) do
+              if response.status in 200..299,
+                do: {:ok, {response, body}},
+                else: {:error, {:http_status, response.status}}
+            end
+
+          {:error, _reason} = error ->
+            error
+        end
+        |> case do
+          {:error, %HTTP.RequestError{reason: :decoded_body_too_large}} ->
+            {:error, elem(response_bound, 1)}
+
+          result ->
+            result
+        end
+      after
+        HTTP.RequestCompletion.abort_and_await(HTTP.Promise.completion(promise), 1_000)
+      end
+    after
+      send(watcher, {watcher_ref, :done})
     end
   end
 
-  defp bounded_into({max_bytes, _too_large_error}) do
-    fn {:data, data}, {request, response} ->
-      {size, chunks} =
-        Req.Response.get_private(response, :synapsis_backplane_body, {0, []})
+  defp abort_watcher do
+    caller = self()
+    ref = make_ref()
 
-      next_size = size + byte_size(data)
+    {:ok, watcher} =
+      Task.Supervisor.start_child(Synapsis.MCP.TaskSupervisor, fn ->
+        monitor = Process.monitor(caller)
+        signal = HTTP.AbortController.new()
+        send(caller, {ref, signal})
 
-      if next_size <= max_bytes do
-        response =
-          Req.Response.put_private(
-            response,
-            :synapsis_backplane_body,
-            {next_size, [data | chunks]}
-          )
+        receive do
+          {^ref, :done} -> :ok
+          {:DOWN, ^monitor, :process, ^caller, _reason} -> HTTP.AbortController.abort(signal)
+        end
 
-        {:cont, {request, response}}
-      else
-        response = Req.Response.put_private(response, :synapsis_backplane_body_limit, true)
-        {:halt, {request, response}}
+        Agent.stop(signal)
+        Process.demonitor(monitor, [:flush])
+      end)
+
+    receive do
+      {^ref, signal} -> {watcher, ref, signal}
+    after
+      1_000 ->
+        send(watcher, {ref, :done})
+        raise "HTTP cancellation monitor did not start"
+    end
+  end
+
+  defp bounded_body(%HTTP.Response{body: stream}, bound, deadline) when is_pid(stream) do
+    monitor = Process.monitor(stream)
+    send(stream, {:read_chunk, self(), :ack})
+
+    try do
+      collect_body(stream, monitor, bound, deadline, 0, [])
+    after
+      Process.demonitor(monitor, [:flush])
+    end
+  end
+
+  defp bounded_body(%HTTP.Response{body: body}, {max_bytes, too_large_error}, _deadline) do
+    body = body || ""
+    if byte_size(body) <= max_bytes, do: {:ok, body}, else: {:error, too_large_error}
+  end
+
+  defp collect_body(stream, monitor, {max_bytes, too_large_error} = bound, deadline, size, chunks) do
+    remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+
+    if remaining == 0 do
+      {:error, %HTTP.RequestError{reason: :timeout}}
+    else
+      receive do
+        {:stream_chunk, ^stream, data, ack_ref} ->
+          next_size = size + byte_size(data)
+
+          if next_size <= max_bytes do
+            send(stream, {:stream_chunk_ack, ack_ref})
+            collect_body(stream, monitor, bound, deadline, next_size, [data | chunks])
+          else
+            {:error, too_large_error}
+          end
+
+        {:stream_end, ^stream} ->
+          {:ok, chunks |> Enum.reverse() |> IO.iodata_to_binary()}
+
+        {:stream_trailers, ^stream, _headers} ->
+          collect_body(stream, monitor, bound, deadline, size, chunks)
+
+        {:stream_error, ^stream, reason} ->
+          {:error, %HTTP.RequestError{reason: reason}}
+
+        {:DOWN, ^monitor, :process, ^stream, reason} ->
+          {:error, %HTTP.RequestError{reason: {:stream_down, reason}}}
+      after
+        remaining ->
+          {:error, %HTTP.RequestError{reason: :timeout}}
       end
     end
   end
 
-  defp bounded_response(response, {_max_bytes, too_large_error}) do
-    cond do
-      Req.Response.get_private(response, :synapsis_backplane_body_limit, false) ->
-        {:error, too_large_error}
-
-      response.status not in 200..299 ->
-        {:error, {:http_status, response.status}}
-
-      true ->
-        {_size, chunks} =
-          Req.Response.get_private(response, :synapsis_backplane_body, {0, []})
-
-        body = chunks |> Enum.reverse() |> IO.iodata_to_binary()
-        response = Req.Response.put_private(response, :synapsis_backplane_body, {0, []})
-        {:ok, {response, body}}
-    end
-  end
-
   defp decode_json(body) do
-    case Jason.decode(body) do
+    case Formata.JSON.decode(body) do
       {:ok, decoded} -> {:ok, decoded}
       {:error, _reason} -> {:error, :invalid_json_response}
     end
@@ -729,17 +803,6 @@ defmodule Synapsis.Backplane.Client do
 
   defp decode_optional_json(""), do: {:ok, ""}
   defp decode_optional_json(body), do: decode_json(body)
-
-  defp request_opts(opts) do
-    timeout = option(opts, :timeout, @default_timeout)
-
-    [
-      receive_timeout: timeout,
-      request_timeout: timeout,
-      connect_options: [timeout: timeout],
-      retry: false
-    ]
-  end
 
   defp response_bound(opts, key, default, too_large_error) do
     {option(opts, key, default), too_large_error}
@@ -1075,9 +1138,12 @@ defmodule Synapsis.Backplane.Client do
   end
 
   defp session_header(response) do
-    case Req.Response.get_header(response, "mcp-session-id") do
-      [session_id | _] when session_id != "" -> [{"mcp-session-id", session_id}]
-      _missing -> []
+    case HTTP.Headers.get(response.headers, "mcp-session-id") do
+      session_id when is_binary(session_id) and session_id != "" ->
+        [{"mcp-session-id", session_id}]
+
+      _missing ->
+        []
     end
   end
 

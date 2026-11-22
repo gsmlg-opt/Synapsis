@@ -68,7 +68,7 @@ defmodule Synapsis.Config.StoreTest do
     Store.put(:provider, %{id: "p1", name: "provider-one", type: "anthropic", config: %{}})
 
     path = Store.file_path(:provider)
-    assert {:ok, %{"providers" => [persisted]}} = Toml.decode(File.read!(path))
+    assert {:ok, %{"providers" => [persisted]}} = Formata.decode(File.read!(path), :toml)
     assert persisted["id"] == "p1"
     refute Map.has_key?(persisted, "config")
 

@@ -240,7 +240,7 @@ defmodule Synapsis.Agent.Tools.ProfilesTest do
 
     Gaoxy.Test.expect_once(server, "POST", "/memory/synapsis/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       assert request["method"] == "tools/list"
 
       tools =
@@ -256,7 +256,7 @@ defmodule Synapsis.Agent.Tools.ProfilesTest do
       Plug.Conn.resp(
         conn,
         200,
-        Jason.encode!(%{jsonrpc: "2.0", id: request["id"], result: %{tools: tools}})
+        Formata.JSON.encode!(%{jsonrpc: "2.0", id: request["id"], result: %{tools: tools}})
       )
     end)
 

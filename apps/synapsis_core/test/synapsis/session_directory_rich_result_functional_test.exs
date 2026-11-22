@@ -66,7 +66,7 @@ defmodule Synapsis.SessionDirectoryRichResultFunctionalTest do
     assert text =~ ~s("fraction": 1e-7)
     assert text =~ ~s("large": 100000000000000000000)
     refute text =~ ~s("fraction": 1.0e-7)
-    assert Jason.decode!(text) == Jason.decode!(Jason.encode!(page))
+    assert Formata.JSON.decode!(text) == Formata.JSON.decode!(Formata.JSON.encode!(page))
     assert byte_size(text) == oracle["utf8Bytes"]
     assert byte_size(text) == 65_536
     assert is_atom(hd(Map.keys(page)))
@@ -126,7 +126,7 @@ defmodule Synapsis.SessionDirectoryRichResultFunctionalTest do
     assert page.truncation_reason == "byte-limit"
     refute Map.has_key?(page, :enrichment_omitted)
     assert byte_size(text) == oracle["utf8Bytes"]
-    assert Jason.decode!(text) == Jason.decode!(Jason.encode!(page))
+    assert Formata.JSON.decode!(text) == Formata.JSON.decode!(Formata.JSON.encode!(page))
   end
 
   test "first rich row exceeding final page bytes downgrades every row to real metadata" do
@@ -189,7 +189,7 @@ defmodule Synapsis.SessionDirectoryRichResultFunctionalTest do
         key <- [:messages, :derived_title, :last_message_preview],
         do: refute(Map.has_key?(row, key))
 
-    assert Jason.decode!(text) == Jason.decode!(Jason.encode!(page))
+    assert Formata.JSON.decode!(text) == Formata.JSON.decode!(Formata.JSON.encode!(page))
   end
 
   defp row(title),
@@ -284,7 +284,7 @@ defmodule Synapsis.SessionDirectoryRichResultFunctionalTest do
       ])
 
     try do
-      assert Port.command(port, Jason.encode!(input) <> "\n")
+      assert Port.command(port, Formata.JSON.encode!(input) <> "\n")
       collect_javascript(port, "")
     after
       if Port.info(port), do: Port.close(port)
@@ -294,7 +294,7 @@ defmodule Synapsis.SessionDirectoryRichResultFunctionalTest do
   defp collect_javascript(port, output) do
     receive do
       {^port, {:data, chunk}} -> collect_javascript(port, output <> chunk)
-      {^port, {:exit_status, 0}} -> Jason.decode!(output)
+      {^port, {:exit_status, 0}} -> Formata.JSON.decode!(output)
     after
       5_000 -> flunk("ordinary JSON.stringify oracle did not finish")
     end

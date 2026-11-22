@@ -24,7 +24,7 @@ defmodule Synapsis.SessionDirectoryHistoryTestSupport do
       __DIR__
     )
     |> File.read!()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 
   def message(role, text) do
@@ -81,7 +81,7 @@ defmodule Synapsis.SessionDirectoryHistoryTestSupport do
   def incoming(events) do
     Enum.flat_map(events, fn
       {:port_data, _port, {:eol, body}} ->
-        case Jason.decode(body) do
+        case Formata.JSON.decode(body) do
           {:ok, value} -> [value]
           _ -> []
         end
@@ -94,7 +94,7 @@ defmodule Synapsis.SessionDirectoryHistoryTestSupport do
   def outgoing(events) do
     for [_port, data, _opts] <- calls(events, :erlang, :port_command),
         line <- String.split(IO.iodata_to_binary(data), "\n", trim: true),
-        do: Jason.decode!(line)
+        do: Formata.JSON.decode!(line)
   end
 
   def assert_fixed_reads(events, entry) do
@@ -141,14 +141,14 @@ defmodule Synapsis.SessionDirectoryHistoryTestSupport do
       ])
 
     input = if is_nil(messages), do: %{row: row}, else: %{row: row, messages: messages}
-    assert Port.command(port, Jason.encode!(input) <> "\n")
+    assert Port.command(port, Formata.JSON.encode!(input) <> "\n")
     collect_json(port, "")
   end
 
   defp collect_json(port, output) do
     receive do
       {^port, {:data, chunk}} -> collect_json(port, output <> chunk)
-      {^port, {:exit_status, 0}} -> Jason.decode!(output)
+      {^port, {:exit_status, 0}} -> Formata.JSON.decode!(output)
     after
       5_000 ->
         if Port.info(port), do: Port.close(port)
@@ -373,7 +373,7 @@ defmodule Synapsis.SessionDirectoryHistoryFunctionalTest do
     assert Enum.any?(frames, &(&1["type"] == "history_transfer_start"))
 
     for frame <- frames do
-      assert byte_size(Jason.encode!(frame)) + 1 <= 65_536
+      assert byte_size(Formata.JSON.encode!(frame)) + 1 <= 65_536
 
       if frame["type"] == "history_transfer_chunk",
         do: assert(byte_size(Base.decode64!(frame["data"])) <= 32_768)

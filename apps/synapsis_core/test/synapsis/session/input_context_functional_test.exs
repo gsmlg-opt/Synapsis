@@ -47,7 +47,7 @@ defmodule Synapsis.Session.InputContextFunctionalTest do
     session_id = Ecto.UUID.generate()
     assert {:ok, captured} = InputContext.capture(session_id, explicit_identity())
 
-    decoded = captured |> Jason.encode!() |> Jason.decode!()
+    decoded = captured |> Formata.JSON.encode!() |> Formata.JSON.decode!()
 
     assert decoded == captured
     assert :ok = InputContext.validate(decoded, session_id)

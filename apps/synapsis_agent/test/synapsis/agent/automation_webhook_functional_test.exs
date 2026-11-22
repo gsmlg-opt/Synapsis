@@ -92,7 +92,7 @@ defmodule Synapsis.Agent.AutomationWebhookFunctionalTest do
     assert {:ok, %{structured: created, content: content}} =
              AutomationConfiguration.execute(operation(create, create_args(), ctx.context))
 
-    assert Jason.decode!(content) == created
+    assert Formata.JSON.decode!(content) == created
     assert created["persisted"] == true
     assert created["activation"] == "reloaded"
     assert created["delivery"] == %{"mode" => "webhook", "to" => @target}
@@ -113,7 +113,7 @@ defmodule Synapsis.Agent.AutomationWebhookFunctionalTest do
                  operation(update, update_args(created["id"], delivery), ctx.context)
                )
 
-      assert Jason.decode!(text) == receipt
+      assert Formata.JSON.decode!(text) == receipt
       assert receipt["persisted"] == true
       assert receipt["activation"] == "reloaded"
       assert receipt["cancellation"]["status"] == "not_requested"
@@ -174,7 +174,7 @@ defmodule Synapsis.Agent.AutomationWebhookFunctionalTest do
       backend = descriptor.backend
       assert {:ok, value} = backend.execute(operation(descriptor, arguments, ctx.context))
       receipt = value.structured
-      assert Jason.decode!(value.content) == receipt
+      assert Formata.JSON.decode!(value.content) == receipt
       assert receipt["source"] == "routine"
       assert {:ok, _} = Ecto.UUID.cast(receipt["id"])
       if expected_id, do: assert(receipt["id"] == expected_id)
@@ -192,7 +192,7 @@ defmodule Synapsis.Agent.AutomationWebhookFunctionalTest do
 
       assert metadata["delivery"]["to"] == target
       assert metadata["automation_job"]["delivery"]["to"] == target
-      assert byte_size(Jason.encode!(value)) <= 65_536
+      assert byte_size(Formata.JSON.encode!(value)) <= 65_536
       assert receipt["projection_truncated"] == true
       assert receipt["delivery"]["mode"] == "webhook"
       assert receipt["delivery"]["to_truncated"] == true

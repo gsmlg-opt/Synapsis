@@ -12,7 +12,7 @@ defmodule Synapsis.Web.FetchFunctionalTest do
              __DIR__
            )
   @external_resource @fixture
-  @oracle @fixture |> File.read!() |> Jason.decode!()
+  @oracle @fixture |> File.read!() |> Formata.JSON.decode!()
   @direct_ids ~w(plain markdown markdown-text article article-text json json-subtype declared-charset bom document-charset repeat-cache)
   @source_keys %{
     "finalUrl" => "final_url",

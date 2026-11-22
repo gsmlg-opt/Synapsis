@@ -196,12 +196,12 @@ defmodule Synapsis.Web.GeminiSearchFunctionalTest do
 
         Agent.update(
           ctx.counter,
-          &%{&1 | posts: &1.posts ++ [{path, Jason.decode!(body), headers}]}
+          &%{&1 | posts: &1.posts ++ [{path, Formata.JSON.decode!(body), headers}]}
         )
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(ctx.group["httpPayload"]))
+        |> Plug.Conn.resp(200, Formata.JSON.encode!(ctx.group["httpPayload"]))
       end)
     end
 
@@ -232,6 +232,6 @@ defmodule Synapsis.Web.GeminiSearchFunctionalTest do
       __DIR__
     )
     |> File.read!()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 end

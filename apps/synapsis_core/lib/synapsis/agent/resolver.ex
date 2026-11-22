@@ -62,7 +62,7 @@ defmodule Synapsis.Agent.Resolver do
     config =
       case raw["config"] do
         json when is_binary(json) ->
-          case Jason.decode(json) do
+          case Formata.JSON.decode(json) do
             {:ok, decoded} -> decoded
             _ -> raw["config"]
           end

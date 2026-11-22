@@ -113,7 +113,7 @@ defmodule Synapsis.Agent.Tools.HostMemoryTest do
     Gaoxy.Test.stub(ctx.server, "POST", "/memory/synapsis/mcp", fn conn ->
       if Agent.get(online, & &1) do
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        request = Jason.decode!(body)
+        request = Formata.JSON.decode!(body)
 
         tools =
           Enum.map(@names, &%{name: &1, description: "Shared " <> &1, inputSchema: schema(&1)})
@@ -121,7 +121,7 @@ defmodule Synapsis.Agent.Tools.HostMemoryTest do
         Plug.Conn.resp(
           conn,
           200,
-          Jason.encode!(%{jsonrpc: "2.0", id: request["id"], result: %{tools: tools}})
+          Formata.JSON.encode!(%{jsonrpc: "2.0", id: request["id"], result: %{tools: tools}})
         )
       else
         Plug.Conn.resp(conn, 503, "temporarily unavailable")
@@ -354,7 +354,7 @@ defmodule Synapsis.Agent.Tools.HostMemoryTest do
   defp descriptors(ctx) do
     Gaoxy.Test.expect_once(ctx.server, "POST", "/memory/synapsis/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       assert request["method"] == "tools/list"
 
       tools =
@@ -366,7 +366,7 @@ defmodule Synapsis.Agent.Tools.HostMemoryTest do
       Plug.Conn.resp(
         conn,
         200,
-        Jason.encode!(%{jsonrpc: "2.0", id: request["id"], result: %{tools: tools}})
+        Formata.JSON.encode!(%{jsonrpc: "2.0", id: request["id"], result: %{tools: tools}})
       )
     end)
 
@@ -416,8 +416,8 @@ defmodule Synapsis.Agent.Tools.HostMemoryTest do
   defp expect_call(ctx, method, args, result) do
     Gaoxy.Test.expect_once(ctx.server, "POST", "/memory/synapsis/call/" <> method, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert Jason.decode!(body) == args
-      Plug.Conn.resp(conn, 200, Jason.encode!(%{ok: true, result: result}))
+      assert Formata.JSON.decode!(body) == args
+      Plug.Conn.resp(conn, 200, Formata.JSON.encode!(%{ok: true, result: result}))
     end)
   end
 

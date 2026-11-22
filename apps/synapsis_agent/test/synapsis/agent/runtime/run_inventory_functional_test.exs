@@ -276,7 +276,7 @@ defmodule Synapsis.Agent.Runtime.RunInventoryFunctionalTest do
   defp install_provider(harness) do
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       users = for message <- request["input"], message["role"] == "user", do: text(message)
 
       phase =

@@ -201,7 +201,7 @@ defmodule Synapsis.Session.InputProvenanceFunctionalTest do
 
     Gaoxy.Test.stub(http, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       handler = self()
 
       index =
@@ -342,7 +342,7 @@ defmodule Synapsis.Session.InputProvenanceFunctionalTest do
       for message <- [live_message, durable_message] do
         assert message.id == captured["input_id"]
         assert message.input_provenance == captured
-        encoded = message |> Message.encode() |> Jason.encode!() |> Jason.decode!()
+        encoded = message |> Message.encode() |> Formata.JSON.encode!() |> Formata.JSON.decode!()
         assert encoded["id"] == captured["input_id"]
         assert encoded["input_provenance"] == captured
         assert encoded["parts"] == [%{"type" => "text", "text" => text}]
@@ -350,7 +350,7 @@ defmodule Synapsis.Session.InputProvenanceFunctionalTest do
     end
 
     for {turn, {captured, text}} <- Enum.zip(turns, expected) do
-      encoded = turn |> Jason.encode!() |> Jason.decode!()
+      encoded = turn |> Formata.JSON.encode!() |> Formata.JSON.decode!()
       assert encoded["id"] == captured["input_id"]
       assert encoded["input_provenance"] == captured
       assert encoded["parts"] == [%{"type" => "text", "text" => text}]
@@ -374,7 +374,7 @@ defmodule Synapsis.Session.InputProvenanceFunctionalTest do
               turn -> turn
             end
 
-          encoded = turn |> Jason.encode!() |> Jason.decode!()
+          encoded = turn |> Formata.JSON.encode!() |> Formata.JSON.decode!()
           assert encoded["input_provenance"] == nil
 
           case encoded["parts"] do

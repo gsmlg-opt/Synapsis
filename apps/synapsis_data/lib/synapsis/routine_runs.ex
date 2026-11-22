@@ -55,7 +55,7 @@ defmodule Synapsis.RoutineRuns do
            next_cursor: next_cursor(page, rest, visible.requester, source, id)
          },
          :ok <- active(options.deadline),
-         {:ok, encoded} <- Jason.encode(result),
+         {:ok, encoded} <- Synapsis.JSON.encode(result),
          :ok <- active(options.deadline) do
       if byte_size(encoded) <= 65_536, do: {:ok, result}, else: {:error, :output_too_large}
     else
@@ -293,7 +293,7 @@ defmodule Synapsis.RoutineRuns do
        when is_binary(cursor) and byte_size(cursor) in 1..4_096 do
     with {:ok, json} <- Base.url_decode64(cursor, padding: false),
          {:ok, [1, requester_id, requester_name, ^source, ^id, finished, run_id]} <-
-           Jason.decode(json),
+           Formata.JSON.decode(json),
          true <- requester_id == requester.id and requester_name == requester.name,
          true <- is_integer(finished) and uuid?(run_id),
          anchor = {finished, run_id},
@@ -322,7 +322,7 @@ defmodule Synapsis.RoutineRuns do
   defp encode_cursor(requester, source, id, {finished, run_id}),
     do:
       [1, requester.id, requester.name, source, id, finished, run_id]
-      |> Jason.encode!()
+      |> Formata.JSON.encode!()
       |> Base.url_encode64(padding: false)
 
   defp uuid?(id) when is_binary(id), do: match?({:ok, ^id}, Ecto.UUID.cast(id))

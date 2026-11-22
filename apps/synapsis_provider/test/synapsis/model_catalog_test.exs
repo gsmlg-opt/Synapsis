@@ -38,7 +38,7 @@ defmodule Synapsis.ModelCatalogTest do
       Plug.Conn.resp(
         Plug.Conn.put_resp_content_type(conn, "application/json"),
         200,
-        Jason.encode!(%{
+        Formata.JSON.encode!(%{
           "data" => [
             %{"id" => "backplane-existing", "context_window" => 384_000},
             %{"id" => "backplane-new", "context_length" => 768_000}
@@ -90,7 +90,7 @@ defmodule Synapsis.ModelCatalogTest do
       Plug.Conn.resp(
         Plug.Conn.put_resp_content_type(conn, "application/json"),
         401,
-        Jason.encode!(%{"error" => "Unauthorized"})
+        Formata.JSON.encode!(%{"error" => "Unauthorized"})
       )
     end)
 
@@ -253,7 +253,7 @@ defmodule Synapsis.ModelCatalogTest do
     assert {:error, :not_found} = Models.get(manual.id)
     assert {:ok, persisted_provider} = Providers.get(provider.id)
     assert persisted_provider.config["model_catalog_migrated"]
-    assert {:ok, raw_toml} = Toml.decode(File.read!(Store.file_path(:provider)))
+    assert {:ok, raw_toml} = Formata.decode(File.read!(Store.file_path(:provider)), :toml)
 
     assert Enum.any?(
              raw_toml["providers"],
@@ -276,7 +276,7 @@ defmodule Synapsis.ModelCatalogTest do
       Plug.Conn.resp(
         Plug.Conn.put_resp_content_type(conn, "application/json"),
         200,
-        Jason.encode!(%{
+        Formata.JSON.encode!(%{
           "data" => [%{"id" => "remote", "context_window" => 128_000}, %{"id" => "new"}]
         })
       )

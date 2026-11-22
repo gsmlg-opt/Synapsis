@@ -248,7 +248,7 @@ defmodule Synapsis.Session.NativeAutomationMutationFunctionalTest do
     assert result.is_error == false
     assert {"tool", result.content} in wire_texts(request)
     assert_durable_tool_result(session.id, result)
-    {Jason.decode!(result.content), result}
+    {Formata.JSON.decode!(result.content), result}
   end
 
   defp assert_durable_tool_result(id, result) do
@@ -299,7 +299,7 @@ defmodule Synapsis.Session.NativeAutomationMutationFunctionalTest do
 
     Gaoxy.Test.stub(http, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       Agent.update(log, &(&1 ++ [request]))
       following = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
       prompt = List.last(user_texts(request))

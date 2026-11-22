@@ -26,7 +26,7 @@ defmodule Synapsis.MCP.ServerTest do
 
     Gaoxy.Test.stub(bypass, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      req = Jason.decode!(body)
+      req = Formata.JSON.decode!(body)
       handle_rpc(conn, req, server_name, call_observer, tools)
     end)
 
@@ -72,7 +72,10 @@ defmodule Synapsis.MCP.ServerTest do
     else
       conn
       |> Plug.Conn.put_resp_header("content-type", "application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(%{"jsonrpc" => "2.0", "id" => id, "result" => result}))
+      |> Plug.Conn.resp(
+        200,
+        Formata.JSON.encode!(%{"jsonrpc" => "2.0", "id" => id, "result" => result})
+      )
     end
   end
 
@@ -104,5 +107,4 @@ defmodule Synapsis.MCP.ServerTest do
         wait_until(fun, tries - 1)
     end
   end
-
 end

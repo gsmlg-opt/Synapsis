@@ -96,7 +96,7 @@ defmodule Synapsis.Session.NativeDuckDuckGoSearchFunctionalTest do
              safe_search: "moderate"
            }
 
-    [first, cached, last] = Enum.map(results, &Jason.decode!(&1.content))
+    [first, cached, last] = Enum.map(results, &Formata.JSON.decode!(&1.content))
     assert is_integer(first["tookMs"]) and first["tookMs"] >= 0
 
     assert first == %{
@@ -166,7 +166,7 @@ defmodule Synapsis.Session.NativeDuckDuckGoSearchFunctionalTest do
              safe_search: "moderate"
            }
 
-    [first, cached] = Enum.map(results, &Jason.decode!(&1.content))
+    [first, cached] = Enum.map(results, &Formata.JSON.decode!(&1.content))
     took = get_in(first, ["data", "tookMs"])
     assert is_integer(took) and took >= 0
 
@@ -299,7 +299,7 @@ defmodule Synapsis.Session.NativeDuckDuckGoSearchFunctionalTest do
     assert Enum.all?(results, &(&1.is_error == false))
 
     for result <- results do
-      public = Jason.decode!(result.content)
+      public = Formata.JSON.decode!(result.content)
 
       assert result.projection == %{
                "version" => 1,
@@ -335,7 +335,9 @@ defmodule Synapsis.Session.NativeDuckDuckGoSearchFunctionalTest do
         end
 
       assert dump == expected_dump
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
 
     assert_durable(id, uses, results)
@@ -430,7 +432,7 @@ defmodule Synapsis.Session.NativeDuckDuckGoSearchFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      req = Jason.decode!(body)
+      req = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -500,7 +502,7 @@ defmodule Synapsis.Session.NativeDuckDuckGoSearchFunctionalTest do
     uses = Enum.filter(req["input"], &(&1["type"] == "function_call"))
 
     assert Enum.map(uses, fn call ->
-             update_in(call, ["function", "arguments"], &Jason.decode!/1)
+             update_in(call, ["function", "arguments"], &Formata.JSON.decode!/1)
            end) ==
              Enum.map(calls, fn {id, name, input} ->
                %{
@@ -546,6 +548,6 @@ defmodule Synapsis.Session.NativeDuckDuckGoSearchFunctionalTest do
   defp reference do
     Path.expand("../../fixtures/openclaw/488631c/duckduckgo-search.json", __DIR__)
     |> File.read!()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 end

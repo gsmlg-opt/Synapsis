@@ -321,8 +321,8 @@ defmodule Synapsis.Memory.FileAdapter do
   defp parse_memory_file(path, content) do
     case String.split(content, "---\n", parts: 3) do
       ["", fm_str, body] ->
-        case YamlElixir.read_from_string(fm_str) do
-          {:ok, fm} ->
+        case Formata.decode(fm_str, :yaml) do
+          {:ok, fm} when is_map(fm) ->
             {:ok,
              %{
                id: stored_id(fm["id"], path, fm_str),
@@ -457,7 +457,7 @@ defmodule Synapsis.Memory.FileAdapter do
          String.downcase(s) not in ~w(true false null yes no on off) do
       s
     else
-      Jason.encode!(s)
+      Formata.JSON.encode!(s)
     end
   end
 

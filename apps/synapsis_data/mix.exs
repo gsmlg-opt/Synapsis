@@ -36,11 +36,10 @@ defmodule SynapsisData.MixProject do
     # the memory port.
     [
       {:ecto, "~> 3.12"},
-      {:jason, "~> 1.4"},
       {:concord, "~> 3.1.18"},
       {:crontab, "~> 1.2.1"},
-      {:toml, "~> 0.7"},
-      {:file_system, "~> 1.0"}
+      {:file_system, "~> 1.0"},
+      {:formata, "~> 0.3.5"}
     ]
   end
 

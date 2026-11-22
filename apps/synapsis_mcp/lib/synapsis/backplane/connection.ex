@@ -519,7 +519,7 @@ defmodule Synapsis.Backplane.Connection do
   defp decode_json_map(nil, _field), do: {:ok, %{}}
 
   defp decode_json_map(encoded, field) when is_binary(encoded) do
-    case Jason.decode(encoded) do
+    case Formata.JSON.decode(encoded) do
       {:ok, map} when is_map(map) -> {:ok, map}
       _invalid -> {:error, invalid_field(field)}
     end
@@ -528,8 +528,8 @@ defmodule Synapsis.Backplane.Connection do
   defp decode_json_map(_invalid, field), do: {:error, invalid_field(field)}
 
   defp normalize_json_map(map, field) do
-    with {:ok, encoded} <- Jason.encode(map),
-         {:ok, normalized} when is_map(normalized) <- Jason.decode(encoded) do
+    with {:ok, encoded} <- Synapsis.JSON.encode(map),
+         {:ok, normalized} when is_map(normalized) <- Formata.JSON.decode(encoded) do
       {:ok, normalized}
     else
       _invalid -> {:error, invalid_field(field)}
@@ -539,7 +539,7 @@ defmodule Synapsis.Backplane.Connection do
   end
 
   defp encode_json_map(map) when map_size(map) == 0, do: nil
-  defp encode_json_map(map), do: Jason.encode!(map)
+  defp encode_json_map(map), do: Formata.JSON.encode!(map)
 
   defp json_field(:connection_options), do: :connection_options_json
   defp json_field(:metadata), do: :metadata_json

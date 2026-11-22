@@ -262,12 +262,12 @@ defmodule Synapsis.Web.ParallelSearchFunctionalTest do
 
       Agent.update(
         ctx.counter,
-        &(&1 ++ [{conn.request_path, conn.query_string, Jason.decode!(body)}])
+        &(&1 ++ [{conn.request_path, conn.query_string, Formata.JSON.decode!(body)}])
       )
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(payload))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
     end)
   end
 end

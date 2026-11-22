@@ -142,7 +142,7 @@ defmodule Synapsis.Session.NativeSearxngSearchFunctionalTest do
            ]
 
     assert Enum.all?(results, &(&1.is_error == false))
-    [first, cached, last] = Enum.map(results, &Jason.decode!(&1.content))
+    [first, cached, last] = Enum.map(results, &Formata.JSON.decode!(&1.content))
     assert Map.delete(first, "tookMs") == expected(args["query"], first_rows())
     assert is_integer(first["tookMs"]) and first["tookMs"] >= 0
     assert cached == first |> Map.put("query", cached_args["query"]) |> Map.put("cached", true)
@@ -150,7 +150,7 @@ defmodule Synapsis.Session.NativeSearxngSearchFunctionalTest do
     assert is_integer(last["tookMs"]) and last["tookMs"] >= 0
 
     for result <- results do
-      public = Jason.decode!(result.content)
+      public = Formata.JSON.decode!(result.content)
 
       assert result.projection == %{
                "version" => 1,
@@ -186,7 +186,9 @@ defmodule Synapsis.Session.NativeSearxngSearchFunctionalTest do
         end
 
       assert dump == expected_dump
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
 
     assert_durable(harness.session.id, uses, results)
@@ -384,7 +386,7 @@ defmodule Synapsis.Session.NativeSearxngSearchFunctionalTest do
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(%{"results" => rows}))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"results" => rows}))
     end)
   end
 
@@ -416,7 +418,7 @@ defmodule Synapsis.Session.NativeSearxngSearchFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      req = Jason.decode!(body)
+      req = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -475,7 +477,7 @@ defmodule Synapsis.Session.NativeSearxngSearchFunctionalTest do
     uses = Enum.filter(req["input"], &(&1["type"] == "function_call"))
 
     assert Enum.map(uses, fn call ->
-             update_in(call, ["function", "arguments"], &Jason.decode!/1)
+             update_in(call, ["function", "arguments"], &Formata.JSON.decode!/1)
            end) ==
              Enum.map(calls, fn {id, name, input} ->
                %{
@@ -520,6 +522,6 @@ defmodule Synapsis.Session.NativeSearxngSearchFunctionalTest do
   defp reference do
     Path.expand("../../fixtures/openclaw/488631c/searxng-search.json", __DIR__)
     |> File.read!()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 end

@@ -19,7 +19,7 @@ defmodule Synapsis.Agent.Tools.AutomationManagement do
   @revision 1
   @context_keys [:session_id, :requester_name, :run_id, :incarnation, :catalog_revision]
   @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
   @terminal ~w(completed failed cancelled interrupted timed_out unknown_outcome)
   @maximum_wait 60_000
 
@@ -59,7 +59,8 @@ defmodule Synapsis.Agent.Tools.AutomationManagement do
         runMode: Map.get(operation.arguments, "runMode", "due")
       }
 
-      {:ok, %{action: "automation.run", resource: "automation:" <> Jason.encode!(resource)}}
+      {:ok,
+       %{action: "automation.run", resource: "automation:" <> Formata.JSON.encode!(resource)}}
     end
   end
 
@@ -293,9 +294,9 @@ defmodule Synapsis.Agent.Tools.AutomationManagement do
   defp now, do: System.monotonic_time(:millisecond)
 
   defp output(result) do
-    value = %{content: Jason.encode!(result), structured: result}
+    value = %{content: Formata.JSON.encode!(result), structured: result}
 
-    if byte_size(Jason.encode!(value)) <= 65_536,
+    if byte_size(Formata.JSON.encode!(value)) <= 65_536,
       do: {:ok, value},
       else: {:error, error(:unknown_outcome)}
   end

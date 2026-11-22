@@ -17,13 +17,13 @@ defmodule Synapsis.Provider.ResponsesToolImageFunctionalTest do
 
       Gaoxy.Test.expect_once(fixture, "POST", "/v1/responses", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        send(owner, {:responses_wire, Jason.decode!(body)})
+        send(owner, {:responses_wire, Formata.JSON.decode!(body)})
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(
           200,
-          Jason.encode!(%{
+          Formata.JSON.encode!(%{
             "status" => "completed",
             "output" => [
               %{
@@ -124,7 +124,7 @@ defmodule Synapsis.Provider.ResponsesToolImageFunctionalTest do
   defp assert_call_input(call, :custom), do: assert(call["input"] == input(:custom))
 
   defp assert_call_input(call, :function),
-    do: assert(Jason.decode!(call["arguments"]) == input(:function))
+    do: assert(Formata.JSON.decode!(call["arguments"]) == input(:function))
 
   defp tool(:function) do
     %{

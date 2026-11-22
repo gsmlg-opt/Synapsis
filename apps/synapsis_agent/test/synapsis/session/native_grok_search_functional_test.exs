@@ -129,7 +129,7 @@ defmodule Synapsis.Session.NativeGrokSearchFunctionalTest do
 
     assert Enum.map(results, & &1.tool_use_id) == ["grok-first", "grok-cached"]
     assert Enum.all?(results, &(&1.is_error == false))
-    [first, cached] = Enum.map(results, &Jason.decode!(&1.content))
+    [first, cached] = Enum.map(results, &Formata.JSON.decode!(&1.content))
 
     assert Map.delete(first, "tookMs") == %{
              "kind" => "answer",
@@ -143,7 +143,7 @@ defmodule Synapsis.Session.NativeGrokSearchFunctionalTest do
     assert cached == first |> Map.put("query", cached_args["query"]) |> Map.put("cached", true)
 
     for result <- results do
-      public = Jason.decode!(result.content)
+      public = Formata.JSON.decode!(result.content)
 
       assert result.projection == %{
                "version" => 1,
@@ -184,7 +184,9 @@ defmodule Synapsis.Session.NativeGrokSearchFunctionalTest do
         end
 
       assert dump == expected_dump
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
 
     assert_durable(harness.session.id, uses, results)
@@ -319,13 +321,13 @@ defmodule Synapsis.Session.NativeGrokSearchFunctionalTest do
         &%{
           &1
           | search_requests:
-              &1.search_requests ++ [{conn.request_path, Jason.decode!(body), headers}]
+              &1.search_requests ++ [{conn.request_path, Formata.JSON.decode!(body), headers}]
         }
       )
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(payload))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
     end)
   end
 
@@ -354,7 +356,7 @@ defmodule Synapsis.Session.NativeGrokSearchFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      req = Jason.decode!(body)
+      req = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -408,7 +410,7 @@ defmodule Synapsis.Session.NativeGrokSearchFunctionalTest do
     uses = Enum.filter(req["input"], &(&1["type"] == "function_call"))
 
     assert Enum.map(uses, fn call ->
-             update_in(call, ["function", "arguments"], &Jason.decode!/1)
+             update_in(call, ["function", "arguments"], &Formata.JSON.decode!/1)
            end) ==
              Enum.map(calls, fn {id, name, input} ->
                %{
@@ -453,6 +455,6 @@ defmodule Synapsis.Session.NativeGrokSearchFunctionalTest do
   defp reference do
     Path.expand("../../fixtures/openclaw/488631c/grok-search.json", __DIR__)
     |> File.read!()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 end

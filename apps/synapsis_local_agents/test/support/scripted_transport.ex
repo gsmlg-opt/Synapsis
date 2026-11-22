@@ -13,12 +13,14 @@ defmodule SynapsisLocalAgents.Test.ScriptedTransport do
 
   @impl true
   def send(state, body) do
-    Kernel.send(state.observer, {:sent, self(), Jason.decode!(body)})
+    Kernel.send(state.observer, {:sent, self(), Formata.JSON.decode!(body)})
     {:ok, state}
   end
 
   @impl true
-  def handle_info({:incoming, wire}, state), do: {:ok, [{:message, Jason.encode!(wire)}], state}
+  def handle_info({:incoming, wire}, state),
+    do: {:ok, [{:message, Formata.JSON.encode!(wire)}], state}
+
   def handle_info(:drop_connection, state), do: {:ok, [{:closed, %{}}], state}
   def handle_info(_, _), do: :unknown
 

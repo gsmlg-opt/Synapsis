@@ -242,7 +242,7 @@ defmodule SynapsisWeb.AgentLive.AgentsDeferredToolsFunctionalTest do
     |> LazyHTML.query("[data-form-id]")
     |> LazyHTML.attribute("data-initial-values")
     |> hd()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 
   defp unique_name, do: "deferred-ui-#{System.unique_integer([:positive, :monotonic])}"

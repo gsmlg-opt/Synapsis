@@ -151,10 +151,10 @@ defmodule Synapsis.Backplane.ConnectionTest do
     assert {:ok, stored} = Store.get(:backplane, connection.id)
     assert stored["endpoint"] == connection.endpoint
     assert stored["base_url"] == connection.endpoint
-    assert Jason.decode!(stored["connection_options_json"]) == connection_options
-    assert Jason.decode!(stored["metadata_json"]) == metadata
-    assert Jason.decode!(stored["counts_json"]) == counts
-    assert Jason.decode!(stored["artifacts_json"]) == %{"provider_id" => "provider-1"}
+    assert Formata.JSON.decode!(stored["connection_options_json"]) == connection_options
+    assert Formata.JSON.decode!(stored["metadata_json"]) == metadata
+    assert Formata.JSON.decode!(stored["counts_json"]) == counts
+    assert Formata.JSON.decode!(stored["artifacts_json"]) == %{"provider_id" => "provider-1"}
     refute Map.has_key?(stored, "connection_options")
     refute Map.has_key?(stored, "metadata")
     refute Map.has_key?(stored, "counts")

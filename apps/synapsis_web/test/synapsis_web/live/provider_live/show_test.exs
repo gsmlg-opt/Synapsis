@@ -59,7 +59,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       |> LazyHTML.attribute("data-initial-values")
 
     assert %{"base_url" => "https://draft.example/v1", "enabled" => false, "credential_id" => id} =
-             Jason.decode!(json)
+             Formata.JSON.decode!(json)
 
     assert id == provider.credential_id
     assert has_element?(view, "input[name='base_url'][value='https://draft.example/v1']")
@@ -193,7 +193,10 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "backplane-model"}]}))
+        |> Plug.Conn.send_resp(
+          200,
+          Formata.JSON.encode!(%{"data" => [%{"id" => "backplane-model"}]})
+        )
       end)
 
       provider =
@@ -424,7 +427,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "fresh-model"}]}))
+        |> Plug.Conn.send_resp(200, Formata.JSON.encode!(%{"data" => [%{"id" => "fresh-model"}]}))
       end)
 
       provider =
@@ -849,7 +852,11 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       render_hook(view, "chat.send", chat_params(provider, %{"text" => "hello"}))
       assert_reply(view, %{status: "ok"})
       assert_receive {:provider_request, request_pid}, 1_000
-      send(request_pid, {:respond, 401, Jason.encode!(%{error: %{message: "Invalid API key"}})})
+
+      send(
+        request_pid,
+        {:respond, 401, Formata.JSON.encode!(%{error: %{message: "Invalid API key"}})}
+      )
 
       assert_push_event(view, "chat:event", %{
         type: "chat.snapshot",
@@ -943,7 +950,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
     alias Synapsis.Provider.TestSupport.ResponsesFixture
 
     [ResponsesFixture.text_delta(text), ResponsesFixture.completed()]
-    |> Enum.map_join("", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+    |> Enum.map_join("", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
   end
 
   defp create_provider!(attrs) do

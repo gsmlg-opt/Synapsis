@@ -902,7 +902,7 @@ defmodule Synapsis.Providers do
             {:ok, %{}}
 
           encoded when is_binary(encoded) ->
-            case Jason.decode(encoded) do
+            case Formata.JSON.decode(encoded) do
               {:ok, metadata} when is_map(metadata) -> {:ok, metadata}
               _invalid_json_or_shape -> {:error, :invalid_metadata}
             end

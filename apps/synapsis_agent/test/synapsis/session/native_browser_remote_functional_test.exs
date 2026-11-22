@@ -217,16 +217,21 @@ defmodule Synapsis.Session.NativeBrowserRemoteFunctionalTest do
     assert_receive {^port, {:data, {:eol, line}}}, 20_000
 
     assert %{"event" => "ready", "endpoint" => endpoint, "pid" => pid, "markerPath" => marker} =
-             Jason.decode!(line)
+             Formata.JSON.decode!(line)
 
     %{port: port, endpoint: endpoint, pid: pid, marker: marker, url: url}
   end
 
   defp fixture_call(port, method, extra \\ %{}) do
     id = System.unique_integer([:positive])
-    assert Port.command(port, Jason.encode!(Map.merge(extra, %{id: id, method: method})) <> "\n")
+
+    assert Port.command(
+             port,
+             Formata.JSON.encode!(Map.merge(extra, %{id: id, method: method})) <> "\n"
+           )
+
     assert_receive {^port, {:data, {:eol, line}}}, 10_000
-    assert %{"id" => ^id} = reply = Jason.decode!(line)
+    assert %{"id" => ^id} = reply = Formata.JSON.decode!(line)
     reply
   end
 
@@ -242,7 +247,7 @@ defmodule Synapsis.Session.NativeBrowserRemoteFunctionalTest do
 
   defp close_fixture_if_open(port) do
     if Port.info(port) do
-      Port.command(port, Jason.encode!(%{id: "cleanup", method: "close"}) <> "\n")
+      Port.command(port, Formata.JSON.encode!(%{id: "cleanup", method: "close"}) <> "\n")
     end
   rescue
     ArgumentError -> :ok
@@ -253,7 +258,7 @@ defmodule Synapsis.Session.NativeBrowserRemoteFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/messages", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -325,7 +330,7 @@ defmodule Synapsis.Session.NativeBrowserRemoteFunctionalTest do
     result["content"]
     |> Enum.find(&(&1["type"] == "text"))
     |> Map.fetch!("text")
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 
   defp browser_parts(id),
@@ -347,7 +352,9 @@ defmodule Synapsis.Session.NativeBrowserRemoteFunctionalTest do
 
     for part <- parts do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
 
     {uses, results}
@@ -463,7 +470,8 @@ defmodule Synapsis.Session.NativeBrowserRemoteFunctionalTest do
       case call do
         {id, input} ->
           {%{"type" => "tool_use", "id" => id, "name" => ToolName.encode(@name), "input" => %{}},
-           %{"type" => "input_json_delta", "partial_json" => Jason.encode!(input)}, "tool_use"}
+           %{"type" => "input_json_delta", "partial_json" => Formata.JSON.encode!(input)},
+           "tool_use"}
 
         nil ->
           {%{"type" => "text", "text" => ""},
@@ -482,7 +490,7 @@ defmodule Synapsis.Session.NativeBrowserRemoteFunctionalTest do
     |> Plug.Conn.put_resp_content_type("text/event-stream")
     |> Plug.Conn.resp(
       200,
-      Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+      Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
     )
   end
 end

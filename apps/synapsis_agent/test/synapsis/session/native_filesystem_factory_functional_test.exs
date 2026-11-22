@@ -53,7 +53,7 @@ defmodule Synapsis.Session.NativeFilesystemFactoryFunctionalTest do
 
       Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        request = Jason.decode!(body)
+        request = Formata.JSON.decode!(body)
 
         index =
           Agent.get_and_update(harness.counter, fn state ->
@@ -144,7 +144,9 @@ defmodule Synapsis.Session.NativeFilesystemFactoryFunctionalTest do
 
       for part <- parts do
         assert {:ok, dump} = Synapsis.Part.dump(part)
-        assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+        assert {:ok, ^part} =
+                 dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
       end
 
       assert {:ok, aggregate} =
@@ -232,7 +234,8 @@ defmodule Synapsis.Session.NativeFilesystemFactoryFunctionalTest do
 
     edit = %{
       "path" => public <> "/edit.txt",
-      "edits" => Jason.encode!(Enum.map(@edits, &Map.put(&1, "note", "source projection"))),
+      "edits" =>
+        Formata.JSON.encode!(Enum.map(@edits, &Map.put(&1, "note", "source projection"))),
       "note" => "original model argument"
     }
 
@@ -282,7 +285,7 @@ defmodule Synapsis.Session.NativeFilesystemFactoryFunctionalTest do
     @fixtures
     |> Path.join(file <> ".json")
     |> File.read!()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
     |> Map.fetch!("cases")
     |> Enum.find(&(&1["id"] == id))
     |> Map.fetch!("result")
@@ -358,7 +361,7 @@ defmodule Synapsis.Session.NativeFilesystemFactoryFunctionalTest do
                request["input"],
                &(&1["type"] == "function_call" and &1["call_id"] == use.tool_use_id and
                    ToolName.decode(&1["name"]) == use.tool and
-                   Jason.decode!(&1["arguments"]) == use.input)
+                   Formata.JSON.decode!(&1["arguments"]) == use.input)
              )
     end
 
@@ -372,7 +375,7 @@ defmodule Synapsis.Session.NativeFilesystemFactoryFunctionalTest do
   end
 
   defp function_call(conn, id, name, arguments) do
-    encoded = Jason.encode!(arguments)
+    encoded = Formata.JSON.encode!(arguments)
 
     item = %{
       "type" => "function_call",
@@ -417,6 +420,6 @@ defmodule Synapsis.Session.NativeFilesystemFactoryFunctionalTest do
       |> Plug.Conn.put_resp_content_type("text/event-stream")
       |> Plug.Conn.resp(
         200,
-        Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+        Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
       )
 end

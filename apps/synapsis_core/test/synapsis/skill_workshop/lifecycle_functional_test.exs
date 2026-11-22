@@ -77,7 +77,7 @@ defmodule Synapsis.SkillWorkshop.LifecycleFunctionalTest do
 
   test "all seventeen pinned calls retain exact source envelopes, whole trees and durable changes",
        ctx do
-    fixture = @fixture |> File.read!() |> Jason.decode!()
+    fixture = @fixture |> File.read!() |> Formata.JSON.decode!()
     assert fixture["referencePin"] == @reference
     assert Enum.map(fixture["observations"], & &1["id"]) == @source_rows
 
@@ -628,14 +628,14 @@ defmodule Synapsis.SkillWorkshop.LifecycleFunctionalTest do
         :exit_status,
         :use_stdio,
         :stderr_to_stdout,
-        args: ["-e", script, root, Jason.encode!(files)]
+        args: ["-e", script, root, Formata.JSON.encode!(files)]
       ])
 
     {:os_pid, os_pid} = Port.info(port, :os_pid)
     bytes = oracle_bytes(port, [], deadline())
     assert Port.info(port) == nil
     refute File.exists?("/proc/#{os_pid}")
-    Jason.decode!(bytes)
+    Formata.JSON.decode!(bytes)
   end
 
   defp oracle_bytes(port, bytes, deadline) do

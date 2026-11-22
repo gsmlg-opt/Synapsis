@@ -16,18 +16,18 @@ defmodule SynapsisCli.ArgsTest do
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
+        |> Plug.Conn.resp(201, Formata.JSON.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        decoded = Jason.decode!(body)
+        decoded = Formata.JSON.decode!(body)
         # Verify -p value was captured as the prompt
         assert decoded["content"] == "hello"
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
+        |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"ok" => true}))
       end)
 
       Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->
@@ -145,18 +145,18 @@ defmodule SynapsisCli.ArgsTest do
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => session_id}}))
+        |> Plug.Conn.resp(201, Formata.JSON.encode!(%{"data" => %{"id" => session_id}}))
       end)
 
       Gaoxy.Test.expect_once(bypass, "POST", "/api/sessions/#{session_id}/messages", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        decoded = Jason.decode!(body)
+        decoded = Formata.JSON.decode!(body)
         # Positional args should be joined with spaces
         assert decoded["content"] == "explain this file"
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(%{"ok" => true}))
+        |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"ok" => true}))
       end)
 
       Gaoxy.Test.expect_once(bypass, "GET", "/api/sessions/#{session_id}/events", fn conn ->

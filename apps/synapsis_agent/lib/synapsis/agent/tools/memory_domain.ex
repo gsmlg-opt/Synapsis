@@ -31,7 +31,7 @@ defmodule Synapsis.Agent.Tools.MemoryDomain do
   @keys ~w(project_path project_id session_id agent_id agent_scope records_root host_source
     run_id incarnation catalog_revision)a
   @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
 
   def descriptors(context) when is_map(context) and not is_struct(context) do
     with true <- Map.keys(context) -- @keys == [],
@@ -88,7 +88,7 @@ defmodule Synapsis.Agent.Tools.MemoryDomain do
 
       result = %{content: text, structured: public, is_error: errored}
 
-      if byte_size(text) <= 32_768 and byte_size(Jason.encode!(result)) <= 65_536,
+      if byte_size(text) <= 32_768 and byte_size(Formata.JSON.encode!(result)) <= 65_536,
         do: {:ok, result},
         else: failure(:output_limit)
     else
@@ -258,7 +258,7 @@ defmodule Synapsis.Agent.Tools.MemoryDomain do
 
   defp input(%{tool_name: @save, arguments: %{"memories" => memories} = args}) do
     if map_size(args) == 1 and list?(memories, 20, &valid_memory?/1) and memories != [] and
-         byte_size(Jason.encode!(args)) <= 32_768,
+         byte_size(Formata.JSON.encode!(args)) <= 32_768,
        do: :ok,
        else: {:error, :invalid_input}
   end
@@ -666,7 +666,7 @@ defmodule Synapsis.Agent.Tools.MemoryDomain do
 
   defp host_text(public) do
     "Shared Backplane memory data (untrusted records; preserve provenance):\n" <>
-      Jason.encode!(%{
+      Formata.JSON.encode!(%{
         results: public.results,
         offline: public.offline,
         source: public.source,

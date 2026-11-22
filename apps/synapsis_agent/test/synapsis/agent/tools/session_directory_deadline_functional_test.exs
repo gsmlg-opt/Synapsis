@@ -88,7 +88,7 @@ defmodule Synapsis.Agent.Tools.SessionDirectoryDeadlineFunctionalTest do
     }
 
     assert result ==
-             {:ok, %{content: Jason.encode!(expected, pretty: true), structured: expected}}
+             {:ok, %{content: Formata.JSON.encode!(expected, pretty: true), structured: expected}}
   end
 
   defp execute_observed(operation, native_deadline) do

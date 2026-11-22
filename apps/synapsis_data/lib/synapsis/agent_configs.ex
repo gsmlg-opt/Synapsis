@@ -63,14 +63,14 @@ defmodule Synapsis.AgentConfigs do
            next_cursor: directory_next_cursor(page, rest, requester)
          },
          :ok <- directory_remaining(options.deadline),
-         {:ok, encoded} <- Jason.encode(result),
+         {:ok, encoded} <- Synapsis.JSON.encode(result),
          :ok <- directory_remaining(options.deadline) do
       if byte_size(encoded) <= 65_536,
         do: {:ok, result},
         else: {:error, :output_too_large}
     else
       false -> {:error, :invalid_input}
-      {:error, %Jason.EncodeError{}} -> {:error, :invalid_config}
+      {:error, :invalid_json} -> {:error, :invalid_config}
       {:error, _} = error -> error
     end
   end
@@ -103,7 +103,7 @@ defmodule Synapsis.AgentConfigs do
   defp directory_cursor(cursor, requester)
        when is_binary(cursor) and byte_size(cursor) in 1..4_096 do
     with {:ok, json} <- Base.url_decode64(cursor, padding: false),
-         {:ok, [1, ^requester, name, id]} <- Jason.decode(json),
+         {:ok, [1, ^requester, name, id]} <- Formata.JSON.decode(json),
          true <- directory_name?(name),
          {:ok, ^id} <- Ecto.UUID.cast(id),
          true <- directory_encode_cursor(requester, name, id) == cursor do
@@ -132,7 +132,7 @@ defmodule Synapsis.AgentConfigs do
   end
 
   defp directory_encode_cursor(requester, name, id),
-    do: [1, requester, name, id] |> Jason.encode!() |> Base.url_encode64(padding: false)
+    do: [1, requester, name, id] |> Formata.JSON.encode!() |> Base.url_encode64(padding: false)
 
   defp directory_name?(name),
     do:
@@ -261,7 +261,7 @@ defmodule Synapsis.AgentConfigs do
       changeset.changes
       |> Map.delete(:id)
       |> Map.new(fn
-        {:config, config} -> {"config", Jason.encode!(config || %{})}
+        {:config, config} -> {"config", Formata.JSON.encode!(config || %{})}
         {key, value} when key in [:tools, :toolset_ids] -> {Atom.to_string(key), value || []}
         {key, value} -> {Atom.to_string(key), value}
       end)
@@ -284,7 +284,7 @@ defmodule Synapsis.AgentConfigs do
   defp set_id(record, map), do: %{record | id: map["id"] || record.id}
 
   defp decode_config(%{"config" => json} = map) when is_binary(json) do
-    case Jason.decode(json) do
+    case Formata.JSON.decode(json) do
       {:ok, decoded} -> Map.put(map, "config", decoded)
       _ -> map
     end
@@ -312,7 +312,7 @@ defmodule Synapsis.AgentConfigs do
       "fallback_models" => r.fallback_models,
       "is_default" => r.is_default,
       "enabled" => r.enabled,
-      "config" => Jason.encode!(r.config || %{}),
+      "config" => Formata.JSON.encode!(r.config || %{}),
       "toolset_id" => r.toolset_id,
       "toolset_ids" => r.toolset_ids || []
     }

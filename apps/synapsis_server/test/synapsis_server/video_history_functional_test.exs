@@ -40,7 +40,7 @@ defmodule SynapsisServer.VideoHistoryFunctionalTest do
     response = build_conn() |> get("/api/sessions/#{session.id}") |> json_response(200)
     assert [%{"id" => id, "parts" => [serialized]}] = response["data"]["messages"]
     assert id == message.id
-    assert serialized == expected |> Jason.encode!() |> Jason.decode!()
+    assert serialized == expected |> Formata.JSON.encode!() |> Formata.JSON.decode!()
     assert {:ok, socket} = connect(SynapsisServer.UserSocket, %{})
 
     assert {:ok, %{messages: [%{parts: [^expected]}]}, _} =

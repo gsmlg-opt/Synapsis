@@ -225,7 +225,9 @@ defmodule Synapsis.Session.NativeCodeModeFunctionalTest do
 
     for part <- parts do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
 
     old_worker = runtime.worker
@@ -371,7 +373,7 @@ defmodule Synapsis.Session.NativeCodeModeFunctionalTest do
 
   defp capture_request(conn, harness) do
     {:ok, body, conn} = Plug.Conn.read_body(conn)
-    request = Jason.decode!(body)
+    request = Formata.JSON.decode!(body)
 
     index =
       Agent.get_and_update(harness.counter, fn state ->
@@ -466,7 +468,7 @@ defmodule Synapsis.Session.NativeCodeModeFunctionalTest do
         assert Enum.any?(
                  request["input"],
                  &(&1["type"] == "function_call" and &1["call_id"] == use.tool_use_id and
-                     &1["name"] == use.tool and Jason.decode!(&1["arguments"]) == use.input)
+                     &1["name"] == use.tool and Formata.JSON.decode!(&1["arguments"]) == use.input)
                )
       end
     end
@@ -504,7 +506,7 @@ defmodule Synapsis.Session.NativeCodeModeFunctionalTest do
     end
   end
 
-  defp json_value(value), do: value |> Jason.encode!() |> Jason.decode!()
+  defp json_value(value), do: value |> Formata.JSON.encode!() |> Formata.JSON.decode!()
 
   defp custom_call(conn, id, raw) do
     item = %{
@@ -532,7 +534,7 @@ defmodule Synapsis.Session.NativeCodeModeFunctionalTest do
   end
 
   defp function_call(conn, id, name, args) do
-    encoded = Jason.encode!(args)
+    encoded = Formata.JSON.encode!(args)
 
     item = %{
       "type" => "function_call",
@@ -577,6 +579,6 @@ defmodule Synapsis.Session.NativeCodeModeFunctionalTest do
       |> Plug.Conn.put_resp_content_type("text/event-stream")
       |> Plug.Conn.resp(
         200,
-        Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+        Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
       )
 end

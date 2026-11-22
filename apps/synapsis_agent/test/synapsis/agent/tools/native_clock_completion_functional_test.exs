@@ -142,7 +142,7 @@ defmodule Synapsis.Agent.Tools.NativeClockCompletionFunctionalTest do
     assert after_clock == %{"type" => "text", "text" => "after-clock"}
     assert elapsed["type"] == "text"
 
-    assert Jason.decode!(elapsed["text"]) == %{
+    assert Formata.JSON.decode!(elapsed["text"]) == %{
              "wall_time_seconds" => clock_result.wall_time_seconds
            }
 

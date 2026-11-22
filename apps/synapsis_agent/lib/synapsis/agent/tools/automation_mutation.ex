@@ -26,7 +26,7 @@ defmodule Synapsis.Agent.Tools.AutomationMutation do
     :catalog_revision
   ]
   @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
   @counts ~w(active_count queued_count submission_count producer_count pending_recovery_count pending_refill_count)a
   @projection_fields ~w(name enabled schedule timezone session_target delivery provider model agent_name deleteAfterRun max_runtime_ms no_overlap)
   @schedule_fields ~w(kind expr tz staggerMs at everyMs anchorMs)
@@ -81,7 +81,7 @@ defmodule Synapsis.Agent.Tools.AutomationMutation do
        %{
          action:
            if(operation.tool_name == @update, do: "automation.update", else: "automation.remove"),
-         resource: "automation:" <> Jason.encode!(resource)
+         resource: "automation:" <> Formata.JSON.encode!(resource)
        }}
     end
   end
@@ -260,9 +260,9 @@ defmodule Synapsis.Agent.Tools.AutomationMutation do
       end)
 
     result = Map.merge(public_routine(Map.get(receipt, :routine, %{})), minimum)
-    value = %{content: Jason.encode!(result), structured: result}
+    value = %{content: Formata.JSON.encode!(result), structured: result}
 
-    if byte_size(Jason.encode!(value)) <= 65_536 do
+    if byte_size(Formata.JSON.encode!(value)) <= 65_536 do
       {:ok, value}
     else
       minimum = Map.put(minimum, "projection_truncated", true)
@@ -271,9 +271,9 @@ defmodule Synapsis.Agent.Tools.AutomationMutation do
   end
 
   defp bounded_minimum(result) do
-    value = %{content: Jason.encode!(result), structured: result}
+    value = %{content: Formata.JSON.encode!(result), structured: result}
 
-    if byte_size(Jason.encode!(value)) <= 65_536 do
+    if byte_size(Formata.JSON.encode!(value)) <= 65_536 do
       value
     else
       # Only the delivery target is unbounded in the minimum receipt. Recheck

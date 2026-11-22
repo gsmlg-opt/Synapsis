@@ -27,7 +27,7 @@ defmodule Synapsis.Agent.Tools.SessionState do
   # Conversation 1.10.35 adds these runtime capabilities to effect context.
   # They cannot select a different session and are never invoked here.
   @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
   @statuses ~w(pending in_progress completed)
   @max_todos 100
   @max_content 8192
@@ -69,7 +69,7 @@ defmodule Synapsis.Agent.Tools.SessionState do
          operation = %{operation | backend_context: context},
          {:ok, meta} <- session(context.session_id),
          {:ok, result} <- run(context.session_id, meta, operation) do
-      if byte_size(Jason.encode!(result)) <= @output_limit,
+      if byte_size(Formata.JSON.encode!(result)) <= @output_limit,
         do: {:ok, result},
         else: failure(:output_limit)
     else
@@ -227,7 +227,7 @@ defmodule Synapsis.Agent.Tools.SessionState do
         end)
 
       public = %{todos: todos}
-      {:ok, %{content: Jason.encode!(public), structured: public}}
+      {:ok, %{content: Formata.JSON.encode!(public), structured: public}}
     else
       {:error, :malformed_state}
     end

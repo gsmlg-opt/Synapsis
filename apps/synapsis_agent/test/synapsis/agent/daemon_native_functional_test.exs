@@ -278,7 +278,7 @@ defmodule Synapsis.Agent.DaemonNativeFunctionalTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       index = Agent.get_and_update(counter, &{&1, &1 + 1})
       send(owner, {:native_request, index, request})
 

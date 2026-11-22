@@ -29,8 +29,14 @@ defmodule Synapsis.Session.OperatorInputContextFunctionalTest do
                }
 
         assert :ok = InputContext.validate(context, session_id)
-        assert Jason.decode!(Jason.encode!(context)) == context
-        assert :ok = InputContext.validate(Jason.decode!(Jason.encode!(context)), session_id)
+        assert Formata.JSON.decode!(Formata.JSON.encode!(context)) == context
+
+        assert :ok =
+                 InputContext.validate(
+                   Formata.JSON.decode!(Formata.JSON.encode!(context)),
+                   session_id
+                 )
+
         context
       end
 
@@ -69,6 +75,6 @@ defmodule Synapsis.Session.OperatorInputContextFunctionalTest do
            }
 
     assert :ok = InputContext.validate(context, id)
-    assert Jason.decode!(Jason.encode!(context)) == context
+    assert Formata.JSON.decode!(Formata.JSON.encode!(context)) == context
   end
 end

@@ -66,7 +66,7 @@ defmodule Synapsis.Agent.DaemonExecutionTest do
     Gaoxy.Test.expect_once(fixture, "POST", "/v1/responses", fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.send_resp(503, Jason.encode!(%{"error" => %{"message" => "offline"}}))
+      |> Plug.Conn.send_resp(503, Formata.JSON.encode!(%{"error" => %{"message" => "offline"}}))
     end)
 
     {provider_name, agent_name} = register_provider_agent(tmp_dir, fixture)

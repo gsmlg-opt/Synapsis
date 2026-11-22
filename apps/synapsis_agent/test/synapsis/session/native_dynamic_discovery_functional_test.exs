@@ -239,7 +239,7 @@ defmodule Synapsis.Session.NativeDynamicDiscoveryFunctionalTest do
 
     Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       last_user = request["input"] |> Enum.filter(&(&1["role"] == "user")) |> List.last()
 
       text =
@@ -341,7 +341,7 @@ defmodule Synapsis.Session.NativeDynamicDiscoveryFunctionalTest do
 
     Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(ctx.harness.counter, fn state ->
@@ -403,7 +403,7 @@ defmodule Synapsis.Session.NativeDynamicDiscoveryFunctionalTest do
   defp nested_source(ctx) do
     """
     text(await tools.synapsis__file_read({path: "catalog.txt"}));
-    text(await tools[#{Jason.encode!(ctx.mcp_name)}]({label: "nested"}));
+    text(await tools[#{Formata.JSON.encode!(ctx.mcp_name)}]({label: "nested"}));
     text(await tools.exec_command({cmd: "printf 'run\\n' >> catalog-count.txt", login: false, yield_time_ms: 1000}));
     store("catalog-marker", "continued");
     yield "catalog-pause";
@@ -437,7 +437,7 @@ defmodule Synapsis.Session.NativeDynamicDiscoveryFunctionalTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       result =
         case request["method"] do
@@ -487,7 +487,7 @@ defmodule Synapsis.Session.NativeDynamicDiscoveryFunctionalTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(
           200,
-          Jason.encode!(%{"jsonrpc" => "2.0", "id" => request["id"], "result" => result})
+          Formata.JSON.encode!(%{"jsonrpc" => "2.0", "id" => request["id"], "result" => result})
         )
       else
         Plug.Conn.resp(conn, 202, "")
@@ -622,7 +622,9 @@ defmodule Synapsis.Session.NativeDynamicDiscoveryFunctionalTest do
   defp assert_part_round_trips(parts) do
     for part <- parts do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
   end
 
@@ -669,7 +671,7 @@ defmodule Synapsis.Session.NativeDynamicDiscoveryFunctionalTest do
                  request["input"],
                  &(&1["type"] == "function_call" and
                      &1["call_id"] == use.tool_use_id and &1["name"] == name and
-                     Jason.decode!(&1["arguments"]) == use.input)
+                     Formata.JSON.decode!(&1["arguments"]) == use.input)
                )
       end
     end
@@ -709,7 +711,7 @@ defmodule Synapsis.Session.NativeDynamicDiscoveryFunctionalTest do
             "id" => id <> "-item",
             "call_id" => id,
             "name" => ToolName.encode(name),
-            "arguments" => Jason.encode!(args)
+            "arguments" => Formata.JSON.encode!(args)
           }
 
     events =
@@ -769,6 +771,6 @@ defmodule Synapsis.Session.NativeDynamicDiscoveryFunctionalTest do
       |> Plug.Conn.put_resp_content_type("text/event-stream")
       |> Plug.Conn.resp(
         200,
-        Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+        Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
       )
 end

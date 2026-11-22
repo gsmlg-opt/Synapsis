@@ -130,7 +130,10 @@ defmodule Synapsis.Provider.TypedToolMediaTest do
     for is_error <- [false, true] do
       part = projected(content, is_error)
       assert {:ok, dumped} = Synapsis.Part.dump(part)
-      assert {:ok, loaded} = dumped |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, loaded} =
+               dumped |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
+
       assert loaded === part
       assert loaded.projection["result"]["content"] === content
     end
@@ -144,7 +147,9 @@ defmodule Synapsis.Provider.TypedToolMediaTest do
 
     for protocol <- @protocols, part <- parts do
       assert {:ok, wire} = build(protocol, part)
-      assert Jason.encode!(wire) =~ part.content or Jason.encode!(wire) =~ "projected"
+
+      assert Formata.JSON.encode!(wire) =~ part.content or
+               Formata.JSON.encode!(wire) =~ "projected"
     end
   end
 
@@ -154,13 +159,13 @@ defmodule Synapsis.Provider.TypedToolMediaTest do
 
     Gaoxy.Test.expect_once(fixture, "POST", "/v1/messages", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(owner, {:wire, Jason.decode!(body)})
+      send(owner, {:wire, Formata.JSON.decode!(body)})
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.resp(
         200,
-        Jason.encode!(%{
+        Formata.JSON.encode!(%{
           "stop_reason" => "end_turn",
           "content" => [%{"type" => "text", "text" => "ok"}]
         })

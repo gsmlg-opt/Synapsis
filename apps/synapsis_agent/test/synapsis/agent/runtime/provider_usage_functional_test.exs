@@ -362,7 +362,7 @@ defmodule Synapsis.Agent.Runtime.ProviderUsageFunctionalTest do
 
     Gaoxy.Test.expect_once(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert Jason.decode!(body)["model"] == "usage-fixture"
+      assert Formata.JSON.decode!(body)["model"] == "usage-fixture"
 
       alias Synapsis.Provider.TestSupport.ResponsesFixture
 
@@ -450,8 +450,8 @@ defmodule Synapsis.Agent.Runtime.ProviderUsageFunctionalTest do
 
     Gaoxy.Test.expect_once(fixture, "POST", path, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert is_map(Jason.decode!(body))
-      body = Enum.map_join(chunks, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+      assert is_map(Formata.JSON.decode!(body))
+      body = Enum.map_join(chunks, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
 
       conn
       |> Plug.Conn.put_resp_content_type("text/event-stream")

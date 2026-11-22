@@ -35,33 +35,36 @@ defmodule Synapsis.Automation.Webhook do
   defp request(url, encoded_json, deadline, progress, attempted) do
     timeout = min(@attempt_timeout, remaining(deadline))
 
-    result =
-      Req.Request.new()
-      |> Req.Steps.attach()
-      |> Req.merge(
+    promise =
+      HTTP.fetch(url,
         method: :post,
-        url: url,
         headers: [{"content-type", "application/json"}],
         body: encoded_json,
-        into: :self,
-        raw: true,
-        compressed: false,
+        stream_response: true,
+        decode_body: false,
+        redirect: :manual,
         retry: false,
-        redirect: false,
-        receive_timeout: timeout,
-        request_timeout: timeout,
-        finch: [pool_timeout: timeout, conn_opts: [transport_opts: [timeout: timeout]]]
+        timeout: timeout,
+        connect_timeout: timeout
       )
-      |> perform()
 
-    case result do
-      {:ok, response} -> settle(response, progress, attempted)
-      {:error, _reason} -> {:ok, Map.put(attempted, "error", "webhook_request_unconfirmed")}
+    try do
+      result = perform(promise)
+
+      case result do
+        {:ok, response} -> settle(response, progress, attempted)
+        {:error, _reason} -> {:ok, Map.put(attempted, "error", "webhook_request_unconfirmed")}
+      end
+    after
+      HTTP.RequestCompletion.abort_and_await(HTTP.Promise.completion(promise), 1_000)
     end
   end
 
   defp perform(request) do
-    Req.request(request)
+    case HTTP.Promise.await(request) do
+      %HTTP.Response{} = response -> {:ok, response}
+      {:error, _} = error -> error
+    end
   rescue
     _ -> {:error, :request_unconfirmed}
   catch
@@ -82,13 +85,9 @@ defmodule Synapsis.Automation.Webhook do
         do: outcome,
         else: Map.put(outcome, "error", "Webhook request failed with HTTP #{response.status}")
 
-    try do
-      case acknowledge(progress, outcome) do
-        :ok -> {:ok, outcome}
-        :error -> {:ok, Map.put(attempted, "error", "webhook_progress_unacknowledged")}
-      end
-    after
-      discard_response(response)
+    case acknowledge(progress, outcome) do
+      :ok -> {:ok, outcome}
+      :error -> {:ok, Map.put(attempted, "error", "webhook_progress_unacknowledged")}
     end
   end
 
@@ -100,18 +99,8 @@ defmodule Synapsis.Automation.Webhook do
     :exit, _ -> :error
   end
 
-  defp discard_response(%Req.Response{body: %Req.Response.Async{}} = response) do
-    Req.cancel_async_response(response)
-  rescue
-    _ -> :ok
-  catch
-    :exit, _ -> :ok
-  end
-
-  defp discard_response(_response), do: :ok
-
   # The pinned direct-delivery policy requires typed proven-not-sent evidence
-  # before retrying. A plain HTTP rejection has no such marker, and Req's generic
+  # before retrying. A plain HTTP rejection has no such marker, and generic
   # transport errors do not prove a POST was unsent. Neither is retried here.
   defp not_attempted(error) do
     %{

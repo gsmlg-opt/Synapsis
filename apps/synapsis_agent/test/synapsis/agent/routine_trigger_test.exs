@@ -61,7 +61,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
            }
 
     dream_json =
-      Jason.encode!(%{
+      Formata.JSON.encode!(%{
         "recent_summary" => "Reviewed recent work",
         "memory_candidates" => ["Keep the deployment lesson"],
         "open_questions" => ["Is the retry budget sufficient?"],
@@ -108,7 +108,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
 
     Gaoxy.Test.expect(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       request_number = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
       send(owner, {:schedule_provider_request, request_number, request, self()})
 
@@ -206,7 +206,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     }
 
     dream_json =
-      Jason.encode!(%{
+      Formata.JSON.encode!(%{
         "recent_summary" => "Saved the release lesson",
         "memory_candidates" => ["Verify imported tools"],
         "open_questions" => [],
@@ -221,7 +221,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
 
     Gaoxy.Test.expect(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       request_number = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
       send(owner, {:dream_memory_provider_request, request_number, request, self()})
 
@@ -346,7 +346,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     fixture = Gaoxy.Test.open()
 
     dream_json =
-      Jason.encode!(%{
+      Formata.JSON.encode!(%{
         "recent_summary" => "Reviewed bounded context",
         "memory_candidates" => [],
         "open_questions" => [],
@@ -463,7 +463,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     fixture = Gaoxy.Test.open()
 
     dream_json =
-      Jason.encode!(%{
+      Formata.JSON.encode!(%{
         "recent_summary" => "Reviewed project status",
         "memory_candidates" => [],
         "open_questions" => [],
@@ -552,7 +552,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
     fixture = Gaoxy.Test.open()
 
     dream_json =
-      Jason.encode!(%{
+      Formata.JSON.encode!(%{
         "recent_summary" => "Reviewed bounded context",
         "memory_candidates" => [],
         "open_questions" => [],
@@ -653,7 +653,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
   @tag :tmp_dir
   test "dream output rejects an empty recent summary", %{tmp_dir: tmp_dir} do
     empty =
-      Jason.encode!(%{
+      Formata.JSON.encode!(%{
         "recent_summary" => "",
         "memory_candidates" => [],
         "open_questions" => [],
@@ -668,7 +668,7 @@ defmodule Synapsis.Agent.RoutineTriggerTest do
   @tag :tmp_dir
   test "dream output rejects an inexact six-field shape", %{tmp_dir: tmp_dir} do
     inexact =
-      Jason.encode!(%{
+      Formata.JSON.encode!(%{
         "recent_summary" => "reflection",
         "memory_candidates" => "not-a-list",
         "open_questions" => [],

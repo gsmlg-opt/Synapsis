@@ -40,7 +40,7 @@ defmodule SynapsisWeb.AgentLive.ToolResultChatFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/messages", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -246,7 +246,10 @@ defmodule SynapsisWeb.AgentLive.ToolResultChatFunctionalTest do
       %{
         "type" => "content_block_delta",
         "index" => 0,
-        "delta" => %{"type" => "input_json_delta", "partial_json" => Jason.encode!(@arguments)}
+        "delta" => %{
+          "type" => "input_json_delta",
+          "partial_json" => Formata.JSON.encode!(@arguments)
+        }
       },
       %{"type" => "content_block_stop", "index" => 0},
       %{"type" => "message_delta", "delta" => %{"stop_reason" => "tool_use"}},
@@ -278,11 +281,11 @@ defmodule SynapsisWeb.AgentLive.ToolResultChatFunctionalTest do
       |> Plug.Conn.put_resp_content_type("text/event-stream")
       |> Plug.Conn.resp(
         200,
-        Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+        Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
       )
 
   defp export(name, data) do
     if destination = System.get_env("SYNAPSIS_TOOL_RESULT_UI_EVIDENCE"),
-      do: File.write!(Path.join(destination, name), Jason.encode!(data))
+      do: File.write!(Path.join(destination, name), Formata.JSON.encode!(data))
   end
 end

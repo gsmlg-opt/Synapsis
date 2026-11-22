@@ -1,5 +1,5 @@
 defmodule Synapsis.Web.Transport do
-  @moduledoc "Bounded native web transport using clean Req defaults and verified HTTPS."
+  @moduledoc "Bounded native web transport using http_fetch and verified HTTPS."
 
   alias Backplane.AgentRuntime.Error
 
@@ -48,65 +48,81 @@ defmodule Synapsis.Web.Transport do
   end
 
   defp perform(uri, timeout, limit, method, headers \\ []) do
-    Req.Request.new()
-    |> Req.Steps.attach()
-    |> Req.merge(
-      method: method,
-      headers: headers,
-      url: URI.to_string(uri),
-      raw: true,
-      compressed: false,
-      into: fn event, pair ->
-        if method == :head, do: {:cont, pair}, else: collect(event, pair, limit)
-      end,
-      retry: false,
-      redirect: false,
-      receive_timeout: timeout,
-      request_timeout: timeout,
-      finch: [pool_timeout: timeout, conn_opts: [transport_opts: [timeout: timeout]]]
-    )
-    |> run_request()
-    |> response()
-  end
+    promise =
+      HTTP.fetch(URI.to_string(uri),
+        method: method,
+        headers: headers,
+        redirect: :manual,
+        retry: false,
+        decode_body: false,
+        stream_response: true,
+        timeout: timeout,
+        connect_timeout: timeout
+      )
 
-  # Finch can raise or exit on ordinary request failures (including pool
-  # checkout timeout). Contain that boundary inside the linked task so it
-  # returns an explicit failure instead of taking down the execution owner.
-  defp run_request(request) do
-    Req.request(request)
+    try do
+      case HTTP.Promise.await(promise) do
+        %HTTP.Response{} = response ->
+          with {:ok, body} <- collect(response.body, limit, timeout) do
+            {:ok,
+             %{
+               status: response.status,
+               headers: HTTP.Headers.to_list(response.headers),
+               body: body
+             }}
+          end
+
+        {:error, _} = error ->
+          response(error)
+      end
+    after
+      HTTP.RequestCompletion.abort_and_await(HTTP.Promise.completion(promise), 1_000)
+    end
   rescue
-    _exception -> {:error, :request_failed}
+    _exception -> response({:error, :request_failed})
   catch
-    :exit, _reason -> {:error, :request_failed}
+    :exit, _reason -> response({:error, :request_failed})
   end
 
-  defp collect({:data, data}, {request, response}, limit) do
-    {size, chunks} = Req.Response.get_private(response, :web_body, {0, []})
+  defp collect(body, limit, _timeout) when is_binary(body) do
+    if byte_size(body) <= limit, do: {:ok, body}, else: body_limit()
+  end
 
-    if size + byte_size(data) <= limit do
-      {:cont,
-       {request,
-        Req.Response.put_private(response, :web_body, {size + byte_size(data), [data | chunks]})}}
-    else
-      {:halt, {request, Req.Response.put_private(response, :web_limit, true)}}
+  defp collect(stream, limit, timeout) when is_pid(stream) do
+    monitor = Process.monitor(stream)
+
+    try do
+      send(stream, {:read_chunk, self(), :ack})
+      collect_chunks(stream, monitor, limit, timeout, [])
+    after
+      Process.demonitor(monitor, [:flush])
     end
   end
 
-  defp response({:ok, response}) do
-    if Req.Response.get_private(response, :web_limit, false) do
-      {:error, Error.new(:budget_exceeded, "web response exceeds byte limit")}
-    else
-      {_, chunks} = Req.Response.get_private(response, :web_body, {0, []})
-      headers = for {key, values} <- response.headers, value <- values, do: {key, value}
+  defp collect_chunks(stream, monitor, left, timeout, chunks) do
+    receive do
+      {:stream_chunk, ^stream, chunk, ack} ->
+        if byte_size(chunk) <= left do
+          send(stream, {:stream_chunk_ack, ack})
+          collect_chunks(stream, monitor, left - byte_size(chunk), timeout, [chunk | chunks])
+        else
+          body_limit()
+        end
 
-      {:ok,
-       %{
-         status: response.status,
-         headers: headers,
-         body: IO.iodata_to_binary(Enum.reverse(chunks))
-       }}
+      {:stream_end, ^stream} ->
+        {:ok, chunks |> Enum.reverse() |> IO.iodata_to_binary()}
+
+      {:stream_error, ^stream, _reason} ->
+        response({:error, :request_failed})
+
+      {:DOWN, ^monitor, :process, ^stream, _reason} ->
+        response({:error, :request_failed})
+    after
+      timeout -> {:error, Error.new(:timeout, "web request timed out")}
     end
   end
+
+  defp body_limit, do: {:error, Error.new(:budget_exceeded, "web response exceeds byte limit")}
 
   defp response({:error, _}),
     do: {:error, Error.new(:transient_transport, "web request failed")}

@@ -23,7 +23,9 @@ defmodule Synapsis.DeliveredImagePartFunctionalTest do
              })
 
     assert {:ok, ^stored} = Part.dump(part)
-    assert {:ok, ^part} = stored |> Jason.encode!() |> Jason.decode!() |> Part.load()
+
+    assert {:ok, ^part} =
+             stored |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Part.load()
   end
 
   test "delivered image without a display name retains its public identity" do
@@ -32,7 +34,10 @@ defmodule Synapsis.DeliveredImagePartFunctionalTest do
 
     assert {:ok, ^part} = Part.cast(Map.delete(stored, "name"))
     assert {:ok, ^stored} = Part.dump(part)
-    assert {:ok, ^part} = stored |> Jason.encode!() |> Jason.decode!() |> Part.load()
+
+    assert {:ok, ^part} =
+             stored |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Part.load()
+
     assert DeliveredImage.summary(part) =~ "Delivered image: image\n"
   end
 
@@ -138,7 +143,9 @@ defmodule Synapsis.DeliveredImagePartFunctionalTest do
     for {part, stored} <- [{image, image_stored}, {video, video_stored}] do
       assert {:ok, ^part} = Part.cast(stored)
       assert {:ok, ^stored} = Part.dump(part)
-      assert {:ok, ^part} = stored |> Jason.encode!() |> Jason.decode!() |> Part.load()
+
+      assert {:ok, ^part} =
+               stored |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Part.load()
     end
 
     message = message(video.delivery["session_id"], [image, video])

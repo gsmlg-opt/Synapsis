@@ -17,7 +17,7 @@ defmodule Synapsis.Session.NativeReadableWebFetchFunctionalTest do
   @oracle_path Path.expand("../../fixtures/openclaw/488631c/web-fetch.json", __DIR__)
   @external_resource @oracle_path
   @oracle_bytes File.read!(@oracle_path)
-  @oracle Jason.decode!(@oracle_bytes)
+  @oracle Formata.JSON.decode!(@oracle_bytes)
   @oracle_sha "2fc7a79709a6d23fe109f21958223dae40d9e7e3f17271bc217e45bab5c4fd08"
   @source_marker "3636363636363636"
   @fields %{
@@ -238,7 +238,7 @@ defmodule Synapsis.Session.NativeReadableWebFetchFunctionalTest do
 
     Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, bytes, conn} = Plug.Conn.read_body(conn, length: 1_000_000)
-      request = Jason.decode!(bytes)
+      request = Formata.JSON.decode!(bytes)
 
       index =
         Agent.get_and_update(h.counter, fn state ->
@@ -289,7 +289,7 @@ defmodule Synapsis.Session.NativeReadableWebFetchFunctionalTest do
     Enum.zip(results, calls)
     |> Enum.each(fn {message, call} ->
       assert Map.keys(message) |> Enum.sort() == ["call_id", "output", "type"]
-      document = Jason.decode!(message["output"])
+      document = Formata.JSON.decode!(message["output"])
       assert_document(document, call, started_at)
     end)
   end
@@ -359,7 +359,7 @@ defmodule Synapsis.Session.NativeReadableWebFetchFunctionalTest do
     for {result, call} <- Enum.zip(results, calls) do
       assert %ToolResult{tool_use_id: call_id, is_error: false} = result
       assert call_id == call.id
-      document = Jason.decode!(result.content)
+      document = Formata.JSON.decode!(result.content)
       assert_document(document, call, started_at)
 
       assert result.projection == %{
@@ -371,7 +371,9 @@ defmodule Synapsis.Session.NativeReadableWebFetchFunctionalTest do
 
     for part <- parts do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
 
     assert {:ok, turns} = Store.list_turns(id)
@@ -394,8 +396,8 @@ defmodule Synapsis.Session.NativeReadableWebFetchFunctionalTest do
 
   defp assert_cache(parts) do
     results = Enum.filter(parts, &match?(%ToolResult{}, &1))
-    original = hd(results).content |> Jason.decode!()
-    cached = Enum.at(results, 1).content |> Jason.decode!()
+    original = hd(results).content |> Formata.JSON.decode!()
+    cached = Enum.at(results, 1).content |> Formata.JSON.decode!()
     assert cached == Map.put(original, "cached", true)
   end
 

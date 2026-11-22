@@ -49,7 +49,7 @@ defmodule Synapsis.SessionDirectory.Projection.PortSession do
     id = Integer.to_string(session.sequence + 1)
     request = %{type: "project", protocol: 1, id: id, rows: rows, options: options}
 
-    with {:ok, body} <- Jason.encode(request),
+    with {:ok, body} <- Synapsis.JSON.encode(request),
          true <- session.input_bytes + byte_size(body) + 128 <= @input_limit,
          :ok <- write(session, body <> "\n"),
          {:ok, envelope, bytes} <- frame(session),
@@ -162,7 +162,7 @@ defmodule Synapsis.SessionDirectory.Projection.PortSession do
   end
 
   defp send_history(session, logical) do
-    with {:ok, body} <- Jason.encode(logical) do
+    with {:ok, body} <- Synapsis.JSON.encode(logical) do
       cond do
         byte_size(body) > @history_transfer_limit ->
           {:error, :history_reader_admission}
@@ -245,7 +245,7 @@ defmodule Synapsis.SessionDirectory.Projection.PortSession do
                is_integer(bytes) and bytes > 0 and bytes <= @history_transfer_limit ->
           with :ok <- send_ack(session, transfer_id, 0, false),
                {:ok, body} <- receive_chunks(session, transfer_id, bytes, 0, [], 0),
-               {:ok, logical} <- Jason.decode(body),
+               {:ok, logical} <- Formata.JSON.decode(body),
                true <- logical["type"] == logical_type do
             {:ok, logical}
           else
@@ -321,7 +321,7 @@ defmodule Synapsis.SessionDirectory.Projection.PortSession do
   defp history_control(session, frame) do
     frame = Map.merge(frame, %{"protocol" => 1, "historyProtocol" => 1})
 
-    with {:ok, body} <- Jason.encode(frame),
+    with {:ok, body} <- Synapsis.JSON.encode(frame),
          true <- byte_size(body) + 1 <= @history_wire_limit do
       write(session, body <> "\n")
     else
@@ -333,7 +333,7 @@ defmodule Synapsis.SessionDirectory.Projection.PortSession do
   defp decode_candidate(%{"mode" => "standalone", "text" => text, "page" => page}, "standalone")
        when is_binary(text) and is_map(page) do
     with true <- byte_size(text) <= 262_144,
-         {:ok, decoded} <- Jason.decode(text),
+         {:ok, decoded} <- Formata.JSON.decode(text),
          true <- decoded == page do
       {:ok, %{text: text, page: page}}
     else
@@ -481,7 +481,7 @@ defmodule Synapsis.SessionDirectory.Projection.PortSession do
           true ->
             text = [chunk | chunks] |> Enum.reverse() |> IO.iodata_to_binary()
 
-            case Jason.decode(text) do
+            case Formata.JSON.decode(text) do
               {:ok, value} -> {:ok, value, bytes}
               _ -> {:error, :invalid_projection}
             end

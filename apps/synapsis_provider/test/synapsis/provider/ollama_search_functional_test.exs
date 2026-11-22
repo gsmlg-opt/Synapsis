@@ -271,7 +271,7 @@ defmodule Synapsis.Provider.OllamaSearchFunctionalTest do
       __DIR__
     )
     |> File.read!()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 
   defp config(ctx),
@@ -323,11 +323,11 @@ defmodule Synapsis.Provider.OllamaSearchFunctionalTest do
 
     Gaoxy.Test.stub(ctx.fixture, "POST", path, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(owner, {:ollama_http, conn.request_path, Jason.decode!(body), conn.req_headers})
+      send(owner, {:ollama_http, conn.request_path, Formata.JSON.decode!(body), conn.req_headers})
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(payload))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
     end)
   end
 end

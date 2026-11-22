@@ -1690,7 +1690,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
           <span class="font-semibold">{approval_agent_name(pending)}</span>
           requests permission to use <span class="font-mono">{pending.request.tool_name}</span>
         </p>
-        <pre class="max-h-24 overflow-auto whitespace-pre-wrap break-all text-on-surface-variant">{Jason.encode!(pending.request.arguments, pretty: true)}</pre>
+        <pre class="max-h-24 overflow-auto whitespace-pre-wrap break-all text-on-surface-variant">{Formata.JSON.encode!(pending.request.arguments, pretty: true)}</pre>
         <div class="flex gap-2">
           <.dm_btn
             variant="primary"

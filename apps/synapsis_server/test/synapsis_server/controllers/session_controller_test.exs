@@ -156,7 +156,7 @@ defmodule SynapsisServer.SessionControllerTest do
 
       response = conn |> get("/api/sessions/#{session.id}") |> json_response(200)
       assert %{"data" => %{"live_status" => "error", "error" => ^reason}} = response
-      refute Jason.encode!(response) =~ "private diagnostic details"
+      refute Formata.JSON.encode!(response) =~ "private diagnostic details"
     end
   end
 
@@ -316,7 +316,7 @@ defmodule SynapsisServer.SessionControllerTest do
       conn = get(conn, "/api/sessions/#{id}/export")
       assert conn.status == 200
       assert get_resp_header(conn, "content-type") |> hd() =~ "application/json"
-      body = conn.resp_body |> Jason.decode!()
+      body = conn.resp_body |> Formata.JSON.decode!()
       assert body["version"] == "1.0"
       assert is_map(body["session"])
       assert is_list(body["messages"])

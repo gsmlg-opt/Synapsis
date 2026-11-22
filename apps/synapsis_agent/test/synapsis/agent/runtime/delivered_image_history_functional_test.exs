@@ -54,7 +54,7 @@ defmodule Synapsis.Agent.Runtime.DeliveredImageHistoryFunctionalTest do
 
     Gaoxy.Test.expect_once(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(observer, {:delivered_image_wire, Jason.decode!(body)})
+      send(observer, {:delivered_image_wire, Formata.JSON.decode!(body)})
 
       ResponsesFixture.send_sse(conn, [
         ResponsesFixture.text_delta("Observed image"),

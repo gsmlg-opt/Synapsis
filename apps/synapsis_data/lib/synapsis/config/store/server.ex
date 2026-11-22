@@ -649,7 +649,7 @@ defmodule Synapsis.Config.Store.Server do
 
     case File.read(path) do
       {:ok, content} ->
-        case Toml.decode(content) do
+        case Formata.decode(content, :toml) do
           {:ok, map} ->
             entries =
               if type == :memory,
@@ -658,8 +658,8 @@ defmodule Synapsis.Config.Store.Server do
 
             validate_entries(entries, type)
 
-          {:error, reason} ->
-            {:error, {:parse_failed, reason}}
+          {:error, [%Formata.Error{code: code, location: location} | _]} ->
+            {:error, {:parse_failed, {code, location}}}
         end
 
       {:error, reason} ->
@@ -733,26 +733,28 @@ defmodule Synapsis.Config.Store.Server do
   defp persist_entries(type, entries) do
     path = Store.file_path(type)
 
-    content =
-      if type == :memory do
-        case entries do
-          [] ->
-            ""
+    document =
+      case {type, entries} do
+        {_, []} ->
+          %{}
 
-          [entry] ->
-            entry |> stringify_keys() |> Map.delete("id") |> encode_toml_fields([]) |> Enum.join()
-        end
-      else
-        encode_toml_array_of_tables(
-          Atom.to_string(type) <> "s",
-          Enum.map(entries, &stringify_keys/1)
-        )
+        {:memory, [entry]} ->
+          entry |> toml_fields() |> Map.delete("id")
+
+        {type, entries} ->
+          %{(Atom.to_string(type) <> "s") => Enum.map(entries, &toml_fields/1)}
       end
 
-    with :ok <- File.mkdir_p(Path.dirname(path)),
+    with {:ok, document} <- Formata.Transform.stringify_keys(document),
+         {:ok, document} <- Formata.Transform.drop_nils(document),
+         {:ok, content} <- Formata.encode(document, :toml),
+         :ok <- File.mkdir_p(Path.dirname(path)),
          :ok <- File.write(path, content) do
       :ok
     else
+      {:error, [%Formata.Error{code: code} | _]} ->
+        {:error, {:persist_failed, code}}
+
       {:error, reason} ->
         Logger.warning("config_store_write_error",
           type: type,
@@ -764,58 +766,13 @@ defmodule Synapsis.Config.Store.Server do
     end
   end
 
-  # Minimal TOML encoder for arrays of flat maps (the only shape we persist).
-  # Values may be: string, integer, float, boolean, list-of-string, or nil (skipped).
-  defp encode_toml_array_of_tables(key, entries) do
-    Enum.map_join(entries, "\n", fn entry ->
-      header = "[[#{key}]]\n"
+  defp toml_fields(entry), do: entry |> stringify_keys() |> omit_empty_tables()
 
-      # Toml 0.7 flattens inline map values inside an array of tables. Dotted
-      # keys preserve nested config maps across reloads, including model choices.
-      fields = encode_toml_fields(entry, [])
-
-      header <> Enum.join(fields)
+  defp omit_empty_tables(map) do
+    Enum.reduce(map, %{}, fn {key, value}, fields ->
+      value = if is_map(value) and not is_struct(value), do: omit_empty_tables(value), else: value
+      if value in [nil, %{}], do: fields, else: Map.put(fields, key, value)
     end)
-  end
-
-  defp encode_toml_fields(map, prefix) do
-    Enum.flat_map(map, fn
-      {_key, nil} ->
-        []
-
-      {key, value} when is_map(value) ->
-        encode_toml_fields(value, prefix ++ [to_string(key)])
-
-      {key, value} ->
-        path = Enum.map_join(prefix ++ [to_string(key)], ".", &encode_toml_string/1)
-        ["#{path} = #{encode_toml_value(value)}\n"]
-    end)
-  end
-
-  defp encode_toml_value(v) when is_binary(v), do: encode_toml_string(v)
-  defp encode_toml_value(v) when is_boolean(v), do: to_string(v)
-  defp encode_toml_value(v) when is_integer(v), do: to_string(v)
-  defp encode_toml_value(v) when is_float(v), do: to_string(v)
-
-  defp encode_toml_value(list) when is_list(list) do
-    items = Enum.map_join(list, ", ", &encode_toml_value/1)
-    "[#{items}]"
-  end
-
-  defp encode_toml_value(map) when is_map(map) do
-    pairs =
-      Enum.map_join(map, ", ", fn {k, v} ->
-        "#{encode_toml_string(to_string(k))} = #{encode_toml_value(v)}"
-      end)
-
-    "{#{pairs}}"
-  end
-
-  defp encode_toml_value(v), do: inspect(v)
-
-  defp encode_toml_string(value) do
-    # JSON escapes TOML basic strings except DEL, which TOML also forbids literally.
-    value |> Jason.encode!() |> String.replace(<<127>>, "\\u007F")
   end
 
   defp id_of(attrs) do
@@ -932,7 +889,6 @@ defmodule Synapsis.Config.Store.Server do
       _ -> nil
     end
   end
-
 
   defp validate_entry(:memory, attrs) when is_map(attrs) do
     attrs = stringify_keys(attrs)

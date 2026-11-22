@@ -37,7 +37,7 @@ defmodule Synapsis.Agent.Tools.SessionStatusFunctionalTest do
         source: "native_committed",
         coverage: "retained_runs",
         observation: "sequential",
-        runtime_version: "1.10.74",
+        runtime_version: "1.10.94",
         retained_runs: 0,
         observed_runs: 0,
         provider_attempts: 0,
@@ -48,8 +48,8 @@ defmodule Synapsis.Agent.Tools.SessionStatusFunctionalTest do
     assert {:ok, %{content: content, structured: ^expected} = native} =
              SessionStatus.execute(operation(ctx.context, input))
 
-    assert Jason.decode!(content) == Jason.decode!(Jason.encode!(expected))
-    assert byte_size(Jason.encode!(native)) <= 65_536
+    assert Formata.JSON.decode!(content) == Formata.JSON.decode!(Formata.JSON.encode!(expected))
+    assert byte_size(Formata.JSON.encode!(native)) <= 65_536
   end
 
   test "auto records point-in-time absence before durable fallback", ctx do

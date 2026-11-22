@@ -68,11 +68,11 @@ defmodule Synapsis.SessionDirectoryProjectionFunctionalTest do
                node_executable: ctx.node
              )
 
-    compact = Jason.encode!(page)
+    compact = Formata.JSON.encode!(page)
     expected = javascript_pretty(ctx.node, compact)
-    encoded = Jason.encode!(page, pretty: true)
+    encoded = Formata.JSON.encode!(page, pretty: true)
     assert byte_size(encoded) == byte_size(expected)
-    assert Jason.decode!(encoded) == Jason.decode!(expected)
+    assert Formata.JSON.decode!(encoded) == Formata.JSON.decode!(expected)
     assert byte_size(encoded) <= 65_536
     assert String.contains?(encoded, "\n  \"")
     assert page.source == "durable"

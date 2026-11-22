@@ -70,7 +70,7 @@ defmodule SynapsisServer.SSEController do
           %{live: false, status: nil}
       end
 
-    case Jason.encode(payload) do
+    case Synapsis.JSON.encode(payload) do
       {:ok, data} ->
         case chunk(conn, "event: session_state\ndata: #{data}\n\n") do
           {:ok, conn} -> {:ok, conn}
@@ -91,7 +91,7 @@ defmodule SynapsisServer.SSEController do
         receive do
           {event, payload} when is_binary(event) ->
             if Regex.match?(@event_pattern, event) do
-              case Jason.encode(payload) do
+              case Synapsis.JSON.encode(payload) do
                 {:ok, data} ->
                   chunk_data = "event: #{event}\ndata: #{data}\n\n"
 
@@ -171,7 +171,7 @@ defmodule SynapsisServer.SSEController do
   defp next_keepalive, do: System.monotonic_time(:millisecond) + @keepalive_interval
 
   defp send_agent_event(conn, event, payload) do
-    case Jason.encode(payload) do
+    case Synapsis.JSON.encode(payload) do
       {:ok, data} ->
         case chunk(conn, "event: #{event}\ndata: #{data}\n\n") do
           {:ok, conn} -> {:ok, conn}

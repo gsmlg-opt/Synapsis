@@ -41,7 +41,7 @@ defmodule Synapsis.Memory.StandingIntents.Model do
          {:ok, account} <- account(Map.get(identity, :account_id)),
          provider = lowercase(provider),
          {:ok, target} <- channel_identity(scope, provider, identity) do
-      Jason.encode(["v1", scope, provider, account, target])
+      Synapsis.JSON.encode(["v1", scope, provider, account, target])
     end
   end
 
@@ -53,7 +53,7 @@ defmodule Synapsis.Memory.StandingIntents.Model do
     with {:ok, provider} <- identity(Map.get(identity, :provider)),
          {:ok, account} <- account(Map.get(identity, :account_id)),
          {:ok, sender} <- identity(Map.get(identity, :sender_id)) do
-      Jason.encode(["v1", lowercase(provider), account, sender])
+      Synapsis.JSON.encode(["v1", lowercase(provider), account, sender])
     end
   end
 
@@ -74,7 +74,7 @@ defmodule Synapsis.Memory.StandingIntents.Model do
          true <- nullable_string?(params["channelScope"]),
          true <- nullable_string?(params["senderScope"]),
          true <- nullable_string?(params["sourceSessionId"]),
-         {:ok, keyword_text} <- Jason.encode(keywords) do
+         {:ok, keyword_text} <- Synapsis.JSON.encode(keywords) do
       {:ok,
        %{
          "id" => id,
@@ -354,7 +354,7 @@ defmodule Synapsis.Memory.StandingIntents.Model do
   defp known_creator(_), do: nil
 
   defp stored_scope(text, count) when is_binary(text) do
-    with {:ok, ["v1" | _] = parts} <- Jason.decode(text),
+    with {:ok, ["v1" | _] = parts} <- Formata.JSON.decode(text),
          true <- length(parts) == count,
          true <- Enum.all?(parts, &(is_binary(&1) and &1 != "")) do
       parts
@@ -380,7 +380,7 @@ defmodule Synapsis.Memory.StandingIntents.Model do
   end
 
   defp keyword_projection(text) when is_binary(text) do
-    case Jason.decode(text) do
+    case Formata.JSON.decode(text) do
       {:ok, keywords} when is_list(keywords) ->
         Enum.filter(keywords, &(is_binary(&1) and &1 != ""))
 

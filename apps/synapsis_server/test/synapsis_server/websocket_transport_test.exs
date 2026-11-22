@@ -45,24 +45,29 @@ defmodule SynapsisServer.WebSocketTransportTest do
     listener = start_supervised!({Gaoxy.HTTP, options})
     %{local: {:ok, {_address, port}}} = Gaoxy.info(listener, __MODULE__)
 
-    assert {:ok, conn} =
-             Mint.HTTP.connect(:http, "127.0.0.1", port,
-               mode: :passive,
-               protocols: [:http1],
-               transport_opts: [timeout: @timeout]
-             )
+    socket =
+      HTTP.WebSocket.new("ws://127.0.0.1:#{port}/", [],
+        mode: :proxy,
+        http_version: :http1,
+        opening_timeout: @timeout,
+        connect_timeout: @timeout,
+        write_timeout: @timeout,
+        close_timeout: @timeout
+      )
 
-    # Closing the underlying socket also covers assertion failures below.
-    socket = Mint.HTTP.get_socket(conn)
-    on_exit(fn -> :gen_tcp.close(socket) end)
+    assert %HTTP.WebSocket{} = socket
 
-    assert {:ok, conn, ref} = Mint.WebSocket.upgrade(:ws, conn, "/", [])
-    {conn, status, headers} = receive_upgrade(conn, ref, deadline(), nil, [])
-    assert status == 101
-    assert {:ok, conn, websocket} = Mint.WebSocket.new(conn, ref, status, headers, mode: :passive)
+    on_exit(fn ->
+      HTTP.WebSocket.close(socket)
+      HTTP.ClientCompletion.await(HTTP.WebSocket.completion(socket), @timeout)
+    end)
 
-    {conn, websocket} = send_frame(conn, websocket, ref, {:text, "large"})
-    {conn, websocket, frame} = receive_frame(conn, websocket, ref, deadline())
+    assert_receive {HTTP.WebSocket, ^socket,
+                    %HTTP.WebSocket.Event.Open{handshake: %{status: 101}}},
+                   @timeout
+
+    assert :ok = HTTP.WebSocket.send_frame(socket, {:text, "large"})
+    frame = receive_frame(socket)
 
     assert elem(frame, 0) == :text,
            "expected a large text reply, received #{frame_summary(frame)}"
@@ -73,69 +78,25 @@ defmodule SynapsisServer.WebSocketTransportTest do
     assert :crypto.hash(:sha256, payload) ==
              :crypto.hash(:sha256, String.duplicate("x", @payload_bytes))
 
-    {conn, websocket} = send_frame(conn, websocket, ref, {:ping, "heartbeat"})
-    {conn, websocket, frame} = receive_frame(conn, websocket, ref, deadline())
-    assert frame == {:pong, "heartbeat"}
+    assert :ok = HTTP.WebSocket.send_frame(socket, {:ping, "heartbeat"})
+    assert receive_frame(socket) == {:pong, "heartbeat"}
 
-    {conn, websocket} = send_frame(conn, websocket, ref, {:text, "still-connected"})
-    {_conn, _websocket, frame} = receive_frame(conn, websocket, ref, deadline())
-    assert frame == {:text, "still-connected"}
+    assert :ok = HTTP.WebSocket.send_frame(socket, {:text, "still-connected"})
+    assert receive_frame(socket) == {:text, "still-connected"}
   end
 
-  defp receive_upgrade(conn, ref, deadline, status, headers) do
-    assert {:ok, conn, responses} = Mint.WebSocket.recv(conn, 0, remaining(deadline))
+  defp receive_frame(socket) do
+    receive do
+      {HTTP.WebSocket, ^socket, %HTTP.WebSocket.Event.Frame{opcode: opcode, data: data}} ->
+        {opcode, data}
 
-    status =
-      Enum.find_value(responses, status, fn
-        {:status, ^ref, value} -> value
-        _ -> nil
-      end)
-
-    headers =
-      Enum.reduce(responses, headers, fn
-        {:headers, ^ref, value}, acc -> acc ++ value
-        _, acc -> acc
-      end)
-
-    if {:done, ref} in responses do
-      {conn, status, headers}
-    else
-      receive_upgrade(conn, ref, deadline, status, headers)
-    end
-  end
-
-  defp send_frame(conn, websocket, ref, frame) do
-    assert {:ok, websocket, bytes} = Mint.WebSocket.encode(websocket, frame)
-    assert {:ok, conn} = Mint.WebSocket.stream_request_body(conn, ref, bytes)
-    {conn, websocket}
-  end
-
-  defp receive_frame(conn, websocket, ref, deadline) do
-    assert {:ok, conn, responses} = Mint.WebSocket.recv(conn, 0, remaining(deadline))
-
-    {websocket, frames} =
-      Enum.reduce(responses, {websocket, []}, fn
-        {:data, ^ref, bytes}, {websocket, frames} ->
-          assert {:ok, websocket, decoded} = Mint.WebSocket.decode(websocket, bytes)
-          {websocket, frames ++ decoded}
-
-        _, acc ->
-          acc
-      end)
-
-    case frames do
-      [] -> receive_frame(conn, websocket, ref, deadline)
-      [frame] -> {conn, websocket, frame}
+      {HTTP.WebSocket, ^socket, event} ->
+        flunk("unexpected WebSocket event: #{inspect(event)}")
+    after
+      @timeout -> flunk("timed out waiting for WebSocket traffic")
     end
   end
 
   defp frame_summary({:close, code, _reason}), do: "close code #{code}"
   defp frame_summary(frame), do: inspect(elem(frame, 0))
-  defp deadline, do: System.monotonic_time(:millisecond) + @timeout
-
-  defp remaining(deadline) do
-    remaining = deadline - System.monotonic_time(:millisecond)
-    assert remaining > 0, "timed out waiting for WebSocket traffic"
-    remaining
-  end
 end

@@ -15,7 +15,7 @@ defmodule Synapsis.Provider.Transport.OpenAITest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(%{
+          Formata.JSON.encode!(%{
             "data" => [
               %{"id" => "gpt-4o", "context_length" => 128_000},
               %{"id" => "gpt-4o-mini", "context_length" => 128_000},
@@ -47,7 +47,7 @@ defmodule Synapsis.Provider.Transport.OpenAITest do
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => []}))
+        |> Plug.Conn.send_resp(200, Formata.JSON.encode!(%{"data" => []}))
       end)
 
       config = %{api_key: "my-secret-key", base_url: "http://localhost:#{port}"}
@@ -58,7 +58,7 @@ defmodule Synapsis.Provider.Transport.OpenAITest do
       Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(401, Jason.encode!(%{"error" => "unauthorized"}))
+        |> Plug.Conn.send_resp(401, Formata.JSON.encode!(%{"error" => "unauthorized"}))
       end)
 
       config = %{api_key: "bad-key", base_url: "http://localhost:#{port}"}
@@ -79,7 +79,7 @@ defmodule Synapsis.Provider.Transport.OpenAITest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(%{"data" => [%{"id" => "llama3"}]})
+          Formata.JSON.encode!(%{"data" => [%{"id" => "llama3"}]})
         )
       end)
 
@@ -92,7 +92,7 @@ defmodule Synapsis.Provider.Transport.OpenAITest do
       Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "model-a"}]}))
+        |> Plug.Conn.send_resp(200, Formata.JSON.encode!(%{"data" => [%{"id" => "model-a"}]}))
       end)
 
       config = %{api_key: "test-key", base_url: "http://localhost:#{port}/v1"}
@@ -103,7 +103,7 @@ defmodule Synapsis.Provider.Transport.OpenAITest do
       Gaoxy.Test.expect_once(bypass, "GET", "/llm/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "proxy-model"}]}))
+        |> Plug.Conn.send_resp(200, Formata.JSON.encode!(%{"data" => [%{"id" => "proxy-model"}]}))
       end)
 
       config = %{

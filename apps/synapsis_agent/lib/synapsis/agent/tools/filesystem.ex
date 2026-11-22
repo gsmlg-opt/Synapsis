@@ -20,7 +20,7 @@ defmodule Synapsis.Agent.Tools.Filesystem do
   @identity_keys ~w(run_id incarnation catalog_revision invocation_id tool_name tool_revision turn_id step_id attempt_id tool_call_id enclosing_invocation_id)a
   @correlation_keys ~w(turn_id step_id attempt_id tool_call_id)a
   @record_keys ~w(version key correlation raw_arguments_digest prepared_arguments_digest original_path public_path source_path requested_absolute target source_prefix action resource)a
-  @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding execution_mode headless_input)a
+  @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding execution_mode headless_input)a
   def names, do: @canonical_names
 
   def permission_level(name) when name in ~w(synapsis::read synapsis::ls), do: :read

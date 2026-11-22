@@ -270,7 +270,7 @@ defmodule Synapsis.Session.ChildSessionRuntimeTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       messages = request["input"]
       Agent.update(harness.counter, &%{&1 | provider_requests: &1.provider_requests ++ [request]})
 

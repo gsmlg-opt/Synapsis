@@ -66,7 +66,7 @@ defmodule Synapsis.Memory.CaptureTest do
         "/capture/v1/hooks/synapsis/" <> hook,
         fn conn ->
           {:ok, body, conn} = Plug.Conn.read_body(conn)
-          event = Jason.decode!(body)
+          event = Formata.JSON.decode!(body)
 
           logical =
             case hook do
@@ -111,7 +111,7 @@ defmodule Synapsis.Memory.CaptureTest do
       "/capture/v1/hooks/synapsis/user-prompt-submit",
       fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        event = Jason.decode!(body)
+        event = Formata.JSON.decode!(body)
         send(test, {:captured, event})
         reply(conn, event)
       end
@@ -185,7 +185,7 @@ defmodule Synapsis.Memory.CaptureTest do
       "/capture/v1/hooks/synapsis/user-prompt-submit",
       fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        event = Jason.decode!(body)
+        event = Formata.JSON.decode!(body)
         send(test, {:waiting, self()})
 
         receive do
@@ -260,7 +260,7 @@ defmodule Synapsis.Memory.CaptureTest do
   end
 
   defp reply(conn, event),
-    do: Plug.Conn.resp(conn, 202, Jason.encode!(%{ok: true, event_id: event["event_id"]}))
+    do: Plug.Conn.resp(conn, 202, Formata.JSON.encode!(%{ok: true, event_id: event["event_id"]}))
 
   defp settle do
     state = :sys.get_state(@server)

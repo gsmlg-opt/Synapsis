@@ -56,7 +56,7 @@ defmodule Synapsis.Session.NativeBrowserInputFunctionalTest do
     for result <- results do
       assert %{"version" => 1, "result" => %{"content" => content}} = result.projection
       assert result.content == content
-      assert Jason.decode!(content) == receipt(final, result.tool_use_id)
+      assert Formata.JSON.decode!(content) == receipt(final, result.tool_use_id)
     end
 
     assert_part_round_trips(parts)
@@ -238,7 +238,7 @@ defmodule Synapsis.Session.NativeBrowserInputFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/marker/input", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      proof = Jason.decode!(body)
+      proof = Formata.JSON.decode!(body)
       Agent.update(harness.counter, &%{&1 | markers: &1.markers ++ [proof]})
       Plug.Conn.resp(conn, 200, "marked")
     end)
@@ -252,7 +252,7 @@ defmodule Synapsis.Session.NativeBrowserInputFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/messages", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -366,7 +366,7 @@ defmodule Synapsis.Session.NativeBrowserInputFunctionalTest do
       Enum.find(blocks(request), &(&1["type"] == "tool_result" and &1["tool_use_id"] == id))
 
     text = result["content"] |> Enum.find(&(&1["type"] == "text")) |> Map.fetch!("text")
-    Jason.decode!(text)
+    Formata.JSON.decode!(text)
   end
 
   defp assert_wire_history(request, uses, results) do
@@ -405,7 +405,9 @@ defmodule Synapsis.Session.NativeBrowserInputFunctionalTest do
   defp assert_part_round_trips(parts) do
     for part <- parts do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
   end
 
@@ -488,7 +490,8 @@ defmodule Synapsis.Session.NativeBrowserInputFunctionalTest do
       case call do
         {id, input} ->
           {%{"type" => "tool_use", "id" => id, "name" => ToolName.encode(@name), "input" => %{}},
-           %{"type" => "input_json_delta", "partial_json" => Jason.encode!(input)}, "tool_use"}
+           %{"type" => "input_json_delta", "partial_json" => Formata.JSON.encode!(input)},
+           "tool_use"}
 
         nil ->
           {%{"type" => "text", "text" => ""},
@@ -507,7 +510,7 @@ defmodule Synapsis.Session.NativeBrowserInputFunctionalTest do
     |> Plug.Conn.put_resp_content_type("text/event-stream")
     |> Plug.Conn.resp(
       200,
-      Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+      Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
     )
   end
 end

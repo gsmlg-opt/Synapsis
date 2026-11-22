@@ -384,7 +384,7 @@ defmodule SynapsisWeb.MCPLive.Index do
   end
 
   defp parse_mcp_json(json) do
-    case Jason.decode(json) do
+    case Formata.JSON.decode(json) do
       {:ok, %{"mcpServers" => servers}} when is_map(servers) ->
         {:ok, servers}
 
@@ -399,7 +399,7 @@ defmodule SynapsisWeb.MCPLive.Index do
       {:ok, _} ->
         {:error, "expected a JSON object"}
 
-      {:error, %Jason.DecodeError{} = err} ->
+      {:error, [%Formata.Error{} = err | _]} ->
         {:error, Exception.message(err)}
     end
   end
@@ -893,7 +893,7 @@ defmodule SynapsisWeb.MCPLive.Index do
   end
 
   defp mcp_import_example do
-    Jason.encode!(
+    Formata.JSON.encode!(
       %{
         "mcpServers" => %{
           "filesystem" => %{

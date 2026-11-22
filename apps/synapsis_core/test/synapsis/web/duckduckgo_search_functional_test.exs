@@ -269,6 +269,6 @@ defmodule Synapsis.Web.DuckDuckGoSearchFunctionalTest do
       __DIR__
     )
     |> File.read!()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 end

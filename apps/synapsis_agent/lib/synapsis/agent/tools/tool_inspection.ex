@@ -16,7 +16,7 @@ defmodule Synapsis.Agent.Tools.ToolInspection do
   @context_keys [:identity, :session_binding, :inventory, :mcp_sources]
   @identity_keys [:caller, :session_id, :run_id, :incarnation, :catalog_revision]
   @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
   @output_limit 65_536
 
   def names, do: [@name]
@@ -106,7 +106,7 @@ defmodule Synapsis.Agent.Tools.ToolInspection do
          {:ok, _} <- classify(context, operation),
          {:ok, document} <- lookup(context, operation.arguments["tool_name"]),
          :ok <- Validation.term(document),
-         {:ok, encoded} <- Jason.encode_to_iodata(document),
+         {:ok, encoded} <- Synapsis.JSON.encode_to_iodata(document),
          true <- IO.iodata_length(encoded) <= @output_limit do
       {:ok, %{content: IO.iodata_to_binary(encoded)}}
     else

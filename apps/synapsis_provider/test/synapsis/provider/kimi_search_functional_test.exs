@@ -192,7 +192,7 @@ defmodule Synapsis.Provider.KimiSearchFunctionalTest do
       __DIR__
     )
     |> File.read!()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 
   defp config(ctx),
@@ -210,11 +210,11 @@ defmodule Synapsis.Provider.KimiSearchFunctionalTest do
 
     Gaoxy.Test.stub(ctx.fixture, "POST", path, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(owner, {:kimi_http, conn.request_path, Jason.decode!(body), conn.req_headers})
+      send(owner, {:kimi_http, conn.request_path, Formata.JSON.decode!(body), conn.req_headers})
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(payload))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
     end)
   end
 end

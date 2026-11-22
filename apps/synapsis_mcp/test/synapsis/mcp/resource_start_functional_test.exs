@@ -125,7 +125,7 @@ defmodule Synapsis.MCP.ResourceStartFunctionalTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       Agent.update(calls, &(&1 ++ [request]))
 
       response =
@@ -150,7 +150,7 @@ defmodule Synapsis.MCP.ResourceStartFunctionalTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(
           200,
-          Jason.encode!(%{"jsonrpc" => "2.0", "id" => request["id"], "result" => response})
+          Formata.JSON.encode!(%{"jsonrpc" => "2.0", "id" => request["id"], "result" => response})
         )
       else
         Plug.Conn.resp(conn, 202, "")

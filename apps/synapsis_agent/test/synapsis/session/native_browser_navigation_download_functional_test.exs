@@ -86,14 +86,14 @@ defmodule Synapsis.Session.NativeBrowserNavigationDownloadFunctionalTest do
       assert %{"version" => 1, "result" => projected} = result.projection
       assert projected["is_error"] == false
       assert result.content == projected["content"]
-      assert Jason.decode!(result.content) == receipt(final, result.tool_use_id)
+      assert Formata.JSON.decode!(result.content) == receipt(final, result.tool_use_id)
       assert projected["structured"] == receipt(final, result.tool_use_id)
       assert Map.drop(projected, ~w(content structured is_error)) == projected["structured"]
     end
 
     navigation_part = Enum.find(results, &(&1.tool_use_id == "navigation-download-navigate"))
     assert navigation_part.projection["result"]["structured"]["download"] == saved
-    assert Jason.decode!(navigation_part.content)["download"] == saved
+    assert Formata.JSON.decode!(navigation_part.content)["download"] == saved
     assert_part_round_trips(parts)
     assert_durable_parts(harness.session.id, uses, results)
     assert_effect_counts(harness)
@@ -232,7 +232,7 @@ defmodule Synapsis.Session.NativeBrowserNavigationDownloadFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/messages", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -332,7 +332,7 @@ defmodule Synapsis.Session.NativeBrowserNavigationDownloadFunctionalTest do
     result["content"]
     |> Enum.find(&(&1["type"] == "text"))
     |> Map.fetch!("text")
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 
   defp assert_wire_history(request, uses, results) do
@@ -371,7 +371,9 @@ defmodule Synapsis.Session.NativeBrowserNavigationDownloadFunctionalTest do
   defp assert_part_round_trips(parts) do
     for part <- parts do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
   end
 
@@ -451,7 +453,8 @@ defmodule Synapsis.Session.NativeBrowserNavigationDownloadFunctionalTest do
       case call do
         {id, input} ->
           {%{"type" => "tool_use", "id" => id, "name" => ToolName.encode(@name), "input" => %{}},
-           %{"type" => "input_json_delta", "partial_json" => Jason.encode!(input)}, "tool_use"}
+           %{"type" => "input_json_delta", "partial_json" => Formata.JSON.encode!(input)},
+           "tool_use"}
 
         nil ->
           {%{"type" => "text", "text" => ""},
@@ -468,6 +471,9 @@ defmodule Synapsis.Session.NativeBrowserNavigationDownloadFunctionalTest do
 
     conn
     |> Plug.Conn.put_resp_content_type("text/event-stream")
-    |> Plug.Conn.resp(200, Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n")))
+    |> Plug.Conn.resp(
+      200,
+      Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
+    )
   end
 end

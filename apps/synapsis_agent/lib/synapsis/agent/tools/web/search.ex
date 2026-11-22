@@ -21,7 +21,7 @@ defmodule Synapsis.Agent.Tools.Web.Search do
   @names [@generic, @tavily, @firecrawl]
   @keys ~w(identity agent_id agent_name tool_name config fingerprint session_binding)a
   @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
   @config_keys ~w(provider credential_id base_url timeout_ms cache_ttl_ms count mode)
   @timer_limit 2_147_000_000
   @result_limit 1_000_000
@@ -176,7 +176,7 @@ defmodule Synapsis.Agent.Tools.Web.Search do
   defp query_anchor(arguments, _runtime), do: arguments["query"]
 
   defp output(public) do
-    case Jason.encode(public) do
+    case Synapsis.JSON.encode(public) do
       {:ok, text} when byte_size(text) <= @text_limit ->
         result = Map.put(public, "content", text)
 

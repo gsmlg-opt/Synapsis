@@ -264,7 +264,7 @@ defmodule Synapsis.Filesystem.Planner.PortSession do
 
   defp request_frame(request) do
     if valid_request?(request) do
-      case Jason.encode(request) do
+      case Synapsis.JSON.encode(request) do
         {:ok, bytes} when byte_size(bytes) <= @input_limit -> {:ok, bytes <> "\n"}
         {:ok, _} -> {:error, :input_too_large}
         {:error, _} -> {:error, :invalid_request}
@@ -384,7 +384,7 @@ defmodule Synapsis.Filesystem.Planner.PortSession do
   end
 
   defp complete(state) do
-    decoded = state.chunks |> Enum.reverse() |> IO.iodata_to_binary() |> Jason.decode()
+    decoded = state.chunks |> Enum.reverse() |> IO.iodata_to_binary() |> Formata.JSON.decode()
 
     case decoded do
       {:ok, envelope} ->

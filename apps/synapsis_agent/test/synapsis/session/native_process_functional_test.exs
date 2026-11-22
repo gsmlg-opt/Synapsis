@@ -104,7 +104,9 @@ defmodule Synapsis.Session.NativeProcessFunctionalTest do
 
     for part <- parts do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
 
     assert_durable_parts(harness.session.id, uses, results)
@@ -133,7 +135,7 @@ defmodule Synapsis.Session.NativeProcessFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -208,7 +210,8 @@ defmodule Synapsis.Session.NativeProcessFunctionalTest do
     calls = Enum.filter(request["input"], &(&1["type"] == "function_call"))
 
     assert Enum.map(calls, fn call ->
-             {call["call_id"], ToolName.decode(call["name"]), Jason.decode!(call["arguments"])}
+             {call["call_id"], ToolName.decode(call["name"]),
+              Formata.JSON.decode!(call["arguments"])}
            end) == Enum.map(uses, &{&1.tool_use_id, &1.tool, &1.input})
 
     assert Enum.map(tool_results(request), &{&1["call_id"], &1["output"]}) ==

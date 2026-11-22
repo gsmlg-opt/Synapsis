@@ -81,7 +81,7 @@ defmodule Synapsis.Session.NativePerplexitySearchFunctionalTest do
     results = Enum.filter(parts, &match?(%ToolResult{}, &1))
     assert Enum.map(uses, &{&1.tool_use_id, &1.tool, &1.input}) == calls
     assert Enum.all?(results, &(&1.is_error == false))
-    [first, cached] = Enum.map(results, &Jason.decode!(&1.content))
+    [first, cached] = Enum.map(results, &Formata.JSON.decode!(&1.content))
     assert first["provider"] == "perplexity"
     assert first["query"] == " native search "
     assert cached == Map.put(first, "cached", true)
@@ -94,7 +94,9 @@ defmodule Synapsis.Session.NativePerplexitySearchFunctionalTest do
 
     for part <- uses ++ results do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
 
     assert_durable(harness.session.id, uses, results)
@@ -138,12 +140,12 @@ defmodule Synapsis.Session.NativePerplexitySearchFunctionalTest do
 
       Agent.update(
         harness.counter,
-        &%{&1 | search_requests: &1.search_requests ++ [{path, Jason.decode!(body)}]}
+        &%{&1 | search_requests: &1.search_requests ++ [{path, Formata.JSON.decode!(body)}]}
       )
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(payload))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
     end)
   end
 
@@ -164,7 +166,7 @@ defmodule Synapsis.Session.NativePerplexitySearchFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      req = Jason.decode!(body)
+      req = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -218,7 +220,8 @@ defmodule Synapsis.Session.NativePerplexitySearchFunctionalTest do
     uses = Enum.filter(req["input"], &(&1["type"] == "function_call"))
 
     assert Enum.map(uses, fn call ->
-             {call["call_id"], ToolName.decode(call["name"]), Jason.decode!(call["arguments"])}
+             {call["call_id"], ToolName.decode(call["name"]),
+              Formata.JSON.decode!(call["arguments"])}
            end) == calls
 
     actual = for message <- req["input"], message["type"] == "function_call_output", do: message

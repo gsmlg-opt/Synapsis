@@ -152,7 +152,7 @@ defmodule Synapsis.Web.SearchCachePolicyFunctionalTest do
   end
 
   test "complete pinned public callbacks match HTTP and cache policy observations", ctx do
-    reference = Jason.decode!(File.read!(@fixture))
+    reference = Formata.JSON.decode!(File.read!(@fixture))
     assert length(reference["publicGroups"]) == 8
     assert Enum.sum(Enum.map(reference["publicGroups"], &length(&1["steps"]))) == 36
     install(ctx, "brave", "web")
@@ -205,7 +205,7 @@ defmodule Synapsis.Web.SearchCachePolicyFunctionalTest do
   end
 
   test "complete pinned cache helpers match value, key order and capacity observations" do
-    reference = Jason.decode!(File.read!(@fixture))
+    reference = Formata.JSON.decode!(File.read!(@fixture))
     assert length(reference["helperGroups"]) == 7
 
     for group <- reference["helperGroups"] do
@@ -311,7 +311,7 @@ defmodule Synapsis.Web.SearchCachePolicyFunctionalTest do
           {Plug.Conn.fetch_query_params(conn).query_params, conn}
         else
           {:ok, body, conn} = Plug.Conn.read_body(conn)
-          {Jason.decode!(body), conn}
+          {Formata.JSON.decode!(body), conn}
         end
 
       index =
@@ -336,7 +336,7 @@ defmodule Synapsis.Web.SearchCachePolicyFunctionalTest do
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(payload))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
     end)
   end
 end

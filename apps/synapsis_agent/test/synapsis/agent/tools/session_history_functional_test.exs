@@ -50,7 +50,7 @@ defmodule Synapsis.Agent.Tools.SessionHistoryFunctionalTest do
       })
 
     assert {:ok, %{content: content, structured: page}} = SessionHistory.execute(operation)
-    assert Jason.decode!(content) == Jason.decode!(Jason.encode!(page))
+    assert Formata.JSON.decode!(content) == Formata.JSON.decode!(Formata.JSON.encode!(page))
     pending = %{"items" => [], "total" => 0}
 
     assert page == %{
@@ -60,7 +60,8 @@ defmodule Synapsis.Agent.Tools.SessionHistoryFunctionalTest do
              "droppedMessages" => false,
              "contentTruncated" => false,
              "contentRedacted" => false,
-             "bytes" => byte_size(Jason.encode!([])) + byte_size(Jason.encode!(pending)),
+             "bytes" =>
+               byte_size(Formata.JSON.encode!([])) + byte_size(Formata.JSON.encode!(pending)),
              "pendingInputs" => pending
            }
   end

@@ -34,7 +34,7 @@ defmodule Synapsis.Release.FilesystemRuntimeFunctionalTest do
 
     bytes = File.read!(@fixture)
     assert sha256(bytes) == @fixture_sha256
-    fixture = Jason.decode!(bytes)
+    fixture = Formata.JSON.decode!(bytes)
     assert fixture["reference"]["commit"] == @reference_commit
     assert Enum.map(fixture["cases"], & &1["id"]) == @ordinary_ids
 
@@ -106,7 +106,7 @@ defmodule Synapsis.Release.FilesystemRuntimeFunctionalTest do
       ])
 
     output = collect(port, [], System.monotonic_time(:millisecond) + 5_000)
-    assert Jason.decode!(output) == Map.put(@runtime, "execPath", ctx.node)
+    assert Formata.JSON.decode!(output) == Map.put(@runtime, "execPath", ctx.node)
     assert Port.info(port) == nil
   end
 

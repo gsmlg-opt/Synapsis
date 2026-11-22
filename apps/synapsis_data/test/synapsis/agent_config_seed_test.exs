@@ -114,7 +114,7 @@ defmodule Synapsis.AgentConfigSeedTest do
           "toolset_ids" => [first_toolset, Ecto.UUID.generate(), first_toolset],
           "is_default" => false,
           "enabled" => false,
-          "config" => Jason.encode!(%{"nested_unknown" => %{"keep" => ["one", "two"]}}),
+          "config" => Formata.JSON.encode!(%{"nested_unknown" => %{"keep" => ["one", "two"]}}),
           "future_setting" => %{"nested" => ["keep", "order"]}
         },
         attrs

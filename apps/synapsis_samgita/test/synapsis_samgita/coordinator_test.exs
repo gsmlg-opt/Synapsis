@@ -28,18 +28,18 @@ defmodule SynapsisSamgita.CoordinatorTest do
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
       response =
-        Req.request!(
+        HTTP.fetch(opts[:http_url] <> conn.request_path,
           method: conn.method,
-          url: opts[:http_url] <> conn.request_path,
           headers: conn.req_headers,
           body: body,
           retry: false,
-          receive_timeout: 5_000
+          timeout: 5_000
         )
+        |> HTTP.Promise.await()
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.send_resp(response.status, JSON.encode!(response.body))
+      |> Plug.Conn.send_resp(response.status, HTTP.Response.read_all(response))
     end
   end
 

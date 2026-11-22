@@ -358,8 +358,10 @@ defmodule SynapsisLocalAgents.Codex do
   defp declared_env_keys(nil), do: []
 
   defp declared_env_keys(codex_home) do
-    case Toml.decode_file(Path.join(codex_home, "config.toml")) do
-      {:ok, config} -> collect_env_keys(config)
+    with {:ok, content} <- File.read(Path.join(codex_home, "config.toml")),
+         {:ok, config} <- Formata.decode(content, :toml) do
+      collect_env_keys(config)
+    else
       {:error, _} -> []
     end
   end

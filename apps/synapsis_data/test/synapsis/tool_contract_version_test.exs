@@ -334,7 +334,7 @@ defmodule Synapsis.ToolContractVersionTest do
     assert updated.toolset_id == nil
     assert {:ok, stored} = Store.get(:agent, raw["id"])
     assert is_binary(stored["config"])
-    assert Jason.decode!(stored["config"]) == config
+    assert Formata.JSON.decode!(stored["config"]) == config
     assert stored["toolset_ids"] == []
     assert stored["toolset_id"] == nil
     assert stored["future_setting"] == raw["future_setting"]
@@ -359,7 +359,7 @@ defmodule Synapsis.ToolContractVersionTest do
         Map.merge(raw, %{
           "toolset_ids" => [Ecto.UUID.generate(), Ecto.UUID.generate()],
           "toolset_id" => Ecto.UUID.generate(),
-          "config" => Jason.encode!(%{"nested_unknown" => %{"keep" => ["one", "two"]}})
+          "config" => Formata.JSON.encode!(%{"nested_unknown" => %{"keep" => ["one", "two"]}})
         })
       else
         raw

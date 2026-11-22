@@ -8,7 +8,7 @@ defmodule Synapsis.Agent.Tools.Web.Unavailable do
 
   @context_keys [:identity, :session_binding, :tool_name, :revision, :message]
   @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
   @schema %{"type" => "object", "properties" => %{}, "additionalProperties" => false}
 
   def descriptor(name, revision, message, identity, binding) do

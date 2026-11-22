@@ -34,7 +34,7 @@ defmodule Synapsis.Session.NativeImageProjectionTest do
     part = host |> Enum.find(&(&1.role == :tool)) |> Map.fetch!(:parts) |> hd()
     assert part.content == live
     assert {:ok, dump} = Part.dump(part)
-    assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Part.load()
+    assert {:ok, ^part} = dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Part.load()
 
     Store.ensure_started()
     session_id = Ecto.UUID.generate()
@@ -75,13 +75,13 @@ defmodule Synapsis.Session.NativeImageProjectionTest do
 
     Gaoxy.Test.expect_once(fixture, "POST", "/v1/messages", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(owner, {:image_request, Jason.decode!(body)})
+      send(owner, {:image_request, Formata.JSON.decode!(body)})
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.resp(
         200,
-        Jason.encode!(%{
+        Formata.JSON.encode!(%{
           "stop_reason" => "end_turn",
           "content" => [%{"type" => "text", "text" => "seen"}]
         })

@@ -54,7 +54,7 @@ defmodule Synapsis.SkillBodySearchFunctionalTest do
   end
 
   test "whole pinned source observations independently fix ordinary body ranking" do
-    fixture = @fixture |> File.read!() |> Jason.decode!()
+    fixture = @fixture |> File.read!() |> Formata.JSON.decode!()
 
     for row <- fixture["observations"] do
       entries =

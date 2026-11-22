@@ -342,7 +342,7 @@ defmodule Synapsis.Agent.Tools.ToolInspectionFunctionalTest do
           assert %{content: content} = result.result
           assert result.result == %{content: content, is_error: false}
           assert is_binary(content)
-          assert Jason.decode!(content) == expected
+          assert Formata.JSON.decode!(content) == expected
           assert byte_size(content) <= 65_536
           assert Agent.get(ctx.counter, & &1) == 0
           assert Conversation.status(conversation).catalog_revision == 1

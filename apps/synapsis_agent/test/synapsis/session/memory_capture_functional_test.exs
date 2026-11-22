@@ -42,9 +42,9 @@ defmodule Synapsis.Session.MemoryCaptureFunctionalTest do
     for hook <- ~w(session-start user-prompt-submit post-tool-use session-end) do
       Gaoxy.Test.expect_once(fixture, "POST", "/capture/v1/hooks/synapsis/" <> hook, fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        event = Jason.decode!(body)
+        event = Formata.JSON.decode!(body)
         send(test, {:capture, hook, event})
-        Plug.Conn.resp(conn, 202, Jason.encode!(%{ok: true, event_id: event["event_id"]}))
+        Plug.Conn.resp(conn, 202, Formata.JSON.encode!(%{ok: true, event_id: event["event_id"]}))
       end)
     end
 
@@ -59,7 +59,7 @@ defmodule Synapsis.Session.MemoryCaptureFunctionalTest do
 
     Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       if Enum.any?(request["input"], &(&1["type"] == "function_call_output")) do
         DeterministicProvider.send_sse(conn, [

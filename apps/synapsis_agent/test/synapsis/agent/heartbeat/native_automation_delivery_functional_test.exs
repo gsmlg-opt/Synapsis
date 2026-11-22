@@ -358,7 +358,7 @@ defmodule Synapsis.Agent.Heartbeat.NativeAutomationDeliveryFunctionalTest do
 
     Gaoxy.Test.stub(http, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       Agent.update(log, &(&1 ++ [request]))
       target? = request["model"] == "automation-model"
       following? = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
@@ -403,7 +403,7 @@ defmodule Synapsis.Agent.Heartbeat.NativeAutomationDeliveryFunctionalTest do
           {:ok, conn} =
             Plug.Conn.chunk(
               conn,
-              "data: #{Jason.encode!(DeterministicProvider.text_chunk("Source live fragment"))}\n\n"
+              "data: #{Formata.JSON.encode!(DeterministicProvider.text_chunk("Source live fragment"))}\n\n"
             )
 
           send(owner, {:source_streaming, self()})

@@ -59,7 +59,7 @@ defmodule Synapsis.AutomationDirectoryTest do
     assert {:ok, ^expected} = AutomationDirectory.read(%{"action" => "list"}, ctx.context)
     assert Enum.map(expected.routines, & &1.id) == [ui.id, disabled.id]
     refute Enum.at(expected.routines, 1).enabled
-    refute Jason.encode!(expected) =~ @private
+    refute Formata.JSON.encode!(expected) =~ @private
 
     for {source, raw} <- [{"routine", ui}, {"heartbeat", disabled}] do
       assert {:ok, expected_get} = RoutineConfigs.get_visible("main", source, raw.id)

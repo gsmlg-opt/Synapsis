@@ -94,12 +94,20 @@ defmodule Synapsis.Agent.TestSupport.DeterministicProviderTest do
   defp post_responses_raw(base_url, opts \\ []) do
     input = Keyword.get(opts, :input, [%{"role" => "user", "content" => "hi"}])
 
-    Req.post("#{base_url}/v1/responses",
-      json: %{
-        "model" => "test",
-        "stream" => true,
-        "input" => input
-      }
-    )
+    body = Formata.JSON.encode!(%{"model" => "test", "stream" => true, "input" => input})
+
+    case HTTP.fetch("#{base_url}/v1/responses",
+           method: :post,
+           headers: [{"content-type", "application/json"}],
+           body: body,
+           timeout: 5_000
+         )
+         |> HTTP.Promise.await(5_000) do
+      %HTTP.Response{status: status} = response ->
+        {:ok, %{status: status, body: HTTP.Response.read_all(response)}}
+
+      {:error, _} = error ->
+        error
+    end
   end
 end

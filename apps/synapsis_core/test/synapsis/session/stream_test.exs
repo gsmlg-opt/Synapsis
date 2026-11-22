@@ -240,7 +240,7 @@ defmodule Synapsis.Session.StreamTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           500,
-          Jason.encode!(%{"error" => %{"message" => "internal failure"}})
+          Formata.JSON.encode!(%{"error" => %{"message" => "internal failure"}})
         )
       end)
 
@@ -248,7 +248,7 @@ defmodule Synapsis.Session.StreamTest do
 
       assert {:ok, _ref} = Stream.start_stream(request, config, provider_name)
 
-      # Non-SSE response triggers :provider_done (Req parses non-streaming body)
+      # Non-SSE response follows the provider's error path.
       # OR could be :provider_error depending on implementation.
       # Accept either outcome as graceful handling.
       events = collect_stream_events()

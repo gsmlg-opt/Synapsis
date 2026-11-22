@@ -74,13 +74,13 @@ defmodule Synapsis.Agent.ContextBuilderTest do
 
     Gaoxy.Test.expect_once(server, "POST", "/memory/synapsis/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       assert request["method"] == "initialize"
 
       Plug.Conn.resp(
         conn,
         200,
-        Jason.encode!(%{
+        Formata.JSON.encode!(%{
           jsonrpc: "2.0",
           id: request["id"],
           result: %{instructions: "Use memory::search before exploring; remember once if useful."}

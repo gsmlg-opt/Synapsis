@@ -139,7 +139,7 @@ defmodule Synapsis.Memory.SummarizerDispatcher do
         _ -> text
       end
 
-    case Jason.decode(json_text) do
+    case Formata.JSON.decode(json_text) do
       {:ok, candidates} when is_list(candidates) ->
         valid =
           candidates

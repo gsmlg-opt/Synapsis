@@ -24,7 +24,7 @@ defmodule Synapsis.Session.Sharing do
           messages: Enum.map(messages, &export_message/1)
         }
 
-        case Jason.encode(data, pretty: true) do
+        case Synapsis.JSON.encode(data, pretty: true) do
           {:ok, json} -> {:ok, json}
           {:error, _reason} -> {:error, "Failed to encode session data"}
         end
@@ -45,7 +45,7 @@ defmodule Synapsis.Session.Sharing do
   end
 
   def import_session(json_string, agent_name \\ nil) do
-    case Jason.decode(json_string) do
+    case Formata.JSON.decode(json_string) do
       {:ok, %{"session" => session_data, "messages" => messages_data}} ->
         do_import(session_data, messages_data, agent_name)
 

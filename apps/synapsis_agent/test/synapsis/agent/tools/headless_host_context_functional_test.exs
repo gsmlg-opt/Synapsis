@@ -287,11 +287,13 @@ defmodule Synapsis.Agent.Tools.HeadlessHostContextFunctionalTest do
     assert continued == %{"type" => "text", "text" => "continued"}
     assert after_output == %{"type" => "text", "text" => "after"}
     assert shell_output["type"] == "text"
-    assert %{"exit_code" => 0, "output" => "nested-shell"} = Jason.decode!(shell_output["text"])
+
+    assert %{"exit_code" => 0, "output" => "nested-shell"} =
+             Formata.JSON.decode!(shell_output["text"])
 
     for clock_output <- [clock_one, clock_two] do
       assert clock_output["type"] == "text"
-      assert %{"current_time" => time} = Jason.decode!(clock_output["text"])
+      assert %{"current_time" => time} = Formata.JSON.decode!(clock_output["text"])
       assert time =~ ~r/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC$/
     end
 

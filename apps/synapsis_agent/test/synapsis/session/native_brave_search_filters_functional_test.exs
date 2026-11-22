@@ -56,7 +56,7 @@ defmodule Synapsis.Session.NativeBraveSearchFiltersFunctionalTest do
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(%{"web" => %{"results" => rows}}))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"web" => %{"results" => rows}}))
     end)
 
     config =
@@ -88,7 +88,7 @@ defmodule Synapsis.Session.NativeBraveSearchFiltersFunctionalTest do
     assert Enum.map(uses, &{&1.tool_use_id, &1.tool, &1.input}) == calls
     assert Enum.map(results, & &1.tool_use_id) == Enum.map(calls, &elem(&1, 0))
     assert Enum.all?(results, &(&1.is_error == false))
-    [first, canonical, bounded, swapped] = Enum.map(results, &Jason.decode!(&1.content))
+    [first, canonical, bounded, swapped] = Enum.map(results, &Formata.JSON.decode!(&1.content))
     assert first["query"] == "localized native"
     assert Enum.map(first["results"], & &1["title"]) == ["First", "Second"]
     assert canonical == Map.put(first, "cached", true)
@@ -101,7 +101,9 @@ defmodule Synapsis.Session.NativeBraveSearchFiltersFunctionalTest do
 
     for part <- uses ++ results do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
 
     assert_durable(harness.session.id, uses, results)
@@ -172,7 +174,7 @@ defmodule Synapsis.Session.NativeBraveSearchFiltersFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      req = Jason.decode!(body)
+      req = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -222,7 +224,8 @@ defmodule Synapsis.Session.NativeBraveSearchFiltersFunctionalTest do
     uses = Enum.filter(req["input"], &(&1["type"] == "function_call"))
 
     assert Enum.map(uses, fn call ->
-             {call["call_id"], ToolName.decode(call["name"]), Jason.decode!(call["arguments"])}
+             {call["call_id"], ToolName.decode(call["name"]),
+              Formata.JSON.decode!(call["arguments"])}
            end) == calls
 
     actual = for message <- req["input"], message["type"] == "function_call_output", do: message

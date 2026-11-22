@@ -111,7 +111,7 @@ defmodule Synapsis.Session.NativeRuntimeRetirementFunctionalTest do
 
   defp record_request(conn, counter) do
     {:ok, body, conn} = Plug.Conn.read_body(conn)
-    request = Jason.decode!(body)
+    request = Formata.JSON.decode!(body)
 
     index =
       Agent.get_and_update(counter, fn state ->

@@ -96,7 +96,7 @@ defmodule Synapsis.Web.TavilySearchFunctionalTest do
         __DIR__
       )
       |> File.read!()
-      |> Jason.decode!()
+      |> Formata.JSON.decode!()
 
     vectors =
       for group <- reference["groups"],
@@ -117,11 +117,11 @@ defmodule Synapsis.Web.TavilySearchFunctionalTest do
 
         Gaoxy.Test.stub(fixture, "POST", endpoint.path, fn conn ->
           {:ok, body, conn} = Plug.Conn.read_body(conn)
-          send(owner, {:tavily_oracle_http, conn.query_string, Jason.decode!(body)})
+          send(owner, {:tavily_oracle_http, conn.query_string, Formata.JSON.decode!(body)})
 
           conn
           |> Plug.Conn.put_resp_content_type("application/json")
-          |> Plug.Conn.resp(200, Jason.encode!(group["httpPayload"]))
+          |> Plug.Conn.resp(200, Formata.JSON.encode!(group["httpPayload"]))
         end)
 
         # Compare source-effective typed arguments. The reference raw reader also
@@ -176,7 +176,7 @@ defmodule Synapsis.Web.TavilySearchFunctionalTest do
 
     Gaoxy.Test.stub(ctx.fixture, "POST", "/proxy/search", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(owner, {:tavily_http, Jason.decode!(body)})
+      send(owner, {:tavily_http, Formata.JSON.decode!(body)})
 
       payload = %{
         "results" => [
@@ -193,7 +193,7 @@ defmodule Synapsis.Web.TavilySearchFunctionalTest do
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(payload))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
     end)
   end
 

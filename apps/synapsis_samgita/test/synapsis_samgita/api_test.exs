@@ -21,12 +21,12 @@ defmodule SynapsisSamgita.APITest do
   defp json(conn, status, body) do
     conn
     |> Plug.Conn.put_resp_content_type("application/json")
-    |> Plug.Conn.send_resp(status, Jason.encode!(body))
+    |> Plug.Conn.send_resp(status, Formata.JSON.encode!(body))
   end
 
   defp body(conn) do
     {:ok, raw, conn} = Plug.Conn.read_body(conn)
-    {Jason.decode!(raw), conn}
+    {Formata.JSON.decode!(raw), conn}
   end
 
   test "connect/1 authenticates and sends a command_id without a connection header", %{

@@ -252,7 +252,7 @@ defmodule Synapsis.AgentConfigsDirectoryTest do
     assert :ets.insert(@table, entries)
     assert {:error, :output_too_large} = directory("main", limit: 100)
     assert {:ok, page} = directory("main", limit: 1)
-    assert byte_size(Jason.encode!(page)) <= 65_536
+    assert byte_size(Formata.JSON.encode!(page)) <= 65_536
   end
 
   test "malformed identity metadata fails explicitly instead of silently dropping records" do

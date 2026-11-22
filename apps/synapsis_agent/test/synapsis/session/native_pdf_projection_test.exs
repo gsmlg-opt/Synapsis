@@ -63,7 +63,9 @@ defmodule Synapsis.Session.NativePdfProjectionTest do
              }
 
       assert {:ok, dumped} = Part.dump(part)
-      assert {:ok, ^part} = dumped |> Jason.encode!() |> Jason.decode!() |> Part.load()
+
+      assert {:ok, ^part} =
+               dumped |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Part.load()
 
       reloaded = persist_and_reload(host)
 
@@ -121,13 +123,13 @@ defmodule Synapsis.Session.NativePdfProjectionTest do
 
       Gaoxy.Test.expect_once(fixture, "POST", "/v1/messages", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        send(owner, {:pdf_request, Jason.decode!(body)})
+        send(owner, {:pdf_request, Formata.JSON.decode!(body)})
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(
           200,
-          Jason.encode!(%{
+          Formata.JSON.encode!(%{
             "stop_reason" => "end_turn",
             "content" => [%{"type" => "text", "text" => "PDFs received"}]
           })

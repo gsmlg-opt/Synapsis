@@ -135,7 +135,7 @@ defmodule Synapsis.Agent.Tools.NativeLocal do
          action: "filesystem.patch",
          resource:
            "filesystem:patch:" <>
-             Jason.encode!([1, inspected.root, inspected.patch_sha256, operations]),
+             Formata.JSON.encode!([1, inspected.root, inspected.patch_sha256, operations]),
          permission_levels: levels
        }}
     end

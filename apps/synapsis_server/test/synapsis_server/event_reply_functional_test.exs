@@ -49,7 +49,7 @@ defmodule SynapsisServer.EventReplyFunctionalTest do
               status: 200,
               body: %{"data" => %{"messages" => [rest_event, rest_quiet, rest_ordinary]}}
             }} =
-             Req.get(ctx.host <> "/api/sessions/#{ctx.id}", retry: false)
+             get_json(ctx.host <> "/api/sessions/#{ctx.id}")
 
     assert rest_event["id"] == event.id
 
@@ -85,8 +85,11 @@ defmodule SynapsisServer.EventReplyFunctionalTest do
              join(socket, "session:#{ctx.id}", %{})
 
     assert channel_event.id == event.id
-    assert Jason.decode!(Jason.encode!(channel_event.parts)) == rest_event["parts"]
-    assert Jason.decode!(Jason.encode!(channel_event.reply_presentation)) == projection
+    assert Formata.JSON.decode!(Formata.JSON.encode!(channel_event.parts)) == rest_event["parts"]
+
+    assert Formata.JSON.decode!(Formata.JSON.encode!(channel_event.reply_presentation)) ==
+             projection
+
     assert channel_quiet.reply_presentation.hidden == true
 
     assert channel_ordinary == %{
@@ -106,11 +109,11 @@ defmodule SynapsisServer.EventReplyFunctionalTest do
 
     Gaoxy.Test.expect_once(ctx.provider, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       assert %{
                "role" => "user",
-               "content" => [%{"type" => "text", "text" => "manual event notice"}]
+               "content" => [%{"type" => "input_text", "text" => "manual event notice"}]
              } =
                List.last(request["input"])
 
@@ -122,7 +125,7 @@ defmodule SynapsisServer.EventReplyFunctionalTest do
       assert {:ok, conn} =
                Plug.Conn.chunk(
                  conn,
-                 "data: #{Jason.encode!(DeterministicProvider.text_chunk(raw))}\n\n"
+                 "data: #{Formata.JSON.encode!(DeterministicProvider.text_chunk(raw))}\n\n"
                )
 
       send(owner, {:event_provider_held, self()})
@@ -155,29 +158,19 @@ defmodule SynapsisServer.EventReplyFunctionalTest do
     assert live_view.committed_messages == []
 
     assert {:ok, %{status: 200, body: %{"data" => rest}}} =
-             Req.get(ctx.host <> "/api/sessions/#{ctx.id}", retry: false)
+             get_json(ctx.host <> "/api/sessions/#{ctx.id}")
 
     assert rest["in_flight"] == raw
-    assert rest["reply_presentation"] == Jason.decode!(Jason.encode!(live_view))
+    assert rest["reply_presentation"] == Formata.JSON.decode!(Formata.JSON.encode!(live_view))
     assert {:ok, socket} = connect(SynapsisServer.UserSocket, %{})
     assert {:ok, joined, _socket} = join(socket, "session:#{ctx.id}", %{})
     assert joined.reply_presentation == live_view
 
-    assert {:ok, conn} =
-             Mint.HTTP.connect(:http, "127.0.0.1", ctx.port,
-               mode: :passive,
-               protocols: [:http1],
-               transport_opts: [timeout: @timeout]
-             )
-
-    on_exit(fn -> :gen_tcp.close(Mint.HTTP.get_socket(conn)) end)
-
-    assert {:ok, conn, ref} =
-             Mint.HTTP.request(conn, "GET", "/api/sessions/#{ctx.id}/events", [], nil)
+    {conn, ref} = open_sse(ctx.host <> "/api/sessions/#{ctx.id}/events")
 
     {conn, initial, _wire} = receive_frame(conn, ref, "session_state")
     assert initial["in_flight"] == raw
-    assert initial["reply_presentation"] == Jason.decode!(Jason.encode!(live_view))
+    assert initial["reply_presentation"] == Formata.JSON.decode!(Formata.JSON.encode!(live_view))
 
     send(handler, :finish_event_reply)
 
@@ -187,14 +180,16 @@ defmodule SynapsisServer.EventReplyFunctionalTest do
 
     assert committed.text == "Ready🙂"
 
-    assert_push "reply_presentation",
-                %{phase: "committed", message_id: ^message_id, text: "Ready🙂"},
-                @timeout
+    assert_push(
+      "reply_presentation",
+      %{phase: "committed", message_id: ^message_id, text: "Ready🙂"},
+      @timeout
+    )
 
     {_conn, delivered, _wire} =
       receive_frame(conn, ref, "reply_presentation", "\"phase\":\"committed\"")
 
-    assert delivered == Jason.decode!(Jason.encode!(committed))
+    assert delivered == Formata.JSON.decode!(Formata.JSON.encode!(committed))
     assert_receive {"done", _payload}, @timeout
     assert [_, saved] = Message.list_by_session(ctx.id)
     assert saved.id == message_id
@@ -220,7 +215,7 @@ defmodule SynapsisServer.EventReplyFunctionalTest do
              end)
 
     assert {:ok, %{status: 200, body: %{"data" => rest}}} =
-             Req.get(ctx.host <> "/api/sessions/#{ctx.id}", retry: false)
+             get_json(ctx.host <> "/api/sessions/#{ctx.id}")
 
     assert rest["in_flight"] == ""
     refute Map.has_key?(rest, "reply_presentation")
@@ -228,17 +223,7 @@ defmodule SynapsisServer.EventReplyFunctionalTest do
     assert {:ok, joined, _socket} = join(socket, "session:#{ctx.id}", %{})
     assert Map.keys(joined) |> Enum.sort() == [:debug, :debug_entries, :messages]
 
-    assert {:ok, conn} =
-             Mint.HTTP.connect(:http, "127.0.0.1", ctx.port,
-               mode: :passive,
-               protocols: [:http1],
-               transport_opts: [timeout: @timeout]
-             )
-
-    on_exit(fn -> :gen_tcp.close(Mint.HTTP.get_socket(conn)) end)
-
-    assert {:ok, conn, ref} =
-             Mint.HTTP.request(conn, "GET", "/api/sessions/#{ctx.id}/events", [], nil)
+    {conn, ref} = open_sse(ctx.host <> "/api/sessions/#{ctx.id}/events")
 
     {_conn, initial, _wire} = receive_frame(conn, ref, "session_state")
 
@@ -298,6 +283,28 @@ defmodule SynapsisServer.EventReplyFunctionalTest do
       parts: [%Part.Text{content: raw}]
     }
 
+  defp get_json(url) do
+    response = HTTP.fetch(url, timeout: @timeout, retry: false) |> HTTP.Promise.await()
+
+    with %HTTP.Response{} <- response,
+         {:ok, body} <- HTTP.Response.json(response) do
+      {:ok, %{status: response.status, body: body}}
+    end
+  end
+
+  defp open_sse(url) do
+    promise = HTTP.fetch(url, timeout: 30_000, connect_timeout: @timeout, stream_response: true)
+
+    on_exit(fn ->
+      HTTP.RequestCompletion.abort_and_await(HTTP.Promise.completion(promise), @timeout)
+    end)
+
+    assert %HTTP.Response{status: 200, body: stream} = HTTP.Promise.await(promise)
+    assert is_pid(stream)
+    send(stream, {:read_chunk, self(), :ack})
+    {stream, stream}
+  end
+
   defp receive_frame(conn, ref, event, marker \\ "", bytes \\ "", deadline \\ nil) do
     deadline = deadline || System.monotonic_time(:millisecond) + @timeout
     pattern = ~r/event: #{event}\ndata: ([^\n]*)\n\n/
@@ -305,18 +312,26 @@ defmodule SynapsisServer.EventReplyFunctionalTest do
 
     case Enum.find(matches, fn [_, data] -> String.contains?(data, marker) end) do
       [_, data] ->
-        {conn, Jason.decode!(data), bytes}
+        {conn, Formata.JSON.decode!(data), bytes}
 
       nil ->
         remaining = deadline - System.monotonic_time(:millisecond)
         assert remaining > 0, "SSE did not deliver #{event} #{marker}"
-        assert {:ok, conn, responses} = Mint.HTTP.recv(conn, 0, remaining)
 
         body =
-          Enum.flat_map(responses, fn
-            {:data, ^ref, data} -> [data]
-            _ -> []
-          end)
+          receive do
+            {:stream_chunk, ^ref, data, ack} ->
+              send(ref, {:stream_chunk_ack, ack})
+              data
+
+            {:stream_error, ^ref, reason} ->
+              flunk("SSE stream failed: #{inspect(reason)}")
+
+            {:stream_end, ^ref} ->
+              flunk("SSE stream ended before #{event}")
+          after
+            remaining -> flunk("SSE did not deliver #{event} #{marker}")
+          end
 
         receive_frame(conn, ref, event, marker, bytes <> IO.iodata_to_binary(body), deadline)
     end

@@ -255,7 +255,7 @@ defmodule Synapsis.Session.NativeCollaborationRuntimeTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       Agent.update(harness.counter, &%{&1 | provider_requests: &1.provider_requests ++ [request]})
       messages = request["input"]
 

@@ -269,13 +269,8 @@ defmodule Synapsis.Memory.ScopedReader do
   defp parse(content, id, scope) do
     with true <- String.valid?(content),
          ["", yaml, body] <- String.split(content, "---\n", parts: 3),
-         {:ok, [pairs]} <- YamlElixir.read_all_from_string(yaml, maps_as_keywords: true),
-         true <- is_list(pairs) and Enum.all?(pairs, &match?({key, _} when is_binary(key), &1)),
-         keys = Enum.map(pairs, &elem(&1, 0)),
-         true <- length(keys) == length(Enum.uniq(keys)),
-         # Pair mode preserves duplicate keys but conflates YAML {} with [].
-         # Normal mode preserves field types after the duplicate-key check.
-         {:ok, [fields]} when is_map(fields) <- YamlElixir.read_all_from_string(yaml) do
+         {:ok, fields} when is_map(fields) <- Formata.decode(yaml, :yaml),
+         true <- Enum.all?(Map.keys(fields), &is_binary/1) do
       cond do
         fields["id"] !== id or fields["scope"] !== "project" or
             fields["scope_id"] !== scope.project_id ->
@@ -337,7 +332,7 @@ defmodule Synapsis.Memory.ScopedReader do
   end
 
   defp output(result) do
-    if byte_size(Jason.encode!(result)) <= @max_output,
+    if byte_size(Formata.JSON.encode!(result)) <= @max_output,
       do: {:ok, result},
       else: {:error, :output_limit}
   end

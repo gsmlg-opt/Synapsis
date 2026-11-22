@@ -71,7 +71,7 @@ defmodule Synapsis.Agent.Tools.Memory do
         {:ok, public} ->
           result = %{content: text(public), structured: public}
 
-          if byte_size(Jason.encode!(result)) <= 65_536,
+          if byte_size(Formata.JSON.encode!(result)) <= 65_536,
             do: {:ok, result},
             else: failure(:output_limit)
 

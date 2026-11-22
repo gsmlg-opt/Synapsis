@@ -1921,7 +1921,7 @@ defmodule Synapsis.Backplane.SyncTest do
       assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer client-secret"]
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
-      case Jason.decode!(body)["method"] do
+      case Formata.JSON.decode!(body)["method"] do
         "initialize" ->
           conn
           |> Plug.Conn.put_resp_header("mcp-session-id", "session-1")
@@ -2034,6 +2034,6 @@ defmodule Synapsis.Backplane.SyncTest do
   defp json(conn, body) do
     conn
     |> Plug.Conn.put_resp_content_type("application/json")
-    |> Plug.Conn.send_resp(200, Jason.encode!(body))
+    |> Plug.Conn.send_resp(200, Formata.JSON.encode!(body))
   end
 end

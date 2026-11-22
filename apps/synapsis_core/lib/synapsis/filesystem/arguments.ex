@@ -8,7 +8,7 @@ defmodule Synapsis.Filesystem.Arguments do
 
   Native strings must be valid UTF-8. Escaped unpaired UTF-16 surrogates that
   JavaScript can represent remain an unqualified cross-runtime boundary:
-  Jason returns a parse error, handled by the documented error/fallback path.
+  Formata.JSON returns a parse error, handled by the documented error/fallback path.
   This owner does not establish complete `JSON.parse` equivalence.
   """
 
@@ -84,7 +84,7 @@ defmodule Synapsis.Filesystem.Arguments do
   def normalize_path(_path), do: {:error, :invalid_input}
 
   defp parse_serialized_edits(%{"edits" => edits} = args) when is_binary(edits) do
-    case Jason.decode(repair_json(edits)) do
+    case Formata.JSON.decode(repair_json(edits)) do
       {:ok, parsed} when is_list(parsed) ->
         {:ok, Map.put(args, "edits", parsed)}
 

@@ -109,7 +109,7 @@ defmodule Synapsis.Provider.PerplexitySearchFunctionalTest do
         __DIR__
       )
 
-    reference = Jason.decode!(File.read!(path))
+    reference = Formata.JSON.decode!(File.read!(path))
     assert length(reference["groups"]) == 25
 
     for group <- reference["groups"],
@@ -207,11 +207,11 @@ defmodule Synapsis.Provider.PerplexitySearchFunctionalTest do
 
     Gaoxy.Test.stub(ctx.fixture, "POST", path, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(owner, {:http, Jason.decode!(body), conn.req_headers})
+      send(owner, {:http, Formata.JSON.decode!(body), conn.req_headers})
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(payload))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
     end)
   end
 end

@@ -171,7 +171,7 @@ defmodule Synapsis.Session.NativeFilesystemImageFunctionalTest do
           assert native_outer["value"] == ctx.expected
           assert native_outer["output_truncated"] == false
           assert [%{"type" => "text", "text" => logged}] = native_outer["output"]
-          assert Jason.decode!(logged) == ctx.expected
+          assert Formata.JSON.decode!(logged) == ctx.expected
           assert result.projection["version"] == 2
           assert result.projection["tool_name"] == "exec"
           projected = result.projection["result"]
@@ -179,7 +179,7 @@ defmodule Synapsis.Session.NativeFilesystemImageFunctionalTest do
           assert projected["value"] == ctx.expected
           assert projected["output"] == native_outer["output"]
           assert Enum.take(projected["content"], 1) == native_outer["output"]
-          assert Jason.decode!(hd(projected["content"])["text"]) == ctx.expected
+          assert Formata.JSON.decode!(hd(projected["content"])["text"]) == ctx.expected
           assert :sys.get_state(initial.binding.resource_registry, 1_000).resources == %{}
       end
 
@@ -192,7 +192,12 @@ defmodule Synapsis.Session.NativeFilesystemImageFunctionalTest do
 
       for part <- original_parts do
         assert {:ok, dumped} = Synapsis.Part.dump(part)
-        assert {:ok, ^part} = dumped |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+        assert {:ok, ^part} =
+                 dumped
+                 |> Formata.JSON.encode!()
+                 |> Formata.JSON.decode!()
+                 |> Synapsis.Part.load()
       end
 
       assert %{phase: :idle} = NativeSession.status(initial.binding.session)
@@ -289,7 +294,7 @@ defmodule Synapsis.Session.NativeFilesystemImageFunctionalTest do
 
     Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = read_body(conn, "")
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(ctx.harness.counter, fn state ->
@@ -374,7 +379,7 @@ defmodule Synapsis.Session.NativeFilesystemImageFunctionalTest do
     case mode do
       :direct ->
         assert encoded_use["type"] == "function_call"
-        assert Jason.decode!(encoded_use["arguments"]) == @arguments
+        assert Formata.JSON.decode!(encoded_use["arguments"]) == @arguments
 
         assert output == %{
                  "type" => "function_call_output",
@@ -400,7 +405,7 @@ defmodule Synapsis.Session.NativeFilesystemImageFunctionalTest do
                }
 
         [logged | _] = result.projection["result"]["content"]
-        assert Jason.decode!(logged["text"]) == expected_source(bytes)
+        assert Formata.JSON.decode!(logged["text"]) == expected_source(bytes)
         assert String.starts_with?(output["output"], logged["text"])
     end
   end
@@ -463,7 +468,7 @@ defmodule Synapsis.Session.NativeFilesystemImageFunctionalTest do
     end
   end
 
-  defp json_value(value), do: value |> Jason.encode!() |> Jason.decode!()
+  defp json_value(value), do: value |> Formata.JSON.encode!() |> Formata.JSON.decode!()
 
   defp function_call(conn, id, name, arguments) do
     item = %{
@@ -471,7 +476,7 @@ defmodule Synapsis.Session.NativeFilesystemImageFunctionalTest do
       "id" => id <> "-item",
       "call_id" => id,
       "name" => ToolName.encode(name),
-      "arguments" => Jason.encode!(arguments)
+      "arguments" => Formata.JSON.encode!(arguments)
     }
 
     response(conn, [
@@ -534,6 +539,6 @@ defmodule Synapsis.Session.NativeFilesystemImageFunctionalTest do
       |> Plug.Conn.put_resp_content_type("text/event-stream")
       |> Plug.Conn.resp(
         200,
-        Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+        Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
       )
 end

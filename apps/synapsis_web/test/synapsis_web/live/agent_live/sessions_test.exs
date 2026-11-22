@@ -1857,7 +1857,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        request = Jason.decode!(body)
+        request = Formata.JSON.decode!(body)
 
         chunks =
           if Enum.any?(request["input"], &(&1["type"] == "function_call_output")) do
@@ -1933,8 +1933,8 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
                &(&1.id == SynapsisWeb.AgentLive.SessionChat.live_id(session.id))
              ).status == "pending"
 
-      refute Jason.encode!(chat.metadata) =~ "deadline_ms"
-      refute Jason.encode!(chat.metadata) =~ "owner"
+      refute Formata.JSON.encode!(chat.metadata) =~ "deadline_ms"
+      refute Formata.JSON.encode!(chat.metadata) =~ "owner"
 
       render_hook(
         view,
@@ -2488,7 +2488,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
   end
 
   defp chat_snapshot(view), do: chat_socket(view).assigns.react_chat
-  defp chat_json(view), do: Jason.encode!(chat_snapshot(view))
+  defp chat_json(view), do: Formata.JSON.encode!(chat_snapshot(view))
 
   defp chat_scope(view) do
     chat = chat_snapshot(view)
@@ -2501,7 +2501,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       result =
         case request["method"] do
@@ -2530,7 +2530,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(
           200,
-          Jason.encode!(%{jsonrpc: "2.0", id: request["id"], result: result})
+          Formata.JSON.encode!(%{jsonrpc: "2.0", id: request["id"], result: result})
         )
       else
         Plug.Conn.resp(conn, 202, "")
@@ -2583,7 +2583,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
     Gaoxy.Test.expect_once(bypass, "POST", "/v1/messages", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(test_pid, {:image_provider_request, Jason.decode!(body)})
+      send(test_pid, {:image_provider_request, Formata.JSON.decode!(body)})
 
       conn
       |> Plug.Conn.put_resp_content_type("text/event-stream")

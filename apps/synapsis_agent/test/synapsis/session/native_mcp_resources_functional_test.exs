@@ -101,7 +101,7 @@ defmodule Synapsis.Session.NativeMCPResourcesFunctionalTest do
     results = Enum.filter(parts, &match?(%ToolResult{}, &1))
     assert Enum.map(uses, &{&1.tool_use_id, &1.tool, &1.input}) == calls
     assert Enum.map(results, & &1.tool_use_id) == Enum.map(calls, &elem(&1, 0))
-    assert Enum.map(results, &Jason.decode!(&1.content)) == expected
+    assert Enum.map(results, &Formata.JSON.decode!(&1.content)) == expected
     assert Enum.all?(results, &(&1.is_error == false))
 
     for {result, raw} <- Enum.zip(results, expected) do
@@ -120,7 +120,9 @@ defmodule Synapsis.Session.NativeMCPResourcesFunctionalTest do
 
     for part <- uses ++ results do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
 
     assert_durable(harness.session.id, uses, results)
@@ -206,7 +208,7 @@ defmodule Synapsis.Session.NativeMCPResourcesFunctionalTest do
     assert [%ToolResult{is_error: false} = result] =
              Enum.filter(parts(harness.session.id), &match?(%ToolResult{}, &1))
 
-    assert Jason.decode!(result.content) == %{"sources" => []}
+    assert Formata.JSON.decode!(result.content) == %{"sources" => []}
     assert result.projection["result"]["structured"] == %{"sources" => []}
     assert_wire(next, calls, [result])
   end
@@ -220,7 +222,7 @@ defmodule Synapsis.Session.NativeMCPResourcesFunctionalTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      req = Jason.decode!(body)
+      req = Formata.JSON.decode!(body)
       Agent.update(requests, &(&1 ++ [req]))
 
       result =
@@ -245,7 +247,7 @@ defmodule Synapsis.Session.NativeMCPResourcesFunctionalTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(
           200,
-          Jason.encode!(%{"jsonrpc" => "2.0", "id" => req["id"], "result" => result})
+          Formata.JSON.encode!(%{"jsonrpc" => "2.0", "id" => req["id"], "result" => result})
         )
       else
         Plug.Conn.resp(conn, 202, "")
@@ -335,7 +337,7 @@ defmodule Synapsis.Session.NativeMCPResourcesFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      req = Jason.decode!(body)
+      req = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -412,7 +414,8 @@ defmodule Synapsis.Session.NativeMCPResourcesFunctionalTest do
     uses = Enum.filter(req["input"], &(&1["type"] == "function_call"))
 
     assert Enum.map(uses, fn call ->
-             {call["call_id"], ToolName.decode(call["name"]), Jason.decode!(call["arguments"])}
+             {call["call_id"], ToolName.decode(call["name"]),
+              Formata.JSON.decode!(call["arguments"])}
            end) == calls
 
     actual = for message <- req["input"], message["type"] == "function_call_output", do: message

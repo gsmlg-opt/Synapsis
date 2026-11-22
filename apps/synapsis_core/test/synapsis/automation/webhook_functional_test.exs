@@ -53,7 +53,9 @@ defmodule Synapsis.Automation.WebhookFunctionalTest do
     fixture = Gaoxy.Test.open()
     owner = self()
     release = make_ref()
-    encoded = Jason.encode!(%{"action" => "finished", "summary" => "Accepted before body end"})
+
+    encoded =
+      Formata.JSON.encode!(%{"action" => "finished", "summary" => "Accepted before body end"})
 
     Gaoxy.Test.expect_once(fixture, "POST", "/headers-first", fn conn ->
       assert {:ok, ^encoded, conn} = Plug.Conn.read_body(conn)

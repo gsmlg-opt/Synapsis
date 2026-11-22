@@ -14,7 +14,7 @@ defmodule Synapsis.Browser.TimingFunctionalTest do
       Path.expand("../../../../..", __DIR__)
       |> Path.join("apps/synapsis_agent/test/fixtures/openclaw/488631c/browser-timing.json")
       |> File.read!()
-      |> Jason.decode!()
+      |> Formata.JSON.decode!()
 
     assert fixture["referenceCommit"] == "488631c18fae7cc541ba8fc8beff6cbb0438787b"
     assert length(fixture["vectors"]) == 15

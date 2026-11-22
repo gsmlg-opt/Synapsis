@@ -54,7 +54,7 @@ defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
         expected(1, 3, {51, 13, 21, 6})
       ])
 
-    assert Enum.map(first_results, &Jason.decode!(&1.content)["source"]) === [
+    assert Enum.map(first_results, &Formata.JSON.decode!(&1.content)["source"]) === [
              "live",
              "live",
              "durable"
@@ -185,7 +185,7 @@ defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
              }
            ]
 
-    assert Jason.decode!(result.content)["usage"]["metrics"] === %{
+    assert Formata.JSON.decode!(result.content)["usage"]["metrics"] === %{
              "input_tokens" => 30,
              "cached_tokens" => 7,
              "output_tokens" => 5,
@@ -219,7 +219,7 @@ defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
       source: "native_committed",
       coverage: "retained_runs",
       observation: "sequential",
-      runtime_version: "1.10.74",
+      runtime_version: "1.10.94",
       retained_runs: runs,
       observed_runs: runs,
       provider_attempts: attempts,
@@ -238,7 +238,7 @@ defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
 
     Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(h.counter, fn state ->
@@ -292,7 +292,7 @@ defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
 
     Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/messages", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(h.counter, fn state ->
@@ -314,7 +314,7 @@ defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
              },
              %{
                "type" => "input_json_delta",
-               "partial_json" => Jason.encode!(%{"source" => "live"})
+               "partial_json" => Formata.JSON.encode!(%{"source" => "live"})
              }, "tool_use"}
 
           1 ->
@@ -350,7 +350,7 @@ defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
       |> Plug.Conn.put_resp_content_type("text/event-stream")
       |> Plug.Conn.resp(
         200,
-        Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+        Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
       )
     end)
   end
@@ -366,7 +366,7 @@ defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
 
     for {result, usage} <- Enum.zip(results, usages) do
       assert result.is_error === false
-      decoded = Jason.decode!(result.content)
+      decoded = Formata.JSON.decode!(result.content)
       assert decoded["session"]["id"] === id
       assert decoded["usage"] === json(usage)
 
@@ -380,7 +380,9 @@ defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
              }
 
       assert {:ok, dumped} = Part.dump(result)
-      assert {:ok, ^result} = dumped |> Jason.encode!() |> Jason.decode!() |> Part.load()
+
+      assert {:ok, ^result} =
+               dumped |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Part.load()
     end
 
     assert Store.list_turns(id) === {:ok, Enum.map(messages, &Message.encode/1)}
@@ -494,6 +496,6 @@ defmodule Synapsis.Session.NativeSessionUsageFunctionalTest do
              end)
   end
 
-  defp json(value), do: value |> Jason.encode!() |> Jason.decode!()
+  defp json(value), do: value |> Formata.JSON.encode!() |> Formata.JSON.decode!()
   defp deadline, do: System.monotonic_time(:millisecond) + 5_000
 end

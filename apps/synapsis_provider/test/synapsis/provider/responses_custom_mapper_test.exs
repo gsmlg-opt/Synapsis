@@ -70,7 +70,7 @@ defmodule Synapsis.Provider.ResponsesCustomMapperTest do
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(%{"data" => [%{"id" => "probe"}]}))
+        |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"data" => [%{"id" => "probe"}]}))
       end)
 
       assert {:ok, [%{id: "probe"}]} =
@@ -102,7 +102,7 @@ defmodule Synapsis.Provider.ResponsesCustomMapperTest do
       assert {:ok, wire} =
                MessageMapper.build_request(protocol, [message], [patch, read], %{model: "m"})
 
-      encoded = Jason.encode!(wire)
+      encoded = Formata.JSON.encode!(wire)
       refute encoded =~ "apply_patch"
       assert encoded =~ Synapsis.Provider.ToolName.encode("synapsis::read")
     end
@@ -112,6 +112,6 @@ defmodule Synapsis.Provider.ResponsesCustomMapperTest do
                model: "m"
              })
 
-    assert Jason.encode!(wire) =~ "apply_patch"
+    assert Formata.JSON.encode!(wire) =~ "apply_patch"
   end
 end

@@ -164,7 +164,7 @@ defmodule Synapsis.SkillReaderDiscoveryFunctionalTest do
       assert {:ok, page} = SkillReader.read_explicit(snapshot, input)
       assert page === read_result(binding, document)
       assert Map.has_key?(page, :record_id) == false
-      assert Jason.decode!(Jason.encode!(page))["content"] == document
+      assert Formata.JSON.decode!(Formata.JSON.encode!(page))["content"] == document
     end
 
     assert_preserved(ctx)
@@ -199,7 +199,7 @@ defmodule Synapsis.SkillReaderDiscoveryFunctionalTest do
 
     for binding <- [assigned_binding, learned_binding] do
       page = assert_read(snapshot, binding, document)
-      assert Jason.decode!(Jason.encode!(page))["content"] == document
+      assert Formata.JSON.decode!(Formata.JSON.encode!(page))["content"] == document
 
       assert {:ok, explicit} =
                SkillReader.read_explicit(snapshot, %{"locator" => binding.entry.locator})

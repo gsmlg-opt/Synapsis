@@ -20,7 +20,7 @@ defmodule Synapsis.Agent.Tools.Questions do
 
   @name "synapsis::ask_user"
   @keys ~w(session_id run_id incarnation catalog_revision primary? permission_fingerprint)a
-  @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+  @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
 
   def names, do: [@name]
 

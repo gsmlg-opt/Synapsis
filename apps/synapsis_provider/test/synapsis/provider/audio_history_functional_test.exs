@@ -95,7 +95,7 @@ defmodule Synapsis.Provider.AudioHistoryFunctionalTest do
                  %{model: "fixture"}
                )
 
-      encoded = Jason.encode!(wire)
+      encoded = Formata.JSON.encode!(wire)
       assert encoded =~ "ordinary"
       assert encoded =~ "12:00"
 

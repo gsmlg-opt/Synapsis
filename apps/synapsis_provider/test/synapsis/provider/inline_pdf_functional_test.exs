@@ -20,7 +20,7 @@ defmodule Synapsis.Provider.InlinePDFFunctionalTest do
   end
 
   defp assert_fixture(protocol) do
-    fixture = @fixture |> File.read!() |> Jason.decode!()
+    fixture = @fixture |> File.read!() |> Formata.JSON.decode!()
     id = if protocol == :anthropic, do: "anthropic-two", else: "gemini-two"
     observation = Enum.find(fixture["observations"], &(&1["id"] == id))
     assert is_map(observation)
@@ -77,7 +77,7 @@ defmodule Synapsis.Provider.InlinePDFFunctionalTest do
              "file:///ordinary/report%202.pdf"
            ]
 
-    refute Jason.encode!(request) =~ "file:///ordinary"
+    refute Formata.JSON.encode!(request) =~ "file:///ordinary"
   end
 
   defp replace_pdf_bytes(body, encoded) do

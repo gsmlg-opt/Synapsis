@@ -34,7 +34,7 @@ defmodule Synapsis.Agent.Runtime.ResponsesCustomTransportTest do
         Gaoxy.Test.expect_once(fixture, "POST", "/v1/responses", fn conn ->
           assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer fixture"]
           {:ok, body, conn} = Plug.Conn.read_body(conn)
-          wire = Jason.decode!(body)
+          wire = Formata.JSON.decode!(body)
           send(owner, {:declaration, wire})
 
           sse(conn, [
@@ -86,7 +86,7 @@ defmodule Synapsis.Agent.Runtime.ResponsesCustomTransportTest do
         Gaoxy.Test.expect_once(replay_fixture, "POST", "/v1/responses", fn conn ->
           assert Plug.Conn.get_req_header(conn, "authorization") == ["Bearer fixture"]
           {:ok, body, conn} = Plug.Conn.read_body(conn)
-          send(owner, {:replay, Jason.decode!(body)})
+          send(owner, {:replay, Formata.JSON.decode!(body)})
           sse(conn, [%{"type" => "response.output_text.delta", "delta" => "done"}, completed([])])
         end)
 
@@ -135,7 +135,7 @@ defmodule Synapsis.Agent.Runtime.ResponsesCustomTransportTest do
                  %{provider_type: protocol, model: "probe"}
                )
 
-      encoded = Jason.encode!(wire)
+      encoded = Formata.JSON.encode!(wire)
       assert encoded =~ "json_probe"
       refute encoded =~ "raw_probe"
     end
@@ -388,6 +388,6 @@ defmodule Synapsis.Agent.Runtime.ResponsesCustomTransportTest do
       |> Plug.Conn.put_resp_content_type("text/event-stream")
       |> Plug.Conn.resp(
         200,
-        Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+        Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
       )
 end

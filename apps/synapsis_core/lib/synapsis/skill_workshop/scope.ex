@@ -42,7 +42,7 @@ defmodule Synapsis.SkillWorkshop.Scope do
   defp decode_config(config) when is_map(config) and not is_struct(config), do: {:ok, config}
 
   defp decode_config(config) when is_binary(config) do
-    case Jason.decode(config) do
+    case Formata.JSON.decode(config) do
       {:ok, value} when is_map(value) -> {:ok, value}
       _ -> {:error, :invalid_agent_config}
     end

@@ -117,7 +117,7 @@ defmodule Synapsis.SessionCoupledPublicationFunctionalTest do
         end)
 
       json =
-        Jason.encode!(%{
+        Formata.JSON.encode!(%{
           "session" => %{
             "title" => "shared 雪",
             "agent" => "export-agent",
@@ -166,7 +166,7 @@ defmodule Synapsis.SessionCoupledPublicationFunctionalTest do
 
   test "import retains ordinary title agent and message defaults" do
     json =
-      Jason.encode!(%{
+      Formata.JSON.encode!(%{
         "session" => %{"provider" => "ordinary-provider", "model" => "ordinary-model"},
         "messages" => [%{}, %{"parts" => [%{"type" => "legacy"}]}]
       })

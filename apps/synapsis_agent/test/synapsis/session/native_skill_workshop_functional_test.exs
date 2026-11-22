@@ -137,7 +137,7 @@ defmodule Synapsis.Session.NativeSkillWorkshopFunctionalTest do
     assert_read(manual_result, manual_document, "synapsis://skills/#{manual.id}", manual.id)
 
     nested_source = """
-    const result = await tools.synapsis__skills_read({locator: #{Jason.encode!(learned_entry.locator)}});
+    const result = await tools.synapsis__skills_read({locator: #{Formata.JSON.encode!(learned_entry.locator)}});
     return {content: result.content, structured: result.structured};
     """
 
@@ -166,7 +166,7 @@ defmodule Synapsis.Session.NativeSkillWorkshopFunctionalTest do
            }
 
     nested_view = """
-    const result = await tools.synapsis__skill_workshop(#{Jason.encode!(support_args)});
+    const result = await tools.synapsis__skill_workshop(#{Formata.JSON.encode!(support_args)});
     return {content: result.content, structured: result.structured};
     """
 
@@ -195,7 +195,7 @@ defmodule Synapsis.Session.NativeSkillWorkshopFunctionalTest do
 
   test "all source workshop actions publish exact successors and survive ordinary completed history replay",
        ctx do
-    fixture = @fixture |> File.read!() |> Jason.decode!()
+    fixture = @fixture |> File.read!() |> Formata.JSON.decode!()
     assert fixture["referencePin"] == @reference
     assert Enum.map(fixture["observations"], & &1["id"]) == @source_rows
     assigned = assigned(ctx, "deploy-guide", "Read the unchanged assigned release procedure.\n")
@@ -400,7 +400,7 @@ defmodule Synapsis.Session.NativeSkillWorkshopFunctionalTest do
     Process.put({__MODULE__, :handler_stage}, :read_body)
     {:ok, body, conn} = read_body(conn, "")
     Process.put({__MODULE__, :handler_stage}, :decode_request)
-    request = Jason.decode!(body)
+    request = Formata.JSON.decode!(body)
 
     index =
       Agent.get_and_update(ctx.harness.counter, fn state ->
@@ -679,7 +679,7 @@ defmodule Synapsis.Session.NativeSkillWorkshopFunctionalTest do
       assert is_integer(json) and json > 0
       result = Map.fetch!(aggregate.run.tool_results, intent.operation.invocation_id)
       assert :erlang.external_size(result) <= output
-      assert byte_size(Jason.encode!(result)) <= json
+      assert byte_size(Formata.JSON.encode!(result)) <= json
     end
 
     nested =
@@ -734,7 +734,7 @@ defmodule Synapsis.Session.NativeSkillWorkshopFunctionalTest do
           dumped
         end)
 
-      File.write!(destination, Jason.encode!(dumped), [:exclusive])
+      File.write!(destination, Formata.JSON.encode!(dumped), [:exclusive])
     end
   end
 
@@ -801,7 +801,9 @@ defmodule Synapsis.Session.NativeSkillWorkshopFunctionalTest do
 
     for part <- tools do
       assert {:ok, dumped} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dumped |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dumped |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
 
     assert {:ok, turns} = Synapsis.Session.Store.list_turns(id)
@@ -970,7 +972,7 @@ defmodule Synapsis.Session.NativeSkillWorkshopFunctionalTest do
       "id" => id <> "-item",
       "call_id" => id,
       "name" => ToolName.encode(name),
-      "arguments" => Jason.encode!(args)
+      "arguments" => Formata.JSON.encode!(args)
     }
 
     sse(conn, [
@@ -1026,7 +1028,7 @@ defmodule Synapsis.Session.NativeSkillWorkshopFunctionalTest do
       |> Plug.Conn.put_resp_content_type("text/event-stream")
       |> Plug.Conn.resp(
         200,
-        Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+        Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
       )
 
   defp deadline, do: System.monotonic_time(:millisecond) + 5_000

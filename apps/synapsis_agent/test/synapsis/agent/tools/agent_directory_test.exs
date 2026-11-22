@@ -167,8 +167,11 @@ defmodule Synapsis.Agent.Tools.AgentDirectoryTest do
            }
 
     assert is_binary(result.content) and byte_size(result.content) > 0
-    assert Jason.decode!(result.content) == Jason.decode!(Jason.encode!(result.structured))
-    assert byte_size(Jason.encode!(result)) <= 65_536
+
+    assert Formata.JSON.decode!(result.content) ==
+             Formata.JSON.decode!(Formata.JSON.encode!(result.structured))
+
+    assert byte_size(Formata.JSON.encode!(result)) <= 65_536
 
     for forbidden <- [
           @private,
@@ -178,7 +181,7 @@ defmodule Synapsis.Agent.Tools.AgentDirectoryTest do
           "children",
           "pid"
         ] do
-      refute Jason.encode!(result) =~ forbidden
+      refute Formata.JSON.encode!(result) =~ forbidden
     end
 
     assert {:ok, _} = ResultProjection.to_part("directory", {:ok, result}, tool_name: @name)
@@ -348,7 +351,7 @@ defmodule Synapsis.Agent.Tools.AgentDirectoryTest do
     assert error.details.code == "output_too_large"
 
     assert {:ok, _, %{effects: [small]}} = native(ctx, %{"limit" => 1})
-    assert byte_size(Jason.encode!(small)) <= 65_536
+    assert byte_size(Formata.JSON.encode!(small)) <= 65_536
     assert {:ok, _} = ResultProjection.to_part("directory", {:ok, small}, tool_name: @name)
   end
 
@@ -361,7 +364,7 @@ defmodule Synapsis.Agent.Tools.AgentDirectoryTest do
 
     assert :ets.insert(@table, entries)
     assert {:ok, page} = Synapsis.AgentConfigs.directory("main")
-    assert byte_size(Jason.encode!(page)) < 65_536
+    assert byte_size(Formata.JSON.encode!(page)) < 65_536
     op = operation(ctx, %{})
     error = invocation_error(AgentDirectory.execute(op), op)
     assert error.details.code == "output_too_large"

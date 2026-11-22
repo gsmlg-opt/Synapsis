@@ -318,7 +318,7 @@ defmodule Synapsis.Session.NativeAutomationEventReplyFunctionalTest do
 
     Gaoxy.Test.stub(h.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       Agent.update(h.log, &(&1 ++ [{request, self()}]))
 
       case List.last(user_texts(request)) do
@@ -368,7 +368,7 @@ defmodule Synapsis.Session.NativeAutomationEventReplyFunctionalTest do
       conn |> Plug.Conn.put_resp_content_type("text/event-stream") |> Plug.Conn.send_chunked(200)
 
   defp chunk(conn, value) do
-    {:ok, conn} = Plug.Conn.chunk(conn, "data: " <> Jason.encode!(value) <> "\n\n")
+    {:ok, conn} = Plug.Conn.chunk(conn, "data: " <> Formata.JSON.encode!(value) <> "\n\n")
     conn
   end
 

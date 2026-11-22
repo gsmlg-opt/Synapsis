@@ -24,7 +24,7 @@ defmodule Synapsis.Sandbox.BridgeTest do
     assert {:ok, %{"value" => "ok"}} = SandboxBridge.eval(pid, %{"code" => "1 + 1"}, 1_000)
 
     assert {:ok, request} = eventually_read(request_path)
-    decoded = Jason.decode!(request)
+    decoded = Formata.JSON.decode!(request)
 
     assert %{
              "jsonrpc" => "2.0",
@@ -76,7 +76,7 @@ defmodule Synapsis.Sandbox.BridgeTest do
              "jsonrpc" => "2.0",
              "id" => "tool-1",
              "result" => %{"echo" => "hello"}
-           } = Jason.decode!(response)
+           } = Formata.JSON.decode!(response)
   end
 
   test "start_link fails cleanly when the sandbox binary does not exist" do
@@ -210,7 +210,7 @@ defmodule Synapsis.Sandbox.BridgeTest do
     assert [_only_line] = String.split(String.trim(response), "\n")
 
     assert %{"jsonrpc" => "2.0", "id" => "t-1", "error" => %{"code" => -32_000}} =
-             Jason.decode!(response)
+             Formata.JSON.decode!(response)
   end
 
   @tag :tmp_dir

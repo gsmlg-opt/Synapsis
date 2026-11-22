@@ -663,7 +663,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       |> LazyHTML.query("[data-initial-values]")
       |> LazyHTML.attribute("data-initial-values")
       |> hd()
-      |> Jason.decode!()
+      |> Formata.JSON.decode!()
 
     assert values["mcp_selection"]["sources"][source.id]["mode"] == "inherit"
 
@@ -752,7 +752,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       |> LazyHTML.query("[data-initial-values]")
       |> LazyHTML.attribute("data-initial-values")
       |> hd()
-      |> Jason.decode!()
+      |> Formata.JSON.decode!()
 
     assert values["mcp_selection"]["sources"][source.id]["mode"] == "inherit"
     assert values["agent"]["label"] == "Keep this draft"
@@ -872,7 +872,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
           "name" => "researcher",
           "label" => "Researcher",
           "description" => "Finds facts",
-          "provider_model_state" => Jason.encode!(%{provider: "openai", model: "gpt-4.1"}),
+          "provider_model_state" => Formata.JSON.encode!(%{provider: "openai", model: "gpt-4.1"}),
           "system_prompt" => "Research carefully.",
           "toolset_ids" => [toolset.id],
           "permission_mode" => "restrict",
@@ -1098,7 +1098,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
           "label" => "Picker",
           "provider" => "",
           "model" => "",
-          "provider_model_state" => Jason.encode!(%{provider: "openai", model: "gpt-4.1"})
+          "provider_model_state" => Formata.JSON.encode!(%{provider: "openai", model: "gpt-4.1"})
         },
         "skill_ids" => []
       })
@@ -1127,7 +1127,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
         "agent" => %{
           "label" => "Fallback Picker",
           "fallback_models" => "",
-          "fallback_model_state" => Jason.encode!(%{provider: "openai", model: "gpt-4o"})
+          "fallback_model_state" => Formata.JSON.encode!(%{provider: "openai", model: "gpt-4o"})
         },
         "skill_ids" => []
       })
@@ -1768,12 +1768,12 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       |> LazyHTML.query("[data-initial-values]")
       |> LazyHTML.attribute("data-initial-values")
       |> hd()
-      |> Jason.decode!()
+      |> Formata.JSON.decode!()
 
     html
     |> LazyHTML.query("[data-dm-react-field]")
     |> LazyHTML.attribute("data-dm-react-field")
-    |> Enum.map(&Jason.decode!/1)
+    |> Enum.map(&Formata.JSON.decode!/1)
     |> Enum.reject(& &1["disabled"])
     |> Enum.map(fn field ->
       path = field["name"] |> String.replace("]", "") |> String.split("[")
@@ -1786,7 +1786,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
     |> Regex.run(html)
     |> List.last()
     |> html_attribute_unescape()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 
   defp cascader_value(html) do
@@ -1795,7 +1795,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       |> Regex.run(html)
       |> List.last()
       |> html_attribute_unescape()
-      |> Jason.decode!()
+      |> Formata.JSON.decode!()
 
     [state["provider"], state["model"]]
     |> Enum.reject(&(&1 in [nil, ""]))
@@ -1806,7 +1806,7 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
     |> Regex.run(html)
     |> List.last()
     |> html_attribute_unescape()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 
   defp html_attribute_unescape(value) do

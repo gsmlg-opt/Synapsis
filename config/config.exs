@@ -71,8 +71,8 @@ config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id, :session_id, :provider_id, :provider_ids, :reason]
 
-# Use Jason for JSON parsing in Phoenix
-config :phoenix, :json_library, Jason
+# Use Formata.JSON for JSON parsing in Phoenix
+config :phoenix, :json_library, Formata.JSON
 
 # DuskmoonBundler — JS/TS + Tailwind v4 (replaces bun + Tailwind CLI)
 config :duskmoon_bundler,

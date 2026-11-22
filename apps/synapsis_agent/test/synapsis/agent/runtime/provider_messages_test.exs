@@ -252,8 +252,8 @@ defmodule Synapsis.Agent.Runtime.ProviderMessagesTest do
              ])
 
     assert part.content == text
-    refute Jason.encode!(part.projection) =~ "private"
-    refute Jason.encode!(part.projection) =~ "backend_context"
+    refute Formata.JSON.encode!(part.projection) =~ "private"
+    refute Formata.JSON.encode!(part.projection) =~ "backend_context"
     assert {:ok, replay} = ProviderMessages.from_host(host)
     assert {:ok, ^host} = ProviderMessages.to_host(replay)
   end
@@ -493,7 +493,7 @@ defmodule Synapsis.Agent.Runtime.ProviderMessagesTest do
                ])
 
       assert part.content == expected
-      assert Jason.encode!(part.projection) =~ "opaque-signed-state"
+      assert Formata.JSON.encode!(part.projection) =~ "opaque-signed-state"
       assert {:ok, runtime} = ProviderMessages.from_host(host)
       assert {:ok, ^host} = ProviderMessages.to_host(runtime)
 
@@ -507,8 +507,8 @@ defmodule Synapsis.Agent.Runtime.ProviderMessagesTest do
                })
 
       assert [_, %{"output" => ^expected}] = wire["input"]
-      refute Jason.encode!(wire) =~ "private reasoning"
-      refute Jason.encode!(wire) =~ "opaque-signed-state"
+      refute Formata.JSON.encode!(wire) =~ "private reasoning"
+      refute Formata.JSON.encode!(wire) =~ "opaque-signed-state"
     end
   end
 
@@ -526,7 +526,7 @@ defmodule Synapsis.Agent.Runtime.ProviderMessagesTest do
 
     assert part.content == "Tool denied by capability policy"
     assert part.projection["result"]["error"]["class"] == "forbidden"
-    refute Jason.encode!(part.projection) =~ "private"
+    refute Formata.JSON.encode!(part.projection) =~ "private"
     refute Map.has_key?(part.projection["result"]["error"], "cause")
   end
 

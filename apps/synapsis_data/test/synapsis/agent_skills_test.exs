@@ -136,7 +136,8 @@ defmodule Synapsis.AgentSkillsTest do
                Store.put(:backplane, %{
                  "id" => source_id,
                  "enabled" => true,
-                 "metadata_json" => Jason.encode!(%{"runtime_blocked_surfaces" => ["skills"]})
+                 "metadata_json" =>
+                   Formata.JSON.encode!(%{"runtime_blocked_surfaces" => ["skills"]})
                })
 
       assert Skills.list_skills_for_agent(assigned_agent) == []
@@ -145,7 +146,8 @@ defmodule Synapsis.AgentSkillsTest do
                Store.put(:backplane, %{
                  "id" => source_id,
                  "enabled" => true,
-                 "metadata_json" => Jason.encode!(%{"runtime_blocked_surfaces" => ["tools"]})
+                 "metadata_json" =>
+                   Formata.JSON.encode!(%{"runtime_blocked_surfaces" => ["tools"]})
                })
 
       assert Enum.map(Skills.list_skills_for_agent(assigned_agent), & &1.id) == [skill.id]

@@ -147,34 +147,70 @@ defmodule SynapsisSamgita.API do
       [{"authorization", "Bearer " <> conn.credential}] ++
         if(conn.connection_id, do: [{"x-agent-connection", conn.connection_id}], else: [])
 
-    [
+    timeout = Map.get(conn, :receive_timeout, @receive_timeout)
+    {params, req_opts} = Keyword.pop(req_opts, :params, [])
+    {json, _req_opts} = Keyword.pop(req_opts, :json)
+    url = conn.base_url <> "/api/agent" <> path
+    query = URI.encode_query(params)
+    url = if query == "", do: url, else: url <> "?" <> query
+
+    options = [
       method: method,
-      url: conn.base_url <> "/api/agent" <> path,
       headers: headers,
-      receive_timeout: Map.get(conn, :receive_timeout, @receive_timeout),
-      connect_options: [timeout: 5_000],
+      timeout: timeout,
+      connect_timeout: 5_000,
       retry: false,
-      redirect: false
+      redirect: :manual
     ]
-    |> Keyword.merge(req_opts)
-    |> Req.request()
-    |> normalize()
+
+    options =
+      if json,
+        do: options ++ [body: Formata.JSON.encode!(json), content_type: "application/json"],
+        else: options
+
+    promise = HTTP.fetch(url, options)
+
+    try do
+      case HTTP.Promise.await(promise) do
+        %HTTP.Response{} = response ->
+          body = HTTP.Response.read_all(response)
+
+          decoded =
+            case Formata.JSON.decode(body) do
+              {:ok, value} -> value
+              {:error, _} -> body
+            end
+
+          normalize({:ok, %{status: response.status, body: decoded}})
+
+        {:error, _} = error ->
+          normalize(error)
+      end
+    rescue
+      error in HTTP.ResponseError -> normalize({:error, error.reason})
+    after
+      HTTP.RequestCompletion.abort_and_await(HTTP.Promise.completion(promise), 1_000)
+    end
   end
 
-  defp normalize({:ok, %Req.Response{status: status, body: %{"data" => data}}})
+  defp normalize({:ok, %{status: status, body: %{"data" => data}}})
        when status in 200..299,
        do: {:ok, data}
 
-  defp normalize(
-         {:ok, %Req.Response{status: status, body: %{"errors" => %{"code" => code} = errors}}}
-       ),
-       do:
-         {:error,
-          %{status: status, code: code, detail: errors["detail"], fields: errors["fields"]}}
+  defp normalize({:ok, %{status: status, body: %{"errors" => %{"code" => code} = errors}}}),
+    do:
+      {:error, %{status: status, code: code, detail: errors["detail"], fields: errors["fields"]}}
 
-  defp normalize({:ok, %Req.Response{status: status}}),
+  defp normalize({:ok, %{status: status}}),
     do: {:error, %{status: status, code: "unexpected_response", detail: nil}}
 
   defp normalize({:error, exception}),
-    do: {:error, %{status: nil, code: "transport_error", detail: Exception.message(exception)}}
+    do:
+      {:error,
+       %{
+         status: nil,
+         code: "transport_error",
+         detail:
+           if(is_exception(exception), do: Exception.message(exception), else: inspect(exception))
+       }}
 end

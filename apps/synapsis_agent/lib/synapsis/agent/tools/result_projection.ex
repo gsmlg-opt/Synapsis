@@ -690,7 +690,7 @@ defmodule Synapsis.Agent.Tools.ResultProjection do
               is_binary(type) and type != "" do
     document = Map.drop(result, ["content", "is_error"])
 
-    case Jason.encode(document) do
+    case Synapsis.JSON.encode(document) do
       {:ok, content} -> {:ok, Map.put(result, "content", content)}
       _ -> invalid()
     end

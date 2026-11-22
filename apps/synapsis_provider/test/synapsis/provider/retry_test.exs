@@ -59,7 +59,7 @@ defmodule Synapsis.Provider.RetryTest do
     assert :unexpected = Retry.with_retry(fn -> :unexpected end)
   end
 
-  test "retries and recovers from Req.TransportError" do
+  test "retries and recovers from HTTP.RequestError" do
     counter = :counters.new(1, [:atomics])
 
     result =
@@ -68,7 +68,8 @@ defmodule Synapsis.Provider.RetryTest do
         :counters.add(counter, 1, 1)
 
         if count == 0 do
-          {:error, %Req.TransportError{reason: :econnrefused}}
+          {:error,
+           %HTTP.RequestError{reason: :econnrefused, phase: :connect, request_started: false}}
         else
           {:ok, :recovered}
         end
@@ -116,19 +117,21 @@ defmodule Synapsis.Provider.RetryTest do
     assert :counters.get(counter, 1) == 2
   end
 
-  test "TransportError with 0 retries returns error immediately" do
+  test "RequestError with 0 retries returns error immediately" do
     counter = :counters.new(1, [:atomics])
 
     result =
       Retry.with_retry(
         fn ->
           :counters.add(counter, 1, 1)
-          {:error, %Req.TransportError{reason: :econnrefused}}
+
+          {:error,
+           %HTTP.RequestError{reason: :econnrefused, phase: :connect, request_started: false}}
         end,
         0
       )
 
-    assert {:error, %Req.TransportError{}} = result
+    assert {:error, %HTTP.RequestError{}} = result
     # Only called once (no retries since retries == 0)
     assert :counters.get(counter, 1) == 1
   end
@@ -241,21 +244,34 @@ defmodule Synapsis.Provider.RetryTest do
     assert :counters.get(counter, 1) == 4
   end
 
-  test "retry exhaustion with TransportError returns the error" do
+  test "does not retry a timeout with unknown request transmission" do
     counter = :counters.new(1, [:atomics])
 
     result =
       Retry.with_retry(
         fn ->
           :counters.add(counter, 1, 1)
-          {:error, %Req.TransportError{reason: :timeout}}
+          {:error, %HTTP.RequestError{reason: :timeout}}
         end,
         2
       )
 
-    assert {:error, %Req.TransportError{reason: :timeout}} = result
-    # initial + 2 retries = 3 calls
-    assert :counters.get(counter, 1) == 3
+    assert {:error, %HTTP.RequestError{reason: :timeout}} = result
+    # A timeout may follow successful creation; never replay it.
+    assert :counters.get(counter, 1) == 1
+  end
+
+  test "does not retry a connection reset with unknown request transmission" do
+    counter = :counters.new(1, [:atomics])
+    error = %HTTP.RequestError{reason: :econnreset}
+
+    assert {:error, ^error} =
+             Retry.with_retry(fn ->
+               :counters.add(counter, 1, 1)
+               {:error, error}
+             end)
+
+    assert :counters.get(counter, 1) == 1
   end
 
   test "successful response on first try does not invoke retries" do
@@ -296,7 +312,7 @@ defmodule Synapsis.Provider.RetryTest do
     assert :counters.get(counter, 1) == 3
   end
 
-  test "TransportError followed by non-retryable error stops immediately" do
+  test "RequestError followed by non-retryable error stops immediately" do
     counter = :counters.new(1, [:atomics])
 
     result =
@@ -306,8 +322,12 @@ defmodule Synapsis.Provider.RetryTest do
           :counters.add(counter, 1, 1)
 
           case count do
-            0 -> {:error, %Req.TransportError{reason: :econnrefused}}
-            _ -> {:error, %{status: 401}}
+            0 ->
+              {:error,
+               %HTTP.RequestError{reason: :econnrefused, phase: :connect, request_started: false}}
+
+            _ ->
+              {:error, %{status: 401}}
           end
         end,
         3

@@ -146,7 +146,7 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
     |> LazyHTML.query("[data-initial-values]")
     |> LazyHTML.attribute("data-initial-values")
     |> hd()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 
   describe "native source metadata mounts" do

@@ -278,7 +278,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
       assert has_element?(view, "#mcp-import-modal [data-form-id='mcp-import-form']")
 
       json =
-        Jason.encode!(%{
+        Formata.JSON.encode!(%{
           "mcpServers" => %{"react-import" => %{"command" => "npx", "args" => ["--help"]}}
         })
 
@@ -563,7 +563,7 @@ defmodule SynapsisWeb.MCPLive.IndexTest do
     |> LazyHTML.query("[data-initial-values]")
     |> LazyHTML.attribute("data-initial-values")
     |> hd()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 
   defp create_backplane_provider(name, base_url) do

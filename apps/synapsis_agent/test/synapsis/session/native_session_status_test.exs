@@ -107,7 +107,7 @@ defmodule Synapsis.Session.NativeSessionStatusTest do
 
     Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       Agent.update(
         ctx.harness.counter,
@@ -169,7 +169,7 @@ defmodule Synapsis.Session.NativeSessionStatusTest do
     for {result, index} <- Enum.with_index(results) do
       assert result.is_error == false
       page = result.projection["result"]["structured"]
-      assert Jason.decode!(result.content) == page
+      assert Formata.JSON.decode!(result.content) == page
 
       next_request = Enum.fetch!(requests, index + 1)
 

@@ -102,7 +102,7 @@ defmodule SynapsisServer.RuntimeConfigTest do
 
     File.write!(
       Path.join(outdir, "manifest.json"),
-      Jason.encode!(%{
+      Formata.JSON.encode!(%{
         "manifest_version" => 1,
         "entries" => %{
           "css/app.css" => %{"file" => "app-installed.css"},

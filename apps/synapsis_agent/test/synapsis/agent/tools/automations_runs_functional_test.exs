@@ -240,7 +240,7 @@ defmodule Synapsis.Agent.Tools.AutomationsRunsFunctionalTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       index = Agent.get_and_update(counter, &{&1, &1 + 1})
       send(owner, {:history_request, index, request, self()})
 
@@ -352,7 +352,7 @@ defmodule Synapsis.Agent.Tools.AutomationsRunsFunctionalTest do
              "legacy_history" => "unknown"
            }
 
-    assert byte_size(Jason.encode!(result.projection["result"])) <= 65_536
+    assert byte_size(Formata.JSON.encode!(result.projection["result"])) <= 65_536
     assert_wire_history(following, parts)
     assert_receive {:DOWN, ^root_monitor, :process, root_pid, _}, 5000
     assert root_pid == runtime.root
@@ -446,7 +446,7 @@ defmodule Synapsis.Agent.Tools.AutomationsRunsFunctionalTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       following? = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
       send(owner, {:producer_request, label, following?, request})
 

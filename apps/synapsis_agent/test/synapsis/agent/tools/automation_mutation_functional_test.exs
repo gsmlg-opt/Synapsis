@@ -192,8 +192,8 @@ defmodule Synapsis.Agent.Tools.AutomationMutationFunctionalTest do
     assert {:ok, %{content: content, structured: result} = output} =
              AutomationMutation.execute(operation)
 
-    assert Jason.decode!(content) == result
-    assert byte_size(Jason.encode!(output)) <= 65_536
+    assert Formata.JSON.decode!(content) == result
+    assert byte_size(Formata.JSON.encode!(output)) <= 65_536
     assert result["source"] == "routine"
     assert result["id"] == id
     assert result["persisted"] == true
@@ -224,8 +224,8 @@ defmodule Synapsis.Agent.Tools.AutomationMutationFunctionalTest do
     assert {:ok, %{content: content, structured: result} = output} =
              AutomationMutation.execute(operation)
 
-    assert Jason.decode!(content) == result
-    assert byte_size(Jason.encode!(output)) <= 65_536
+    assert Formata.JSON.decode!(content) == result
+    assert byte_size(Formata.JSON.encode!(output)) <= 65_536
     assert result["source"] == "routine"
     assert result["id"] == id
     assert result["persisted"] == true
@@ -254,8 +254,8 @@ defmodule Synapsis.Agent.Tools.AutomationMutationFunctionalTest do
     assert {:ok, %{content: content, structured: result} = output} =
              AutomationMutation.execute(operation)
 
-    assert Jason.decode!(content) == result
-    assert byte_size(Jason.encode!(output)) <= 65_536
+    assert Formata.JSON.decode!(content) == result
+    assert byte_size(Formata.JSON.encode!(output)) <= 65_536
     assert result["source"] == "routine"
     assert result["id"] == id
     assert result["persisted"] == true

@@ -37,8 +37,8 @@ defmodule Synapsis.Agent.Events.RunEventTest do
     assert {:ok, restored} =
              event
              |> RunEvent.to_map()
-             |> Jason.encode!()
-             |> Jason.decode!()
+             |> Formata.JSON.encode!()
+             |> Formata.JSON.decode!()
              |> RunEvent.from_map()
 
     assert restored.type == event.type

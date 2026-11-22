@@ -92,7 +92,7 @@ defmodule Synapsis.Memory.SessionSummaryTest do
 
     Gaoxy.Test.stub(ctx.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(owner, {:summary_request, Jason.decode!(body)})
+      send(owner, {:summary_request, Formata.JSON.decode!(body)})
       patch = Agent.get_and_update(queue, fn [next | rest] -> {next, rest} end)
       stream_response(conn, [Map.merge(candidate("fact"), patch)])
     end)
@@ -257,7 +257,7 @@ defmodule Synapsis.Memory.SessionSummaryTest do
     alias Synapsis.Provider.TestSupport.ResponsesFixture
 
     ResponsesFixture.send_sse(conn, [
-      ResponsesFixture.text_delta(Jason.encode!(candidates)),
+      ResponsesFixture.text_delta(Formata.JSON.encode!(candidates)),
       ResponsesFixture.completed()
     ])
   end

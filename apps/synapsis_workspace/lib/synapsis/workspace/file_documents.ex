@@ -70,7 +70,7 @@ defmodule Synapsis.Workspace.FileDocuments do
            is_integer(opts[:deadline]) and opts[:deadline] > System.monotonic_time(:millisecond),
          path = "/agents/#{agent}/handoffs/#{ref}.json",
          content =
-           Jason.encode!(%{
+           Formata.JSON.encode!(%{
              ref: ref,
              from: agent,
              to: message.to_agent_id,
@@ -401,7 +401,7 @@ defmodule Synapsis.Workspace.FileDocuments do
         {:ok, %{}}
 
       {:ok, %{content: content, truncated: false}} ->
-        case Jason.decode(content) do
+        case Formata.JSON.decode(content) do
           {:ok, map} when is_map(map) ->
             known = Map.new(@tool_meta_fields, &{Atom.to_string(&1), &1})
 
@@ -528,7 +528,7 @@ defmodule Synapsis.Workspace.FileDocuments do
 
       args = %{
         "path" => Path.relative_to(meta_path(root, path), root),
-        "content" => Jason.encode!(metadata)
+        "content" => Formata.JSON.encode!(metadata)
       }
 
       case Local.perform(root, :file_write, args, opts) do
@@ -749,15 +749,28 @@ defmodule Synapsis.Workspace.FileDocuments do
   defp decode_meta(nil), do: %{}
 
   defp decode_meta(json) do
-    case Jason.decode(json, keys: :atoms) do
+    case Formata.JSON.decode(json) do
       {:ok, map} when is_map(map) ->
         map
+        |> existing_atom_keys()
         |> atomize_times(:inserted_at)
         |> atomize_times(:updated_at)
 
       _ ->
         %{}
     end
+  end
+
+  defp existing_atom_keys(map) when is_map(map),
+    do: Map.new(map, fn {key, value} -> {existing_atom(key), existing_atom_keys(value)} end)
+
+  defp existing_atom_keys(list) when is_list(list), do: Enum.map(list, &existing_atom_keys/1)
+  defp existing_atom_keys(value), do: value
+
+  defp existing_atom(key) do
+    String.to_existing_atom(key)
+  rescue
+    ArgumentError -> key
   end
 
   defp write_meta(workspace_root, path, meta, io) do
@@ -772,7 +785,7 @@ defmodule Synapsis.Workspace.FileDocuments do
     case Local.write_binary(
            workspace_root,
            relative,
-           Jason.encode!(serializable, pretty: true),
+           Formata.JSON.encode!(serializable, pretty: true),
            io
          ) do
       {:ok, _} -> :ok

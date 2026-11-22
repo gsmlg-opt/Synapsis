@@ -160,7 +160,7 @@ defmodule Synapsis.Agent.Tools.FilesystemFactoryFunctionalTest do
   defp source_metadata("synapsis::" <> name) do
     @factory
     |> File.read!()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
     |> Map.fetch!("rows")
     |> Enum.find(&(&1["id"] == name <> "/default"))
     |> Map.fetch!("metadata")

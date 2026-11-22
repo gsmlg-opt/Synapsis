@@ -96,7 +96,7 @@ defmodule Synapsis.Agent.Routine.NativeRunnerFunctionalTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       following? = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
       send(owner, {:producer_request, label, following?, request})
 

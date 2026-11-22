@@ -120,7 +120,7 @@ defmodule Synapsis.Memory.SessionSummary do
           message_count: length(messages)
         }
 
-        if byte_size(Jason.encode!(result)) <= @output_limit,
+        if byte_size(Formata.JSON.encode!(result)) <= @output_limit,
           do: {:ok, result},
           else: {:error, :output_limit}
       end
@@ -282,7 +282,7 @@ defmodule Synapsis.Memory.SessionSummary do
         _ -> text
       end
 
-    with {:ok, candidates} when is_list(candidates) <- Jason.decode(json),
+    with {:ok, candidates} when is_list(candidates) <- Formata.JSON.decode(json),
          true <- length(candidates) <= 20 and Enum.all?(candidates, &candidate?/1) do
       {:ok,
        candidates

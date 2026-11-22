@@ -28,7 +28,7 @@ defmodule Synapsis.Session.NativeQuestionRuntimeTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       has_result = Enum.any?(request["input"], &(&1["type"] == "function_call_output"))
 
       chunks =

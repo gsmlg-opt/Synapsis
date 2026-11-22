@@ -29,10 +29,9 @@ defmodule SynapsisLocalAgents.MixProject do
     [
       {:synapsis_core, in_umbrella: true},
       {:synapsis_data, in_umbrella: true},
-      {:samgita_codex_driver, "~> 0.4.0"},
-      {:samgita_protocol_websocket, "~> 0.4.0"},
-      {:toml, "~> 0.7"},
-      {:jason, "~> 1.4"}
+      {:samgita_codex_driver, "~> 0.5.0"},
+      {:samgita_protocol_websocket, "~> 0.5.0"},
+      {:formata, "~> 0.3.5"}
     ]
   end
 end

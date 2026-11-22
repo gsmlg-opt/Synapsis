@@ -107,7 +107,7 @@ defmodule Synapsis.Session.NativeBrowserActDownloadFunctionalTest do
       assert %{"version" => 1, "result" => projected} = result.projection
       assert projected["is_error"] == false
       assert result.content == projected["content"]
-      assert Jason.decode!(result.content) == receipt(final, result.tool_use_id)
+      assert Formata.JSON.decode!(result.content) == receipt(final, result.tool_use_id)
       assert projected["structured"] == receipt(final, result.tool_use_id)
       assert Map.drop(projected, ~w(content structured is_error)) == projected["structured"]
     end
@@ -260,7 +260,7 @@ defmodule Synapsis.Session.NativeBrowserActDownloadFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -320,7 +320,7 @@ defmodule Synapsis.Session.NativeBrowserActDownloadFunctionalTest do
         }
       })
 
-  defp mark(value), do: %{"kind" => "evaluate", "fn" => "() => " <> Jason.encode!(value)}
+  defp mark(value), do: %{"kind" => "evaluate", "fn" => "() => " <> Formata.JSON.encode!(value)}
   defp click(request, name), do: %{"kind" => "click", "ref" => download_ref(request, name)}
 
   defp input(action, args \\ %{}),
@@ -372,7 +372,7 @@ defmodule Synapsis.Session.NativeBrowserActDownloadFunctionalTest do
       request["input"]
       |> Enum.find(&(&1["type"] == "function_call_output" and &1["call_id"] == id))
       |> Map.fetch!("output")
-      |> Jason.decode!()
+      |> Formata.JSON.decode!()
 
   defp assert_wire_history(request, uses, results) do
     actual =
@@ -386,7 +386,7 @@ defmodule Synapsis.Session.NativeBrowserActDownloadFunctionalTest do
             "type" => "function_call",
             "call_id" => use.tool_use_id,
             "name" => ToolName.encode(use.tool),
-            "arguments" => Jason.encode!(use.input)
+            "arguments" => Formata.JSON.encode!(use.input)
           },
           %{
             "type" => "function_call_output",
@@ -409,7 +409,9 @@ defmodule Synapsis.Session.NativeBrowserActDownloadFunctionalTest do
   defp assert_part_round_trips(parts) do
     for part <- parts do
       assert {:ok, dump} = Synapsis.Part.dump(part)
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
   end
 
@@ -495,7 +497,7 @@ defmodule Synapsis.Session.NativeBrowserActDownloadFunctionalTest do
       "call_id" => id,
       "namespace" => "synapsis",
       "name" => "browser",
-      "arguments" => Jason.encode!(input)
+      "arguments" => Formata.JSON.encode!(input)
     }
 
     sse(conn, [
@@ -507,7 +509,7 @@ defmodule Synapsis.Session.NativeBrowserActDownloadFunctionalTest do
       %{
         "type" => "response.function_call_arguments.delta",
         "item_id" => item["id"],
-        "delta" => Jason.encode!(input)
+        "delta" => Formata.JSON.encode!(input)
       },
       %{"type" => "response.output_item.done", "output_index" => 0, "item" => item},
       completed([item])
@@ -530,6 +532,9 @@ defmodule Synapsis.Session.NativeBrowserActDownloadFunctionalTest do
   defp sse(conn, events) do
     conn
     |> Plug.Conn.put_resp_content_type("text/event-stream")
-    |> Plug.Conn.resp(200, Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n")))
+    |> Plug.Conn.resp(
+      200,
+      Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
+    )
   end
 end

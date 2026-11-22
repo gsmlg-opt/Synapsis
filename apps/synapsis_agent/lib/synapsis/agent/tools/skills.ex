@@ -19,7 +19,7 @@ defmodule Synapsis.Agent.Tools.Skills do
   # Conversation 1.10.35 enriches effect context with these runtime bindings.
   # Only the actual pinned catalog and live deadline participate in body preparation.
   @native_context_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
 
   def descriptors(context) do
     with :ok <- context_valid(context) do

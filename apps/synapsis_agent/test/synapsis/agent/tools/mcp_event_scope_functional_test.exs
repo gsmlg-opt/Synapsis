@@ -277,7 +277,7 @@ defmodule Synapsis.Agent.Tools.MCPEventScopeFunctionalTest do
     expected = first_page()
     assert result.value == expected
     assert [%{"type" => "text", "text" => output}] = result.output
-    assert Jason.decode!(output) == expected
+    assert Formata.JSON.decode!(output) == expected
     assert result.output_truncated == false
     status = Headless.status(occurrence)
     assert status.phase == :terminal
@@ -469,7 +469,7 @@ defmodule Synapsis.Agent.Tools.MCPEventScopeFunctionalTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      wire = Jason.decode!(body)
+      wire = Formata.JSON.decode!(body)
       headers = Map.new(conn.req_headers)
       send(owner, {:events_http, wire["method"], wire["params"], headers, wire["id"]})
 
@@ -480,7 +480,7 @@ defmodule Synapsis.Agent.Tools.MCPEventScopeFunctionalTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.resp(
           200,
-          Jason.encode!(%{"jsonrpc" => "2.0", "id" => wire["id"], "result" => result})
+          Formata.JSON.encode!(%{"jsonrpc" => "2.0", "id" => wire["id"], "result" => result})
         )
       else
         Plug.Conn.resp(conn, 202, "")

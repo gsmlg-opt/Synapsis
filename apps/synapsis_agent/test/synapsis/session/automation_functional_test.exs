@@ -298,7 +298,7 @@ defmodule Synapsis.Session.AutomationFunctionalTest do
 
     Gaoxy.Test.stub(http, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(requests, fn values -> {length(values), values ++ [request]} end)
@@ -316,7 +316,7 @@ defmodule Synapsis.Session.AutomationFunctionalTest do
           {:ok, conn} =
             Plug.Conn.chunk(
               conn,
-              "data: #{Jason.encode!(DeterministicProvider.text_chunk("正在回答"))}\n\n"
+              "data: #{Formata.JSON.encode!(DeterministicProvider.text_chunk("正在回答"))}\n\n"
             )
 
           conn

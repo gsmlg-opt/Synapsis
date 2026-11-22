@@ -125,7 +125,7 @@ defmodule Synapsis.Provider.DeepSeekSearchFunctionalTest do
         __DIR__
       )
       |> File.read!()
-      |> Jason.decode!()
+      |> Formata.JSON.decode!()
 
     callbacks =
       for group <- reference["groups"],
@@ -177,11 +177,11 @@ defmodule Synapsis.Provider.DeepSeekSearchFunctionalTest do
 
     Gaoxy.Test.stub(ctx.fixture, "POST", "/v1/tools/search", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      send(owner, {:deepseek_http, Jason.decode!(body), conn.req_headers})
+      send(owner, {:deepseek_http, Formata.JSON.decode!(body), conn.req_headers})
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(payload))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
     end)
   end
 end

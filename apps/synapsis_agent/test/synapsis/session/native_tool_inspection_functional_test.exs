@@ -257,7 +257,7 @@ defmodule Synapsis.Session.NativeToolInspectionFunctionalTest do
            ]
 
     assert before.content == after_publication.content
-    assert Jason.decode!(custom.content) == exec_document()
+    assert Formata.JSON.decode!(custom.content) == exec_document()
 
     for part <- parts do
       assert {:ok, dump} = Synapsis.Part.dump(part)
@@ -409,7 +409,7 @@ defmodule Synapsis.Session.NativeToolInspectionFunctionalTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       if Map.has_key?(request, "id") do
         result =
@@ -581,7 +581,7 @@ defmodule Synapsis.Session.NativeToolInspectionFunctionalTest do
 
     Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(ctx.harness.counter, fn state ->
@@ -630,7 +630,7 @@ defmodule Synapsis.Session.NativeToolInspectionFunctionalTest do
 
     Gaoxy.Test.stub(ctx.harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(ctx.harness.counter, fn state ->
@@ -733,7 +733,7 @@ defmodule Synapsis.Session.NativeToolInspectionFunctionalTest do
     assert result.is_error == false
 
     assert text == result.content
-    assert Jason.decode!(text) == document
+    assert Formata.JSON.decode!(text) == document
     assert is_binary(result.content)
     assert result.projection === nil
     result
@@ -776,7 +776,7 @@ defmodule Synapsis.Session.NativeToolInspectionFunctionalTest do
       assert Enum.any?(request["input"], fn item ->
                item["type"] == "function_call" and item["call_id"] == use.tool_use_id and
                  item["name"] == ToolName.encode(use.tool) and
-                 Jason.decode!(item["arguments"]) == use.input
+                 Formata.JSON.decode!(item["arguments"]) == use.input
              end)
     end
 
@@ -840,13 +840,13 @@ defmodule Synapsis.Session.NativeToolInspectionFunctionalTest do
     do:
       Enum.find(request["input"], &(&1["call_id"] == id and &1["type"] == "function_call_output"))
 
-  defp json(value), do: value |> Jason.encode!() |> Jason.decode!()
+  defp json(value), do: value |> Formata.JSON.encode!() |> Formata.JSON.decode!()
 
   defp json_response(conn, value),
     do:
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(value))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(value))
 
   defp calls(conn, calls) do
     items =
@@ -856,7 +856,7 @@ defmodule Synapsis.Session.NativeToolInspectionFunctionalTest do
             "id" => id <> "-item",
             "call_id" => id,
             "name" => ToolName.encode(name),
-            "arguments" => Jason.encode!(args)
+            "arguments" => Formata.JSON.encode!(args)
           }
 
     events =
@@ -891,6 +891,6 @@ defmodule Synapsis.Session.NativeToolInspectionFunctionalTest do
       |> Plug.Conn.put_resp_content_type("text/event-stream")
       |> Plug.Conn.resp(
         200,
-        Enum.map_join(events, "", &("data: " <> Jason.encode!(&1) <> "\n\n"))
+        Enum.map_join(events, "", &("data: " <> Formata.JSON.encode!(&1) <> "\n\n"))
       )
 end

@@ -41,7 +41,7 @@ defmodule Synapsis.SkillReaderTest do
     assert {:ok, %{results: results, truncated: false}} = SkillReader.search(snapshot, "inspect")
     assert Enum.sort(Enum.map(results, & &1.record_id)) == Enum.sort([first.id, second.id])
     assert length(Enum.uniq(Enum.map(results, & &1.locator))) == 2
-    encoded = Jason.encode!(results)
+    encoded = Formata.JSON.encode!(results)
     refute encoded =~ "SECRET BODY"
     refute encoded =~ ctx.tmp_dir
     refute encoded =~ "loader"

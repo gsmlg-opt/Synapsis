@@ -116,7 +116,7 @@ defmodule SynapsisWeb.SkillLive.ShowTest do
         |> LazyHTML.query("[data-form-id='edit-skill-form']")
         |> LazyHTML.attribute("data-initial-values")
 
-      assert %{"name" => "", "description" => "Keep this draft"} = Jason.decode!(json)
+      assert %{"name" => "", "description" => "Keep this draft"} = Formata.JSON.decode!(json)
       assert Synapsis.Skills.get(skill.id).description == skill.description
 
       react_form_submit(view, "edit-skill-form", %{

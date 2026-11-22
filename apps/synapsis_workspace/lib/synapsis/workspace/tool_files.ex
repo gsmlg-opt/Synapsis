@@ -443,7 +443,7 @@ defmodule Synapsis.Workspace.ToolFiles do
       :next_offset => if(truncated, do: offset + length(selected))
     }
 
-    if byte_size(Jason.encode!(result)) <= @max_output,
+    if byte_size(Formata.JSON.encode!(result)) <= @max_output,
       do: {:ok, result},
       else: {:error, :output_limit}
   end

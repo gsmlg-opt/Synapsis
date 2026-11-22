@@ -30,10 +30,10 @@ defmodule SynapsisCli.MixProject do
 
   defp deps do
     [
-      {:req, "~> 0.7.5"},
-      {:jason, "~> 1.4"},
       {:owl, "~> 0.12"},
-      {:gaoxy_test, "~> 0.15.1", only: :test}
+      {:gaoxy_test, "~> 0.16.6", only: :test},
+      {:formata, "~> 0.3.5"},
+      {:http_fetch, "~> 1.0.0-rc.20"}
     ]
   end
 end

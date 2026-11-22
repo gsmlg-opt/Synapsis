@@ -208,7 +208,7 @@ defmodule SynapsisWeb.MemoryLive.IndexTest do
       Plug.Conn.resp(
         conn,
         200,
-        Jason.encode!(%{
+        Formata.JSON.encode!(%{
           ok: true,
           result: %{
             offline: true,

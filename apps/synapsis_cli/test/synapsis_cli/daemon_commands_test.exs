@@ -12,7 +12,7 @@ defmodule SynapsisCli.DaemonCommandsTest do
     Gaoxy.Test.expect_once(bypass, "GET", "/api/agent/daemon/status", fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(503, Jason.encode!(%{"error" => "not ready"}))
+      |> Plug.Conn.resp(503, Formata.JSON.encode!(%{"error" => "not ready"}))
     end)
 
     output =
@@ -29,11 +29,11 @@ defmodule SynapsisCli.DaemonCommandsTest do
 
     Gaoxy.Test.expect_once(bypass, "POST", "/api/agent/heartbeat/trigger", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert %{"name" => "health-check"} = Jason.decode!(body)
+      assert %{"name" => "health-check"} = Formata.JSON.decode!(body)
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => "run-id"}}))
+      |> Plug.Conn.resp(201, Formata.JSON.encode!(%{"data" => %{"id" => "run-id"}}))
     end)
 
     output =
@@ -50,11 +50,11 @@ defmodule SynapsisCli.DaemonCommandsTest do
 
     Gaoxy.Test.expect_once(bypass, "POST", "/api/agent/dream/trigger", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert %{} = Jason.decode!(body)
+      assert %{} = Formata.JSON.decode!(body)
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => "dream-run"}}))
+      |> Plug.Conn.resp(201, Formata.JSON.encode!(%{"data" => %{"id" => "dream-run"}}))
     end)
 
     assert capture_io(fn -> assert :ok = Main.run(["dream", "run", "--host", host]) end) =~
@@ -73,7 +73,7 @@ defmodule SynapsisCli.DaemonCommandsTest do
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.resp(
         200,
-        Jason.encode!(%{
+        Formata.JSON.encode!(%{
           "data" => [
             %{"id" => routine_id, "name" => "nightly", "kind" => "schedule"},
             %{
@@ -89,7 +89,7 @@ defmodule SynapsisCli.DaemonCommandsTest do
     Gaoxy.Test.expect_once(bypass, "POST", "/api/agent/routines/#{routine_id}/trigger", fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => "schedule-run"}}))
+      |> Plug.Conn.resp(201, Formata.JSON.encode!(%{"data" => %{"id" => "schedule-run"}}))
     end)
 
     assert capture_io(fn ->
@@ -105,13 +105,13 @@ defmodule SynapsisCli.DaemonCommandsTest do
       {:ok, body, conn} = Plug.Conn.read_body(conn)
 
       assert %{"name" => "local", "endpoint" => "http://backplane.internal"} =
-               decoded = Jason.decode!(body)
+               decoded = Formata.JSON.decode!(body)
 
       refute Map.has_key?(decoded, "credential")
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => "connection-id"}}))
+      |> Plug.Conn.resp(201, Formata.JSON.encode!(%{"data" => %{"id" => "connection-id"}}))
     end)
 
     assert capture_io(fn ->
@@ -138,11 +138,11 @@ defmodule SynapsisCli.DaemonCommandsTest do
                "name" => "trusted",
                "endpoint" => "https://backplane.internal",
                "connection_options" => %{"trust_mcp_annotations" => true}
-             } = Jason.decode!(body)
+             } = Formata.JSON.decode!(body)
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => "trusted-id"}}))
+      |> Plug.Conn.resp(201, Formata.JSON.encode!(%{"data" => %{"id" => "trusted-id"}}))
     end)
 
     assert capture_io(fn ->
@@ -169,7 +169,7 @@ defmodule SynapsisCli.DaemonCommandsTest do
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.resp(
         200,
-        Jason.encode!(%{
+        Formata.JSON.encode!(%{
           "data" => [
             %{"id" => connection_id, "name" => "production"},
             %{"id" => "other", "name" => "staging"}
@@ -185,7 +185,7 @@ defmodule SynapsisCli.DaemonCommandsTest do
       fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(%{"data" => %{"ok" => true}}))
+        |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"data" => %{"ok" => true}}))
       end
     )
 
@@ -204,7 +204,7 @@ defmodule SynapsisCli.DaemonCommandsTest do
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.resp(
         200,
-        Jason.encode!(%{"data" => [%{"id" => connection_id, "name" => "production"}]})
+        Formata.JSON.encode!(%{"data" => [%{"id" => connection_id, "name" => "production"}]})
       )
     end)
 
@@ -215,7 +215,7 @@ defmodule SynapsisCli.DaemonCommandsTest do
       fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(%{"data" => %{"status" => "ready"}}))
+        |> Plug.Conn.resp(200, Formata.JSON.encode!(%{"data" => %{"status" => "ready"}}))
       end
     )
 
@@ -231,7 +231,7 @@ defmodule SynapsisCli.DaemonCommandsTest do
       |> Plug.Conn.put_resp_content_type("application/json")
       |> Plug.Conn.resp(
         200,
-        Jason.encode!(%{
+        Formata.JSON.encode!(%{
           "data" => [
             %{"id" => "first", "name" => "duplicate"},
             %{"id" => "second", "name" => "duplicate"}
@@ -256,11 +256,11 @@ defmodule SynapsisCli.DaemonCommandsTest do
 
     Gaoxy.Test.expect_once(bypass, "POST", "/api/backplane/connections", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert %{"credential" => ^secret} = Jason.decode!(body)
+      assert %{"credential" => ^secret} = Formata.JSON.decode!(body)
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(201, Jason.encode!(%{"data" => %{"id" => "secure-connection"}}))
+      |> Plug.Conn.resp(201, Formata.JSON.encode!(%{"data" => %{"id" => "secure-connection"}}))
     end)
 
     output =
@@ -346,7 +346,7 @@ defmodule SynapsisCli.DaemonCommandsTest do
              ])
   end
 
-  test "mTLS options use the Req and Finch transport option contract" do
+  test "mTLS options use the http_fetch TLS option contract" do
     options =
       Main.request_options(
         [
@@ -357,17 +357,17 @@ defmodule SynapsisCli.DaemonCommandsTest do
         12_345
       )
 
-    assert options[:receive_timeout] == 12_345
-    assert options[:request_timeout] == 12_345
+    assert options[:timeout] == 12_345
+    assert options[:connect_timeout] == 12_345
     assert options[:retry] == false
 
-    assert options[:connect_options][:transport_opts] == [
+    assert options[:ssl] == [
              certfile: "/secure/client.pem",
              keyfile: "/secure/client.key",
              cacertfile: "/secure/ca.pem"
            ]
 
-    assert %Req.Request{} = Req.new([url: "https://synapsis.example.com"] ++ options)
+    assert options[:redirect] == :manual
   end
 
   test "does not send a Backplane credential over non-loopback plaintext HTTP" do
@@ -488,7 +488,7 @@ defmodule SynapsisCli.DaemonCommandsTest do
 
     Gaoxy.Test.expect_once(bypass, "POST", "/api/agent/runs", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      assert %{"prompt" => "inspect deployment"} = Jason.decode!(body)
+      assert %{"prompt" => "inspect deployment"} = Formata.JSON.decode!(body)
       json(conn, 201, %{"data" => %{"id" => "manual-run"}})
     end)
 
@@ -525,6 +525,6 @@ defmodule SynapsisCli.DaemonCommandsTest do
   defp json(conn, status, body) do
     conn
     |> Plug.Conn.put_resp_content_type("application/json")
-    |> Plug.Conn.resp(status, Jason.encode!(body))
+    |> Plug.Conn.resp(status, Formata.JSON.encode!(body))
   end
 end

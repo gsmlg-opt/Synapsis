@@ -122,7 +122,7 @@ defmodule Synapsis.Agent.Tools.WorkspaceMemoryTest do
     assert read_text =~ "memory/nested/daily.md:2"
     assert read_text =~ "truncated"
     assert read_text =~ "3"
-    assert Jason.encode!(page)
+    assert Formata.JSON.encode!(page)
   end
 
   test "partial workspace searches expose continuation without claiming global absence", ctx do
@@ -281,7 +281,7 @@ defmodule Synapsis.Agent.Tools.WorkspaceMemoryTest do
   test "combined encoded text and structured output share one 64KiB budget", ctx do
     put(ctx, "MEMORY.md", String.duplicate("界", 12_001))
     assert {:ok, page} = Synapsis.Memory.read_workspace(ctx.context.root, "MEMORY.md")
-    assert byte_size(Jason.encode!(page)) < 65_536
+    assert byte_size(Formata.JSON.encode!(page)) < 65_536
 
     assert {:error, %Error{class: :budget_exceeded, details: %{code: "output_limit"}}} =
              WorkspaceMemory.execute(operation(ctx, @get, %{"path" => "MEMORY.md"}))

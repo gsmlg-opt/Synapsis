@@ -150,7 +150,7 @@ defmodule Synapsis.SessionHistoryWindowLifecycleFunctionalTest do
       end)
 
     assert {:ok, rendered} = result
-    assert Jason.decode!(rendered.text) == rendered.page
+    assert Formata.JSON.decode!(rendered.text) == rendered.page
     assert rendered.page["session_id"] == id
 
     assert [
@@ -264,7 +264,7 @@ defmodule Synapsis.SessionHistoryWindowLifecycleFunctionalTest do
              source(rewritten, 3, "Report ready 雪 😀")
            ]
 
-    assert Jason.decode!(rendered.text) == rendered.page
+    assert Formata.JSON.decode!(rendered.text) == rendered.page
 
     assert {:ok, older} =
              SessionHistory.read_rendered(
@@ -321,7 +321,7 @@ defmodule Synapsis.SessionHistoryWindowLifecycleFunctionalTest do
   end
 
   defp closed?({:eol, body}) do
-    case Jason.decode(body) do
+    case Formata.JSON.decode(body) do
       {:ok, %{"type" => "closed", "runtime" => %{"workerExitObserved" => true}}} -> true
       _ -> false
     end

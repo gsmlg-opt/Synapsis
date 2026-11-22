@@ -29,7 +29,10 @@ defmodule Synapsis.LLMTest do
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(200, Jason.encode!(%{"status" => "completed", "output" => []}))
+        |> Plug.Conn.send_resp(
+          200,
+          Formata.JSON.encode!(%{"status" => "completed", "output" => []})
+        )
       end)
 
       assert {:ok, _connection} =

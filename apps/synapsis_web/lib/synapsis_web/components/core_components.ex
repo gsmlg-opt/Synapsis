@@ -596,7 +596,7 @@ defmodule SynapsisWeb.CoreComponents do
         <% %Synapsis.Part.ToolUse{tool: tool, tool_use_id: _id, input: input, status: status} -> %>
           <.tool_call_display name={tool} status={to_string(status)}>
             <:params>
-              <pre class="max-h-32 overflow-y-auto">{Jason.encode!(input || %{}, pretty: true)}</pre>
+              <pre class="max-h-32 overflow-y-auto">{Formata.JSON.encode!(input || %{}, pretty: true)}</pre>
             </:params>
           </.tool_call_display>
         <% %Synapsis.Part.ToolResult{content: content, is_error: is_error} -> %>
@@ -727,7 +727,7 @@ defmodule SynapsisWeb.CoreComponents do
             <span class="font-medium text-sm">{@tool}</span>
             <.dm_badge variant="warning" size="sm">{@level}</.dm_badge>
           </div>
-          <pre class="text-xs text-on-surface-variant max-h-24 overflow-y-auto mb-2">{Jason.encode!(@input || %{}, pretty: true)}</pre>
+          <pre class="text-xs text-on-surface-variant max-h-24 overflow-y-auto mb-2">{Formata.JSON.encode!(@input || %{}, pretty: true)}</pre>
           <div class="flex gap-2">
             <.dm_btn
               variant="primary"

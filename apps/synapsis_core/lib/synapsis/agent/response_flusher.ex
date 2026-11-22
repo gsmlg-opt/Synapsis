@@ -408,7 +408,7 @@ defmodule Synapsis.Agent.ResponseFlusher do
 
   defp finalize_pending_tool(%{pending_tool_use: %{tool: name, tool_use_id: id}} = acc) do
     input =
-      case Jason.decode(acc.pending_tool_input || "") do
+      case Formata.JSON.decode(acc.pending_tool_input || "") do
         {:ok, parsed} -> parsed
         _ -> %{}
       end

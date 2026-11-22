@@ -17,7 +17,7 @@ defmodule Synapsis.Agent.Tools.SessionStatus do
   @output_limit 65_536
   @context_keys [:session_id, :agent_id, :run_id, :incarnation, :catalog_revision]
   @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
 
   def names, do: @names
   def permission_level(name) when name in @names, do: :read
@@ -53,7 +53,10 @@ defmodule Synapsis.Agent.Tools.SessionStatus do
       }
 
       {:ok,
-       %{action: "session.status.read", resource: "session_status:" <> Jason.encode!(resource)}}
+       %{
+         action: "session.status.read",
+         resource: "session_status:" <> Formata.JSON.encode!(resource)
+       }}
     end
   end
 
@@ -72,7 +75,7 @@ defmodule Synapsis.Agent.Tools.SessionStatus do
          id = Map.get(operation.arguments, "session_id", context.session_id),
          {:ok, usage} <- SessionUsage.read(id, deadline),
          result = Map.put(result, :usage, usage) do
-      native = %{content: Jason.encode!(result), structured: result}
+      native = %{content: Formata.JSON.encode!(result), structured: result}
 
       bounded_result(native, deadline)
     else
@@ -87,7 +90,7 @@ defmodule Synapsis.Agent.Tools.SessionStatus do
   def execute(_), do: failure(:invalid_context)
 
   defp bounded_result(native, deadline) do
-    with {:ok, json} <- Jason.encode(native),
+    with {:ok, json} <- Synapsis.JSON.encode(native),
          true <- byte_size(json) <= @output_limit do
       if System.monotonic_time(:millisecond) < deadline,
         do: {:ok, native},

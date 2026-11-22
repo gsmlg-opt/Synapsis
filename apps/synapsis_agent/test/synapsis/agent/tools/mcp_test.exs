@@ -23,7 +23,7 @@ defmodule Synapsis.Agent.Tools.MCPTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
       current = Agent.get(state, & &1)
 
       result =
@@ -82,7 +82,7 @@ defmodule Synapsis.Agent.Tools.MCPTest do
           |> Plug.Conn.put_resp_content_type("application/json")
           |> Plug.Conn.resp(
             200,
-            Jason.encode!(%{"jsonrpc" => "2.0", "id" => request["id"], "result" => result})
+            Formata.JSON.encode!(%{"jsonrpc" => "2.0", "id" => request["id"], "result" => result})
           )
 
         true ->
@@ -216,7 +216,7 @@ defmodule Synapsis.Agent.Tools.MCPTest do
     assert result.metadata.mcp === Map.drop(raw, ["content", "structuredContent", "isError"])
     assert result.is_error === false
     assert :settled = ToolEffects.settlement({:ok, result}, %{read_only: false})
-    assert Jason.encode!(result)
+    assert Formata.JSON.encode!(result)
 
     assert_receive {:mcp_native_called,
                     %{"name" => "echo.raw", "arguments" => %{"text" => "value"}}}

@@ -111,7 +111,7 @@ defmodule SynapsisWeb.ProviderCleanupLiveTest do
       |> LazyHTML.query("[data-form-id='mcp-config-form']")
       |> LazyHTML.attribute("data-initial-values")
 
-    assert Jason.decode!(json)["headers"] == "X-Draft: retained"
+    assert Formata.JSON.decode!(json)["headers"] == "X-Draft: retained"
     refute_receive :cleanup_refresh, 20
   end
 

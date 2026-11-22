@@ -89,7 +89,7 @@ defmodule Synapsis.Session.NativeParallelFreeSearchFunctionalTest do
     source =
       Path.expand("../../fixtures/openclaw/488631c/parallel-free-search.json", __DIR__)
       |> File.read!()
-      |> Jason.decode!()
+      |> Formata.JSON.decode!()
       |> Map.fetch!("groups")
       |> hd()
 
@@ -121,7 +121,7 @@ defmodule Synapsis.Session.NativeParallelFreeSearchFunctionalTest do
            ]
 
     assert Enum.all?(results, &(&1.is_error == false))
-    [first, cached, last] = Enum.map(results, &Jason.decode!(&1.content))
+    [first, cached, last] = Enum.map(results, &Formata.JSON.decode!(&1.content))
 
     session = first["sessionId"]
     assert is_binary(session)
@@ -155,7 +155,7 @@ defmodule Synapsis.Session.NativeParallelFreeSearchFunctionalTest do
     assert last["tookMs"] >= 0
 
     for result <- results do
-      public = Jason.decode!(result.content)
+      public = Formata.JSON.decode!(result.content)
 
       assert result.projection == %{
                "version" => 1,
@@ -191,7 +191,9 @@ defmodule Synapsis.Session.NativeParallelFreeSearchFunctionalTest do
         end
 
       assert dump == expected_dump
-      assert {:ok, ^part} = dump |> Jason.encode!() |> Jason.decode!() |> Synapsis.Part.load()
+
+      assert {:ok, ^part} =
+               dump |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Synapsis.Part.load()
     end
 
     assert_durable(harness.session.id, uses, results)
@@ -299,7 +301,7 @@ defmodule Synapsis.Session.NativeParallelFreeSearchFunctionalTest do
   defp install_search(harness) do
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/ordinary/mcp", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -359,7 +361,10 @@ defmodule Synapsis.Session.NativeParallelFreeSearchFunctionalTest do
   defp json_reply(conn, id, result) do
     conn
     |> Plug.Conn.put_resp_content_type("application/json")
-    |> Plug.Conn.resp(200, Jason.encode!(%{"jsonrpc" => "2.0", "id" => id, "result" => result}))
+    |> Plug.Conn.resp(
+      200,
+      Formata.JSON.encode!(%{"jsonrpc" => "2.0", "id" => id, "result" => result})
+    )
   end
 
   defp assert_effect(harness, session) do
@@ -410,7 +415,7 @@ defmodule Synapsis.Session.NativeParallelFreeSearchFunctionalTest do
 
     Gaoxy.Test.stub(harness.provider.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      req = Jason.decode!(body)
+      req = Formata.JSON.decode!(body)
 
       index =
         Agent.get_and_update(harness.counter, fn state ->
@@ -439,7 +444,7 @@ defmodule Synapsis.Session.NativeParallelFreeSearchFunctionalTest do
             args =
               if completed == 2 do
                 first = Enum.find(req["input"], &(&1["type"] == "function_call_output"))
-                session = Jason.decode!(first["output"])["sessionId"]
+                session = Formata.JSON.decode!(first["output"])["sessionId"]
                 Map.put(args, "session_id", " " <> session <> " ")
               else
                 args
@@ -478,7 +483,7 @@ defmodule Synapsis.Session.NativeParallelFreeSearchFunctionalTest do
     uses = Enum.filter(req["input"], &(&1["type"] == "function_call"))
 
     assert Enum.map(uses, fn call ->
-             update_in(call, ["function", "arguments"], &Jason.decode!/1)
+             update_in(call, ["function", "arguments"], &Formata.JSON.decode!/1)
            end) ==
              Enum.map(calls, fn {id, name, input} ->
                %{

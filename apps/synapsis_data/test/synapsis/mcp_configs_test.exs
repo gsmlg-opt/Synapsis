@@ -88,7 +88,7 @@ defmodule Synapsis.MCPConfigsTest do
     assert Enum.find(MCPConfigs.list(), &(&1.id == mcp.id)).config == config
     assert {:ok, stored} = Store.get(:mcp, mcp.id)
     assert stored["config"]["backplane_source_id"] == source_id
-    assert Jason.decode!(stored["config"]["backplane_tools_json"]) == tools
+    assert Formata.JSON.decode!(stored["config"]["backplane_tools_json"]) == tools
     refute Map.has_key?(stored["config"], "backplane_tools")
 
     updated_config = Map.put(config, "backplane_tools", [%{"inputSchema" => %{"enum" => [nil]}}])
@@ -255,7 +255,7 @@ defmodule Synapsis.MCPConfigsTest do
              Store.put(:backplane, %{
                "id" => source_id,
                "enabled" => true,
-               "metadata_json" => Jason.encode!(%{"runtime_blocked_surfaces" => ["tools"]})
+               "metadata_json" => Formata.JSON.encode!(%{"runtime_blocked_surfaces" => ["tools"]})
              })
 
     refute MCPConfigs.runtime_available?(config)
@@ -264,7 +264,8 @@ defmodule Synapsis.MCPConfigsTest do
              Store.put(:backplane, %{
                "id" => source_id,
                "enabled" => true,
-               "metadata_json" => Jason.encode!(%{"runtime_blocked_surfaces" => ["skills"]})
+               "metadata_json" =>
+                 Formata.JSON.encode!(%{"runtime_blocked_surfaces" => ["skills"]})
              })
 
     assert MCPConfigs.runtime_available?(config)
@@ -331,7 +332,8 @@ defmodule Synapsis.MCPConfigsTest do
              Store.put(:backplane, %{
                "id" => source_id,
                "enabled" => true,
-               "connection_options_json" => Jason.encode!(%{"trust_mcp_annotations" => false})
+               "connection_options_json" =>
+                 Formata.JSON.encode!(%{"trust_mcp_annotations" => false})
              })
 
     refute MCPConfigs.trust_tool_annotations?(managed)
@@ -340,7 +342,8 @@ defmodule Synapsis.MCPConfigsTest do
              Store.put(:backplane, %{
                "id" => source_id,
                "enabled" => true,
-               "connection_options_json" => Jason.encode!(%{"trust_mcp_annotations" => true})
+               "connection_options_json" =>
+                 Formata.JSON.encode!(%{"trust_mcp_annotations" => true})
              })
 
     assert MCPConfigs.trust_tool_annotations?(managed)
@@ -360,7 +363,8 @@ defmodule Synapsis.MCPConfigsTest do
              Store.put(:backplane, %{
                "id" => source_id,
                "enabled" => false,
-               "connection_options_json" => Jason.encode!(%{"trust_mcp_annotations" => true})
+               "connection_options_json" =>
+                 Formata.JSON.encode!(%{"trust_mcp_annotations" => true})
              })
 
     refute MCPConfigs.trust_tool_annotations?(managed)

@@ -42,12 +42,12 @@ defmodule Synapsis.Provider.GrokSearchFunctionalTest do
           send(
             owner,
             {:grok_post, conn.method, conn.request_path, conn.query_string,
-             Jason.decode!(encoded), conn.req_headers}
+             Formata.JSON.decode!(encoded), conn.req_headers}
           )
 
           conn
           |> Plug.Conn.put_resp_content_type("application/json")
-          |> Plug.Conn.resp(200, Jason.encode!(group["httpPayload"]))
+          |> Plug.Conn.resp(200, Formata.JSON.encode!(group["httpPayload"]))
         end)
 
         base_path = URI.parse(prepared.base_url).path || ""
@@ -142,6 +142,6 @@ defmodule Synapsis.Provider.GrokSearchFunctionalTest do
       __DIR__
     )
     |> File.read!()
-    |> Jason.decode!()
+    |> Formata.JSON.decode!()
   end
 end

@@ -20,7 +20,7 @@ defmodule Synapsis.Agent.Tools.MCP do
   @context_keys [:source, :run_id, :incarnation, :catalog_revision]
   @source_keys [:source_id, :server_pid, :generation, :tools]
   @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
 
   def descriptors(context) do
     with :ok <- context_valid(context),

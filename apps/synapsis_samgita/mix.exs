@@ -31,13 +31,13 @@ defmodule SynapsisSamgita.MixProject do
       {:synapsis_data, in_umbrella: true},
       {:synapsis_agent, in_umbrella: true},
       {:synapsis_local_agents, in_umbrella: true},
-      {:http_web_socket, "~> 1.0.0-rc.5"},
-      {:samgita_protocol, "~> 0.4.0"},
-      {:samgita_protocol_websocket, "~> 0.4.0"},
-      {:websock_adapter, "~> 0.15.1", hex: :gaoxy_websock_adapter, override: true},
-      {:req, "~> 0.7.5"},
-      {:jason, "~> 1.4"},
-      {:gaoxy_test, "~> 0.15.1", only: :test}
+      {:http_web_socket, "~> 1.0.0-rc.20"},
+      {:samgita_protocol, "~> 0.5.0"},
+      {:samgita_protocol_websocket, "~> 0.5.0"},
+      {:websock_adapter, "~> 0.16.6", hex: :gaoxy_websock_adapter, override: true},
+      {:gaoxy_test, "~> 0.16.6", only: :test},
+      {:formata, "~> 0.3.5"},
+      {:http_fetch, "~> 1.0.0-rc.20"}
     ]
   end
 end

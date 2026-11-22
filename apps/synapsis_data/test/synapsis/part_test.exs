@@ -60,7 +60,10 @@ defmodule Synapsis.PartTest do
       assert {:ok, dumped} = Part.dump(part)
       assert dumped["projection"] == projection
       assert dumped["content"] == "before\nafter"
-      assert {:ok, loaded} = dumped |> Jason.encode!() |> Jason.decode!() |> Part.load()
+
+      assert {:ok, loaded} =
+               dumped |> Formata.JSON.encode!() |> Formata.JSON.decode!() |> Part.load()
+
       assert Map.get(loaded, :projection) == projection
       assert loaded.content == "before\nafter"
     end

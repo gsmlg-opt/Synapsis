@@ -152,7 +152,7 @@ defmodule Synapsis.Web.ExaSearchFunctionalTest do
         __DIR__
       )
       |> File.read!()
-      |> Jason.decode!()
+      |> Formata.JSON.decode!()
 
     callbacks =
       for group <- reference["groups"],
@@ -200,11 +200,11 @@ defmodule Synapsis.Web.ExaSearchFunctionalTest do
   defp install(ctx, payload, prefix \\ "/proxy") do
     Gaoxy.Test.stub(ctx.fixture, "POST", prefix <> "/search", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      Agent.update(ctx.counter, &(&1 ++ [Jason.decode!(body)]))
+      Agent.update(ctx.counter, &(&1 ++ [Formata.JSON.decode!(body)]))
 
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(payload))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
     end)
   end
 end

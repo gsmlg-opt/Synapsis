@@ -29,7 +29,7 @@ defmodule Synapsis.Web.BraveSearchFiltersFunctionalTest do
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.resp(200, Jason.encode!(payload))
+        |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
       end)
     end
 
@@ -261,7 +261,7 @@ defmodule Synapsis.Web.BraveSearchFiltersFunctionalTest do
     groups =
       fixture_path
       |> File.read!()
-      |> Jason.decode!()
+      |> Formata.JSON.decode!()
       |> Map.fetch!("groups")
       |> Enum.reject(&String.ends_with?(&1["id"], "utc-rollover"))
 

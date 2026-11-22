@@ -36,7 +36,7 @@ defmodule Synapsis.MixProject do
 
   defp deps do
     [
-      {:websock_adapter, "~> 0.15.1", hex: :gaoxy_websock_adapter, override: true}
+      {:websock_adapter, "~> 0.16.6", hex: :gaoxy_websock_adapter, override: true}
     ]
   end
 

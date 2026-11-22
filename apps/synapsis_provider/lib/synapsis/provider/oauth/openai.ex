@@ -39,7 +39,7 @@ defmodule Synapsis.Provider.OAuth.OpenAI do
   def request_user_code do
     url = "#{@auth_base_url}/api/accounts/deviceauth/usercode"
 
-    case Req.post(url,
+    case post(url,
            json: %{client_id: @client_id},
            headers: [{"content-type", "application/json"}]
          ) do
@@ -72,7 +72,7 @@ defmodule Synapsis.Provider.OAuth.OpenAI do
   def poll_device_token(device_auth_id, user_code) do
     url = "#{@auth_base_url}/api/accounts/deviceauth/token"
 
-    case Req.post(url,
+    case post(url,
            json: %{device_auth_id: device_auth_id, user_code: user_code},
            headers: [{"content-type", "application/json"}]
          ) do
@@ -113,7 +113,7 @@ defmodule Synapsis.Provider.OAuth.OpenAI do
         "redirect_uri" => @device_callback_uri
       })
 
-    case Req.post(url,
+    case post(url,
            body: body,
            headers: [{"content-type", "application/x-www-form-urlencoded"}]
          ) do
@@ -143,7 +143,7 @@ defmodule Synapsis.Provider.OAuth.OpenAI do
   def refresh_token(refresh_token) do
     url = "#{@auth_base_url}/oauth/token"
 
-    case Req.post(url,
+    case post(url,
            json: %{
              client_id: @client_id,
              grant_type: "refresh_token",
@@ -209,6 +209,16 @@ defmodule Synapsis.Provider.OAuth.OpenAI do
 
   @doc "Return max poll duration in milliseconds."
   def max_poll_duration_ms, do: @max_poll_duration_ms
+
+  defp post(url, opts) do
+    {json, opts} = Keyword.pop(opts, :json)
+    opts = if json == nil, do: opts, else: Keyword.put(opts, :body, Formata.JSON.encode!(json))
+
+    Synapsis.Provider.Transport.HTTP.json(
+      url,
+      [method: :post, timeout: 30_000, max_bytes: 1024 * 1024] ++ opts
+    )
+  end
 
   defp parse_interval(val) when is_binary(val) do
     case Integer.parse(val) do

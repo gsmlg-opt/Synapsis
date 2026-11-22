@@ -461,7 +461,7 @@ defmodule Synapsis.Provider.MessageMapper do
   defp tool_arguments(input) when is_binary(input), do: {:ok, {:custom, input}}
 
   defp tool_arguments(input) when is_map(input) do
-    case Jason.encode(input) do
+    case Synapsis.JSON.encode(input) do
       {:ok, json} ->
         {:ok, {:json, json}}
 

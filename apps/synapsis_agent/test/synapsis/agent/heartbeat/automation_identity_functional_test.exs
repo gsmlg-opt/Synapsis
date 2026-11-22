@@ -263,10 +263,10 @@ defmodule Synapsis.Agent.Heartbeat.AutomationIdentityFunctionalTest do
 
     Gaoxy.Test.stub(fixture, "POST", "/v1/responses", fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
-      request = Jason.decode!(body)
+      request = Formata.JSON.decode!(body)
 
       source =
-        if String.contains?(Jason.encode!(request["input"]), "source heartbeat"),
+        if String.contains?(Formata.JSON.encode!(request["input"]), "source heartbeat"),
           do: "heartbeat",
           else: "routine"
 

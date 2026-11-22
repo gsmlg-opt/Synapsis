@@ -57,7 +57,7 @@ defmodule SynapsisServer.SSETransportTest do
                {"tool_result", payload}
              )
 
-    wire_event = "event: tool_result\ndata: #{Jason.encode!(payload)}\n\n"
+    wire_event = "event: tool_result\ndata: #{Formata.JSON.encode!(payload)}\n\n"
     assert receive_until(socket, wire_event) =~ wire_event
   end
 

@@ -181,7 +181,7 @@ defmodule Synapsis.Memory.HostAgent do
          :ok <- validate_source(source),
          true <- options?(opts, [:timeout, :deadline]),
          {:ok, deadline} <- deadline(opts),
-         true <- byte_size(Jason.encode!(arguments)) <= @max_output do
+         true <- byte_size(Formata.JSON.encode!(arguments)) <= @max_output do
       bounded(
         fn timeout ->
           with {:ok, result} <-
@@ -197,7 +197,7 @@ defmodule Synapsis.Memory.HostAgent do
       _ -> {:error, :invalid_input}
     end
   rescue
-    _ in [Jason.EncodeError, Protocol.UndefinedError] -> {:error, :invalid_input}
+    _ in [ArgumentError, Protocol.UndefinedError] -> {:error, :invalid_input}
   end
 
   def call(_, _, _, _), do: {:error, :invalid_input}
@@ -240,7 +240,7 @@ defmodule Synapsis.Memory.HostAgent do
 
     with :ok <- validate_source(source),
          true <- hook in ~w(session-start user-prompt-submit post-tool-use session-end),
-         true <- is_map(envelope) and byte_size(Jason.encode!(envelope)) <= 65_536,
+         true <- is_map(envelope) and byte_size(Formata.JSON.encode!(envelope)) <= 65_536,
          true <- options?(opts, [:timeout, :deadline]) and opts[:timeout] in 1..2_000,
          {:ok, deadline} <- deadline(opts) do
       bounded(
@@ -392,46 +392,73 @@ defmodule Synapsis.Memory.HostAgent do
   end
 
   defp http(url, arguments, timeout) do
-    # A clean request prevents unrelated global credentials/plugins leaking locally.
-    Req.Request.new()
-    |> Req.Steps.attach()
-    |> Req.merge(
-      method: :post,
-      url: url,
-      json: arguments,
-      raw: true,
-      into: &collect/2,
-      retry: false,
-      redirect: false,
-      receive_timeout: timeout,
-      request_timeout: timeout,
-      connect_options: [timeout: timeout]
-    )
-    |> Req.request()
+    promise =
+      HTTP.fetch(url,
+        method: :post,
+        body: Formata.JSON.encode!(arguments),
+        headers: [{"content-type", "application/json"}],
+        redirect: :manual,
+        retry: false,
+        stream_response: true,
+        timeout: timeout,
+        connect_timeout: timeout
+      )
+
+    try do
+      case HTTP.Promise.await(promise) do
+        %HTTP.Response{} = response ->
+          with {:ok, body} <- collect(response.body, timeout) do
+            {:ok, %{status: response.status, body: body}}
+          end
+
+        {:error, _} = error ->
+          error
+      end
+    after
+      HTTP.RequestCompletion.abort_and_await(HTTP.Promise.completion(promise), 1_000)
+    end
   end
 
-  defp collect({:data, data}, {request, response}) do
-    {size, chunks} = Req.Response.get_private(response, :host_memory_body, {0, []})
+  defp collect(body, _timeout) when is_binary(body) do
+    if byte_size(body) <= @max_response, do: {:ok, body}, else: {:error, :response_limit}
+  end
 
-    if size + byte_size(data) <= @max_response do
-      response =
-        Req.Response.put_private(
-          response,
-          :host_memory_body,
-          {size + byte_size(data), [data | chunks]}
-        )
+  defp collect(stream, timeout) when is_pid(stream) do
+    monitor = Process.monitor(stream)
 
-      {:cont, {request, response}}
-    else
-      {:halt, {request, Req.Response.put_private(response, :host_memory_limit, true)}}
+    try do
+      send(stream, {:read_chunk, self(), :ack})
+      collect_chunks(stream, monitor, @max_response, timeout, [])
+    after
+      Process.demonitor(monitor, [:flush])
+    end
+  end
+
+  defp collect_chunks(stream, monitor, left, timeout, chunks) do
+    receive do
+      {:stream_chunk, ^stream, chunk, ack} ->
+        if byte_size(chunk) <= left do
+          send(stream, {:stream_chunk_ack, ack})
+          collect_chunks(stream, monitor, left - byte_size(chunk), timeout, [chunk | chunks])
+        else
+          {:error, :response_limit}
+        end
+
+      {:stream_end, ^stream} ->
+        {:ok, chunks |> Enum.reverse() |> IO.iodata_to_binary()}
+
+      {:stream_error, ^stream, reason} ->
+        {:error, reason}
+
+      {:DOWN, ^monitor, :process, ^stream, _reason} ->
+        {:error, :unavailable}
+    after
+      timeout -> {:error, :timeout}
     end
   end
 
   defp response_body({:ok, response}, operation) do
     cond do
-      Req.Response.get_private(response, :host_memory_limit, false) ->
-        {:error, :response_limit}
-
       response.status in 300..399 ->
         {:error, :redirect}
 
@@ -463,19 +490,18 @@ defmodule Synapsis.Memory.HostAgent do
     end
   end
 
-  defp response_body({:error, %Req.TransportError{reason: reason}}, _operation)
-       when reason in [:timeout, :connect_timeout],
+  defp response_body({:error, reason}, _operation)
+       when reason in [:timeout, :connect_timeout, :read_idle_timeout],
        do: {:error, :timeout}
+
+  defp response_body({:error, :response_limit}, _operation), do: {:error, :response_limit}
 
   defp response_body({:error, _}, _operation), do: {:error, :unavailable}
 
-  defp body(response) do
-    {_size, chunks} = Req.Response.get_private(response, :host_memory_body, {0, []})
-    chunks |> Enum.reverse() |> IO.iodata_to_binary()
-  end
+  defp body(response), do: response.body
 
   defp decode(body) do
-    case Jason.decode(body) do
+    case Formata.JSON.decode(body) do
       {:ok, decoded} -> {:ok, decoded}
       _ -> {:error, :invalid_json}
     end
@@ -676,7 +702,7 @@ defmodule Synapsis.Memory.HostAgent do
     do: is_binary(value) and String.valid?(value) and byte_size(value) <= bound
 
   defp output(public) do
-    if byte_size(Jason.encode!(public)) <= @max_output,
+    if byte_size(Formata.JSON.encode!(public)) <= @max_output,
       do: {:ok, public},
       else: {:error, :output_limit}
   end

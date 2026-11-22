@@ -35,7 +35,7 @@ defmodule Synapsis.Provider.WebSearchUnicodeFunctionalTest do
     assert [%{"title" => ^prefix, "snippet" => "Z"}] = result["results"]
     assert result["answer"] == ""
     assert result["truncated"] == true
-    assert String.valid?(Jason.encode!(result))
+    assert String.valid?(Formata.JSON.encode!(result))
   end
 
   test "Tavily shared content counts combining codepoints without grapheme normalization", ctx do
@@ -73,7 +73,7 @@ defmodule Synapsis.Provider.WebSearchUnicodeFunctionalTest do
     assert {:ok, result} = search(ctx, "firecrawl", %{"scrape_results" => true})
     assert [%{"title" => ^prefix, "description" => "D", "content" => ""}] = result["results"]
     assert result["truncated"] == true
-    assert String.valid?(Jason.encode!(result))
+    assert String.valid?(Formata.JSON.encode!(result))
   end
 
   test "Brave web passes its complete ordinary text to the generic output owner", ctx do
@@ -116,7 +116,7 @@ defmodule Synapsis.Provider.WebSearchUnicodeFunctionalTest do
   end
 
   test "original UTF16 prefix helper observations match complete scalar prefixes" do
-    reference = Jason.decode!(File.read!(@reference))
+    reference = Formata.JSON.decode!(File.read!(@reference))
     assert length(reference["prefixCases"]) == 8
 
     for row <- reference["prefixCases"] do
@@ -128,7 +128,7 @@ defmodule Synapsis.Provider.WebSearchUnicodeFunctionalTest do
   end
 
   test "complete pinned provider search clients match ordinary Unicode HTTP results" do
-    reference = Jason.decode!(File.read!(@reference))
+    reference = Formata.JSON.decode!(File.read!(@reference))
     assert length(reference["providerCases"]) == 7
 
     for row <- reference["providerCases"] do
@@ -144,14 +144,14 @@ defmodule Synapsis.Provider.WebSearchUnicodeFunctionalTest do
               {nil, conn}
             else
               {:ok, body, conn} = Plug.Conn.read_body(conn)
-              {Jason.decode!(body), conn}
+              {Formata.JSON.decode!(body), conn}
             end
 
           send(owner, {:unicode_request, row["id"], URI.decode_query(conn.query_string), body})
 
           conn
           |> Plug.Conn.put_resp_content_type("application/json")
-          |> Plug.Conn.resp(200, Jason.encode!(row["httpPayload"]))
+          |> Plug.Conn.resp(200, Formata.JSON.encode!(row["httpPayload"]))
         end)
 
         config = %{
@@ -170,7 +170,7 @@ defmodule Synapsis.Provider.WebSearchUnicodeFunctionalTest do
         assert body == request["body"]
         expected = Map.drop(row["resultContentUnframed"], ~w(externalContent tookMs))
         assert Map.delete(result, "tookMs") == expected, row["id"]
-        assert String.valid?(Jason.encode!(result))
+        assert String.valid?(Formata.JSON.encode!(result))
       after
         Gaoxy.Test.close(fixture)
       end
@@ -194,7 +194,7 @@ defmodule Synapsis.Provider.WebSearchUnicodeFunctionalTest do
     Gaoxy.Test.stub(ctx.fixture, method, path, fn conn ->
       conn
       |> Plug.Conn.put_resp_content_type("application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(payload))
+      |> Plug.Conn.resp(200, Formata.JSON.encode!(payload))
     end)
   end
 end

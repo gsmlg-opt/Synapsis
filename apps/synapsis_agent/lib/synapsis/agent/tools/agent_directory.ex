@@ -15,7 +15,7 @@ defmodule Synapsis.Agent.Tools.AgentDirectory do
   @name "synapsis::agents_list"
   @context_keys [:session_id, :requester_name, :run_id, :incarnation, :catalog_revision]
   @native_keys ~w(interact effect_deadline append_feedback emit catalog_snapshot stage_catalog
-    request_new_context nested_dispatch register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
+    request_new_context nested_dispatch nested_submit register_cancellation register_code_mode cancellation_coordinator resource_owner_pid goal goal_binding)a
   @errors ~w(invalid_input invalid_context scope_mismatch timeout requester_unavailable
     storage_unavailable invalid_config invalid_cursor stale_cursor scan_limit output_too_large)a
   @output_limit 65_536
@@ -61,7 +61,7 @@ defmodule Synapsis.Agent.Tools.AgentDirectory do
       {:ok,
        %{
          action: "agent.directory.list",
-         resource: "agent_directory:" <> Jason.encode!(resource)
+         resource: "agent_directory:" <> Formata.JSON.encode!(resource)
        }}
     end
   end
@@ -77,7 +77,7 @@ defmodule Synapsis.Agent.Tools.AgentDirectory do
          operation = %{operation | backend_context: context},
          trusted = Map.take(context, [:session_id, :requester_name]),
          {:ok, result} <- Domain.list(operation.arguments, trusted) do
-      output(%{content: Jason.encode!(result), structured: result})
+      output(%{content: Formata.JSON.encode!(result), structured: result})
     else
       {:error, reason} -> failure(reason)
     end
@@ -147,7 +147,7 @@ defmodule Synapsis.Agent.Tools.AgentDirectory do
   defp input(_), do: {:error, :invalid_input}
 
   defp output(result) do
-    case Jason.encode(result) do
+    case Synapsis.JSON.encode(result) do
       {:ok, encoded} when byte_size(encoded) <= @output_limit -> {:ok, result}
       _ -> failure(:output_too_large)
     end

@@ -84,7 +84,7 @@ defmodule Synapsis.Provider.EventMapper do
   defp completed_arguments({:structured, input}), do: {:ok, input}
 
   defp completed_arguments({:json, input}) do
-    case Jason.decode(input) do
+    case Formata.JSON.decode(input) do
       {:ok, arguments} when is_map(arguments) -> {:ok, arguments}
       _ -> Error.invalid("Provider function arguments must be a JSON object")
     end

@@ -279,7 +279,8 @@ defmodule Synapsis.ProvidersTest do
                Synapsis.Config.Store.put(:backplane, %{
                  "id" => source_id,
                  "enabled" => true,
-                 "metadata_json" => Jason.encode!(%{"runtime_blocked_surfaces" => ["models"]})
+                 "metadata_json" =>
+                   Formata.JSON.encode!(%{"runtime_blocked_surfaces" => ["models"]})
                })
 
       assert {:ok, provider} =
@@ -310,7 +311,7 @@ defmodule Synapsis.ProvidersTest do
                Synapsis.Config.Store.put(:backplane, %{
                  "id" => source_id,
                  "enabled" => true,
-                 "metadata_json" => Jason.encode!(%{"runtime_blocked_surfaces" => [123]})
+                 "metadata_json" => Formata.JSON.encode!(%{"runtime_blocked_surfaces" => [123]})
                })
 
       refute Providers.runtime_available?(provider)
@@ -451,7 +452,7 @@ defmodule Synapsis.ProvidersTest do
       Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn conn ->
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "model-a"}]}))
+        |> Plug.Conn.send_resp(200, Formata.JSON.encode!(%{"data" => [%{"id" => "model-a"}]}))
       end)
 
       {:ok, provider} =
@@ -586,7 +587,7 @@ defmodule Synapsis.ProvidersTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(%{
+          Formata.JSON.encode!(%{
             "data" => [%{"id" => "disabled-model"}, %{"id" => "enabled-model"}]
           })
         )
@@ -636,7 +637,7 @@ defmodule Synapsis.ProvidersTest do
         |> Plug.Conn.put_resp_content_type("application/json")
         |> Plug.Conn.send_resp(
           200,
-          Jason.encode!(%{
+          Formata.JSON.encode!(%{
             "data" => [%{"id" => "enabled-model"}, %{"id" => "unchecked-model"}]
           })
         )
@@ -725,7 +726,10 @@ defmodule Synapsis.ProvidersTest do
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
-        |> Plug.Conn.send_resp(200, Jason.encode!(%{"data" => [%{"id" => "backplane-model"}]}))
+        |> Plug.Conn.send_resp(
+          200,
+          Formata.JSON.encode!(%{"data" => [%{"id" => "backplane-model"}]})
+        )
       end)
 
       preset = Enum.find(Providers.preset_providers(), &(&1.name == "backplane"))

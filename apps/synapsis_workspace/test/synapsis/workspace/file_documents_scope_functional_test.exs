@@ -51,7 +51,9 @@ defmodule Synapsis.Workspace.FileDocumentsScopeFunctionalTest do
     assert reread == written
     assert File.read!(Path.join(root, "shared/raw.bin")) == bytes
 
-    metadata = Jason.decode!(File.read!(Path.join(root, ".synapsis/meta/shared__raw.bin.json")))
+    metadata =
+      Formata.JSON.decode!(File.read!(Path.join(root, ".synapsis/meta/shared__raw.bin.json")))
+
     assert metadata["inserted_at"] == DateTime.to_iso8601(written.inserted_at)
     assert metadata["updated_at"] == DateTime.to_iso8601(written.updated_at)
     refute Map.has_key?(metadata, "content_body")
