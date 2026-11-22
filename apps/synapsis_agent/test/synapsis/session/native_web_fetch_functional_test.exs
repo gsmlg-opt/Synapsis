@@ -13,6 +13,94 @@ defmodule Synapsis.Session.NativeWebFetchFunctionalTest do
   @moduletag :tmp_dir
   @name "web::fetch"
 
+  for name <- [@name, "synapsis::web_search"] do
+    test "a selected unconfigured #{name} lets normal chat complete", %{tmp_dir: root} do
+      name = unquote(name)
+
+      harness =
+        SessionHarness.setup_session!(
+          tmp_dir: root,
+          install_provider?: false,
+          session_config: %{"subagents" => false, "memory_context" => false}
+        )
+
+      on_exit(fn -> SessionHarness.cleanup!(harness) end)
+      assert {:ok, _} = Synapsis.AgentConfigs.update(harness.agent_config, %{tools: [name]})
+      owner = self()
+
+      Gaoxy.Test.expect(
+        harness.provider.fixture,
+        "POST",
+        "/v1/responses",
+        fn conn ->
+          {:ok, body, conn} = Plug.Conn.read_body(conn)
+          request = Jason.decode!(body)
+
+          index =
+            Agent.get_and_update(harness.counter, fn state ->
+              {length(state.provider_requests),
+               %{state | provider_requests: state.provider_requests ++ [request]}}
+            end)
+
+          chunks =
+            case index do
+              0 ->
+                send(owner, {:unconfigured_web_request, request})
+
+                [
+                  DeterministicProvider.text_chunk("Hello"),
+                  DeterministicProvider.finish_chunk("stop")
+                ]
+
+              1 ->
+                [
+                  DeterministicProvider.tool_call_chunk(
+                    ToolName.encode(name),
+                    "unavailable-web",
+                    %{}
+                  ),
+                  DeterministicProvider.finish_chunk("tool_calls")
+                ]
+
+              2 ->
+                send(owner, {:unavailable_web_result, request["input"]})
+
+                [
+                  DeterministicProvider.text_chunk("I can continue"),
+                  DeterministicProvider.finish_chunk("stop")
+                ]
+            end
+
+          DeterministicProvider.send_sse(conn, chunks)
+        end,
+        times: 3
+      )
+
+      SessionHarness.subscribe!(harness.session.id)
+      SessionHarness.ensure_running!(harness.session.id)
+      assert :ok = Worker.send_message(harness.session.id, "say hello")
+      assert_receive {:unconfigured_web_request, request}, 5_000
+      assert [%{"description" => description}] = request["tools"]
+      assert description =~ "unavailable"
+      assert_receive {:run_event, %{type: "session.completed"}}, 10_000
+      SessionHarness.await_waiting!(harness.session.id)
+
+      assert :ok = Worker.send_message(harness.session.id, "Try the web tool")
+      assert_receive {:unavailable_web_result, items}, 10_000
+
+      assert %{"type" => "function_call_output", "output" => explanation} =
+               Enum.find(
+                 items,
+                 &(&1["call_id"] == "unavailable-web" and &1["type"] == "function_call_output")
+               )
+
+      assert explanation =~ "requires"
+      assert explanation =~ if(name == @name, do: "web_allowed_hosts", else: "provider")
+      assert_receive {:run_event, %{type: "session.completed"}}, 10_000
+      assert Synapsis.AgentConfigs.get(harness.agent_config.id).tools == [name]
+    end
+  end
+
   test "selected original fetch reaches real HTTP, durable parts, next provider and restarted Worker",
        %{
          tmp_dir: root
@@ -50,9 +138,8 @@ defmodule Synapsis.Session.NativeWebFetchFunctionalTest do
             "status" => status,
             "body" => body,
             "url" => url,
-            "content_type" => "text/plain; charset=utf-8",
-            "content" => body,
-            "is_error" => false
+            "content_type" =>
+              if(status == 200, do: "text/plain", else: "text/plain; charset=utf-8")
           }
         }
       end)
@@ -136,7 +223,7 @@ defmodule Synapsis.Session.NativeWebFetchFunctionalTest do
 
     [one, two] = expected
     assert_wire_results(following, [one])
-    assert_wire_results(completed, expected)
+    outputs = assert_wire_results(completed, expected)
 
     assert {:ok, turns} = Store.list_turns(harness.session.id)
 
@@ -168,15 +255,23 @@ defmodule Synapsis.Session.NativeWebFetchFunctionalTest do
                tool_use_id: "native-fetch-2",
                projection: projection2,
                content: content2,
-               is_error: false
+               is_error: true
              }
            ] =
              Enum.filter(parts, &(&1[:type] == "tool_result"))
 
-    assert projection1 == %{"version" => 1, "result" => one.result}
-    assert projection2 == %{"version" => 1, "result" => two.result}
-    assert content1 == one.result["body"]
-    assert content2 == two.result["body"]
+    assert [content1, content2] == outputs
+
+    assert projection1 == %{
+             "version" => 1,
+             "result" =>
+               content1
+               |> Jason.decode!()
+               |> Map.put("content", content1)
+               |> Map.put("is_error", false)
+           }
+
+    assert %{"version" => 1, "result" => %{"is_error" => true}} = projection2
 
     host_parts =
       for message <- Synapsis.Message.list_by_session(harness.session.id),
@@ -201,10 +296,26 @@ defmodule Synapsis.Session.NativeWebFetchFunctionalTest do
     assert :ok = Worker.send_message(harness.session.id, "Recall the fetched resources")
     assert_receive {:fetch_request, 3, replay}, 10_000
     assert_receive {:run_event, %{type: "session.completed"}}, 10_000
-    assert_wire_results(replay, expected)
+    assert assert_wire_results(replay, expected) == outputs
 
     assert %{tool_executions: 2, provider_requests: [_, _, _, _]} =
              Agent.get(harness.counter, & &1)
+
+    SessionHarness.await_waiting!(harness.session.id)
+    agent = Synapsis.AgentConfigs.get(harness.agent_config.id)
+
+    assert {:ok, _} =
+             Synapsis.AgentConfigs.update(agent, %{
+               config: Map.delete(agent.config, "web_allowed_hosts")
+             })
+
+    assert :ok = Worker.send_message(harness.session.id, "Continue with fetch unconfigured")
+    assert_receive {:fetch_request, 4, unconfigured}, 10_000
+    assert [%{"description" => description}] = unconfigured["tools"]
+    assert description =~ "unavailable"
+    assert_receive {:run_event, %{type: "session.completed"}}, 10_000
+    assert Agent.get(harness.counter, & &1.tool_executions) == 2
+    assert Synapsis.AgentConfigs.get(agent.id).tools == [@name]
   end
 
   test "a delayed HTTP body times out and the same caller can fetch the next resource" do
@@ -255,12 +366,20 @@ defmodule Synapsis.Session.NativeWebFetchFunctionalTest do
     assert Enum.map(results, & &1["call_id"]) == Enum.map(expected, & &1.id)
 
     Enum.zip(results, expected)
-    |> Enum.each(fn {message, call} ->
-      assert message == %{
-               "type" => "function_call_output",
-               "call_id" => call.id,
-               "output" => call.result["body"]
-             }
+    |> Enum.map(fn {message, call} ->
+      assert %{"type" => "function_call_output", "output" => output} = message
+
+      if call.result["status"] == 200 do
+        document = Jason.decode!(output)
+        assert Map.take(document, ~w(status url content_type)) == Map.drop(call.result, ["body"])
+        assert document["final_url"] == call.result["url"]
+        assert document["text"] =~ call.result["body"]
+        assert document["external_content"]["wrapped"] == true
+      else
+        assert output == "Tool execution failed"
+      end
+
+      output
     end)
   end
 end

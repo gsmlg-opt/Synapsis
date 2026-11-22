@@ -6,6 +6,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
   import SynapsisWeb.AgentLive.Components
 
   alias Synapsis.{AgentConfig, AgentConfigs, AgentSkills, Providers, Skills, Toolsets}
+  alias Synapsis.Agent.Tools.Web.{Fetch, Search}
   alias SynapsisWeb.AgentLive.BrowserSettings
 
   @config_tabs ~w(overview workspace runtime tools skills prompt management)
@@ -128,6 +129,13 @@ defmodule SynapsisWeb.AgentLive.Agents do
         Map.get(params, "mcp_selection", (socket.assigns.agent.config || %{})["mcp_selection"]),
         (socket.assigns.agent.config || %{})["mcp_selection"]
       )
+      |> Map.update!("sources", fn sources ->
+        Map.new(sources, fn {id, rule} ->
+          # Tool lists belong only to selected mode in the runtime contract.
+          # The form may retain them while switching modes before saving.
+          {id, if(rule["mode"] in ["all", "none"], do: Map.delete(rule, "tools"), else: rule)}
+        end)
+      end)
 
     attrs = Map.update!(attrs, "config", &Map.put(&1, "mcp_selection", policy))
 
@@ -725,6 +733,33 @@ defmodule SynapsisWeb.AgentLive.Agents do
                 rows={3}
                 class="mt-5"
               />
+
+              <div
+                :if={"web::fetch" in @tool_names or "synapsis::web_search" in @tool_names}
+                class="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm"
+              >
+                <span :if={"web::fetch" in @tool_names} id="agent-web-fetch-status">
+                  Web fetch
+                  <.dm_badge
+                    soft
+                    variant={if(Fetch.configured?(@agent), do: "success", else: "warning")}
+                  >
+                    {if Fetch.configured?(@agent), do: "Ready", else: "Add allowed hosts"}
+                  </.dm_badge>
+                </span>
+                <span :if={"synapsis::web_search" in @tool_names} id="agent-web-search-status">
+                  Web search
+                  <%= if Search.configured?(@agent, "synapsis::web_search") do %>
+                    <.dm_badge variant="success" soft>Ready</.dm_badge>
+                  <% else %>
+                    <.dm_badge variant="warning" soft>Setup required</.dm_badge>
+                    <span class="text-on-surface-variant">
+                      Set <code>config.web_search.provider</code>
+                      and its credential reference when required.
+                    </span>
+                  <% end %>
+                </span>
+              </div>
 
               <BrowserSettings.editor
                 config={@agent.config || %{}}

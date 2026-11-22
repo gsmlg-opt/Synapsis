@@ -50,7 +50,7 @@ defmodule Synapsis.Agent.Tools.Profiles do
     WorkspaceMemory
   }
 
-  alias Synapsis.Agent.Tools.Web.{Fetch, Search}
+  alias Synapsis.Agent.Tools.Web.{Fetch, Search, Unavailable}
   alias Synapsis.{AgentConfigs, Session, SkillReader, SkillDiscovery}
   alias Synapsis.Session.Store
 
@@ -1015,6 +1015,18 @@ defmodule Synapsis.Agent.Tools.Profiles do
       tool_revision: descriptor.tool_revision,
       classify:
         &Fetch.classify(descriptor, identity, classification_operation(&1, descriptor, catalog))
+    }
+  end
+
+  defp descriptor_binding(%{backend: Unavailable} = descriptor, identity, catalog) do
+    %{
+      tool_revision: descriptor.tool_revision,
+      classify:
+        &Unavailable.classify(
+          descriptor,
+          identity,
+          classification_operation(&1, descriptor, catalog)
+        )
     }
   end
 

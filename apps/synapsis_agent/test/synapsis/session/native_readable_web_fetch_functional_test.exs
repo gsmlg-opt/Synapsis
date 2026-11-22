@@ -95,7 +95,7 @@ defmodule Synapsis.Session.NativeReadableWebFetchFunctionalTest do
       results = wire_results(final_request)
       assert length(results) == length(calls)
 
-      assert Enum.map(results, & &1["content"]) ==
+      assert Enum.map(results, & &1["output"]) ==
                parts |> Enum.filter(&match?(%ToolResult{}, &1)) |> Enum.map(& &1.content)
 
       [{old_worker, _}] = Registry.lookup(Synapsis.Session.Registry, h.session.id)
@@ -288,8 +288,8 @@ defmodule Synapsis.Session.NativeReadableWebFetchFunctionalTest do
 
     Enum.zip(results, calls)
     |> Enum.each(fn {message, call} ->
-      assert Map.keys(message) |> Enum.sort() == ["content", "role", "tool_call_id"]
-      document = Jason.decode!(message["content"])
+      assert Map.keys(message) |> Enum.sort() == ["call_id", "output", "type"]
+      document = Jason.decode!(message["output"])
       assert_document(document, call, started_at)
     end)
   end

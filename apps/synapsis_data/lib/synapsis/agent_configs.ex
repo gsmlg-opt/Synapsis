@@ -10,8 +10,8 @@ defmodule Synapsis.AgentConfigs do
 
   @store_type :agent
 
-  # MVP defaults (docs/design.md §3). web::fetch and synapsis::web_search are
-  # omitted because they require per-agent host/provider configuration.
+  # MVP defaults (docs/design.md §3). Web tools advertise their setup
+  # requirements until this Agent has a usable web configuration.
   @build_tools ~w(
     synapsis::read synapsis::write synapsis::edit synapsis::ls
     apply_patch exec_command write_stdin view_image synapsis::process
@@ -19,6 +19,7 @@ defmodule Synapsis.AgentConfigs do
     spawn_agent send_message followup_task interrupt_agent list_agents wait_agent
     synapsis::skill synapsis::skills_search synapsis::skills_read
     synapsis::ask_user clock::sleep
+    web::fetch synapsis::web_search
     synapsis::memory_save synapsis::memory_source_search synapsis::memory_update
     synapsis::workspace_memory_search synapsis::workspace_memory_get
     synapsis::session_summarize

@@ -160,6 +160,23 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
   end
 
   describe "native contract editor" do
+    test "selected web tools show which settings are missing", %{conn: conn} do
+      {:ok, agent} =
+        AgentConfigs.create(%{
+          name: "web-setup",
+          tools: ["web::fetch", "synapsis::web_search"],
+          tool_contract_version: 1,
+          config: %{"web_allowed_hosts" => ["docs.example.com"]}
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+      render_hook(view, "switch_config_tab", %{"tab" => "tools"})
+
+      assert has_element?(view, "#agent-web-fetch-status", "Ready")
+      assert has_element?(view, "#agent-web-search-status", "config.web_search.provider")
+      assert AgentConfigs.get(agent.id).tools == ["web::fetch", "synapsis::web_search"]
+    end
+
     test "new agents author v1 with explicit empty direct tools and retain user-facing defaults",
          %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/agent/agents/new")
@@ -433,7 +450,13 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       assert saved.tools == agent.tools
       assert saved.toolset_ids == agent.toolset_ids
       assert saved.toolset_id == agent.toolset_id
-      assert saved.config == agent.config
+
+      expected_policy =
+        policy
+        |> put_in(["sources", denied_source], %{"mode" => "none"})
+        |> put_in(["sources", all_source], %{"mode" => "all"})
+
+      assert saved.config == Map.put(agent.config, "mcp_selection", expected_policy)
     end
   end
 
@@ -656,6 +679,46 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
              "default" => "all",
              "sources" => %{}
            }
+  end
+
+  for mode <- ["all", "none"], existing? <- [false, true] do
+    @mcp_mode mode
+    @existing_mcp_rule existing?
+    test "saving #{@mcp_mode} MCP mode produces a runtime-valid rule with existing rule #{@existing_mcp_rule}",
+         %{conn: conn} do
+      source = native_snapshot_source("canonical-mcp-source", "namespace::read")
+
+      sources =
+        if @existing_mcp_rule,
+          do: %{source.id => %{"mode" => @mcp_mode, "tools" => ["remembered/raw"]}},
+          else: %{}
+
+      {:ok, agent} =
+        AgentConfigs.create(%{
+          name: "canonical-mcp-agent",
+          tool_contract_version: 1,
+          tools: [],
+          config: %{"mcp_selection" => %{"default" => "selected", "sources" => sources}}
+        })
+
+      {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+      render_async(view)
+
+      native_agent_event(view, "save_agent", fn pairs ->
+        put_native_value(pairs, "mcp_selection[sources][#{source.id}][mode]", @mcp_mode)
+      end)
+
+      assert AgentConfigs.get(agent.id).config["mcp_selection"] == %{
+               "default" => "selected",
+               "sources" => %{source.id => %{"mode" => @mcp_mode}}
+             }
+
+      resolved = Synapsis.Agent.Resolver.resolve(agent.name)
+      assert {:ok, captured} = Synapsis.Agent.Tools.MCPSources.capture(resolved)
+
+      assert captured.tools ==
+               if(@mcp_mode == "all", do: ["mcp::#{source.id}::namespace::read"], else: [])
+    end
   end
 
   test "new MCP groups inherit the default when discovery remounts a pending draft", %{conn: conn} do

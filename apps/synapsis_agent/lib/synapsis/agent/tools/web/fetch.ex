@@ -1,8 +1,9 @@
 defmodule Synapsis.Agent.Tools.Web.Fetch do
   @moduledoc "Selected native fetch profile with trusted Agent configuration and fresh host classification."
 
-  alias Backplane.AgentRuntime.{Codex, Error, InputSchema}
+  alias Backplane.AgentRuntime.{Codex, Error, InputSchema, ToolCatalog}
   alias Backplane.AgentRuntime.Codex.{Backend, Services}
+  alias Synapsis.Agent.Tools.Web.Unavailable
   alias Synapsis.{AgentConfig, AgentConfigs}
 
   @names ["web::fetch"]
@@ -18,10 +19,18 @@ defmodule Synapsis.Agent.Tools.Web.Fetch do
 
   def permission_level("web::fetch"), do: :read
 
+  def configured?(agent), do: match?({:ok, _, _}, configuration(agent))
+
   def bundles(context, identity, authority, selection, binding) do
     if "web::fetch" in selection do
-      with {:ok, agent, hosts} <- configuration(context.agent[:name]),
-           true <- "web::fetch" in authority.grants do
+      native_authority = %{
+        authority
+        | grants: @names,
+          tool_revisions: Map.take(authority.tool_revisions, @names)
+      }
+
+      with true <- "web::fetch" in authority.grants,
+           {:ok, agent, hosts} <- configuration(context.agent[:name]) do
         scope = %{
           identity: identity,
           agent_id: agent.id,
@@ -42,19 +51,21 @@ defmodule Synapsis.Agent.Tools.Web.Fetch do
           session_binding: binding
         }
 
-        native_authority = %{
-          authority
-          | grants: @names,
-            tool_revisions: Map.take(authority.tool_revisions, @names)
-        }
-
         case Codex.profile(:service_compat, native_context, native_authority, tools: @names) do
           {:ok, bundle} -> {:ok, [bundle]}
           error -> error
         end
       else
-        false -> {:error, Error.new(:forbidden, "Fetch exceeds the parent authority ceiling")}
-        error -> error
+        false ->
+          {:error, Error.new(:forbidden, "Fetch exceeds the parent authority ceiling")}
+
+        {:error, %Error{class: :unsupported_capability, message: message}} ->
+          descriptor =
+            Unavailable.descriptor("web::fetch", revision(), message, identity, binding)
+
+          with {:ok, bundle} <-
+                 ToolCatalog.admit_batch([descriptor], authority: native_authority, mode: :strict),
+               do: {:ok, [bundle]}
       end
     else
       {:ok, []}
@@ -105,9 +116,10 @@ defmodule Synapsis.Agent.Tools.Web.Fetch do
     end
   end
 
-  defp configuration(name) when is_binary(name) do
-    with %AgentConfig{enabled: true, config: config} = agent <- AgentConfigs.get_by_name(name),
-         hosts when is_list(hosts) and hosts != [] <- config["web_allowed_hosts"],
+  defp configuration(name) when is_binary(name), do: configuration(AgentConfigs.get_by_name(name))
+
+  defp configuration(%AgentConfig{enabled: true, config: config} = agent) when is_map(config) do
+    with hosts when is_list(hosts) and hosts != [] <- config["web_allowed_hosts"],
          true <- Enum.all?(hosts, &valid_host?/1) do
       {:ok, agent, hosts |> Enum.map(&String.downcase/1) |> Enum.uniq() |> Enum.sort()}
     else

@@ -12,6 +12,7 @@ defmodule Synapsis.Agent.Tools.Web.Search do
   alias Backplane.AgentRuntime.{Error, InputSchema, ToolCatalog, ToolEffects}
   alias Backplane.AgentRuntime.Codex.{Session, Web}
   alias Synapsis.Agent.Tools.CatalogBinding
+  alias Synapsis.Agent.Tools.Web.Unavailable
   alias Synapsis.{AgentConfig, AgentConfigs, Credentials}
 
   @generic "synapsis::web_search"
@@ -28,6 +29,8 @@ defmodule Synapsis.Agent.Tools.Web.Search do
 
   def names, do: @names
   def permission_level(name) when name in @names, do: :read
+
+  def configured?(agent, name), do: match?({:ok, _, _}, prepare_configuration(agent, name))
 
   def bundles(context, identity, authority, selection, binding) do
     selected = Enum.filter(@names, &(&1 in selection))
@@ -195,25 +198,28 @@ defmodule Synapsis.Agent.Tools.Web.Search do
   defp descriptors(_context, _identity, [], _binding), do: {:ok, []}
 
   defp descriptors(context, identity, selected, binding) do
-    Enum.reduce_while(selected, {:ok, []}, fn name, {:ok, descriptors} ->
-      case configuration(context.agent[:name], name) do
-        {:ok, agent, config} ->
-          trusted = %{
-            identity: identity,
-            agent_id: agent.id,
-            agent_name: agent.name,
-            tool_name: name,
-            config: config,
-            fingerprint: fingerprint(agent, name, config),
-            session_binding: binding
-          }
+    descriptors =
+      Enum.map(selected, fn name ->
+        case prepare_configuration(context.agent[:name], name) do
+          {:ok, agent, config} ->
+            trusted = %{
+              identity: identity,
+              agent_id: agent.id,
+              agent_name: agent.name,
+              tool_name: name,
+              config: config,
+              fingerprint: fingerprint(agent, name, config),
+              session_binding: binding
+            }
 
-          {:cont, {:ok, descriptors ++ [descriptor(trusted)]}}
+            descriptor(trusted)
 
-        error ->
-          {:halt, error}
-      end
-    end)
+          {:error, %Error{class: :unsupported_capability, message: message}} ->
+            Unavailable.descriptor(name, 1, message, identity, binding)
+        end
+      end)
+
+    {:ok, descriptors}
   end
 
   defp descriptor(context) do
@@ -248,11 +254,30 @@ defmodule Synapsis.Agent.Tools.Web.Search do
     end
   end
 
-  defp configuration(agent_name, name) do
-    with %AgentConfig{enabled: true, config: config} = agent <-
-           AgentConfigs.get_by_name(agent_name),
-         true <- is_map(config),
-         raw when is_map(raw) <- config[config_key(name)],
+  defp prepare_configuration(agent, name) do
+    with {:ok, _, config} = ready <- configuration(agent, name) do
+      case config.credential_id do
+        nil ->
+          ready
+
+        id ->
+          case Credentials.get(id) do
+            {:ok, _metadata} ->
+              ready
+
+            {:error, :not_found} ->
+              failure(:unsupported_capability, "Search credential is unavailable")
+          end
+      end
+    end
+  end
+
+  defp configuration(agent_name, name) when is_binary(agent_name),
+    do: configuration(AgentConfigs.get_by_name(agent_name), name)
+
+  defp configuration(%AgentConfig{enabled: true, config: config} = agent, name)
+       when is_map(config) do
+    with raw when is_map(raw) <- config[config_key(name)],
          true <-
            Map.keys(raw) --
              (@config_keys ++
@@ -270,12 +295,17 @@ defmodule Synapsis.Agent.Tools.Web.Search do
          {:ok, normalized} <- citation_config(normalized, config["web_allowed_hosts"]) do
       {:ok, agent, normalized}
     else
-      _ ->
-        failure(
-          :unsupported_capability,
-          "Search requires an enabled Agent and explicit configured provider and credential reference"
-        )
+      _ -> unconfigured()
     end
+  end
+
+  defp configuration(_, _), do: unconfigured()
+
+  defp unconfigured do
+    failure(
+      :unsupported_capability,
+      "Search requires an enabled Agent and explicit configured provider and credential reference"
+    )
   end
 
   defp citation_config(%{provider: "gemini"} = config, hosts) do
