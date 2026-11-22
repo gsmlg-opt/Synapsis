@@ -546,7 +546,11 @@ defmodule Synapsis.Agent.Heartbeat.LocalSchedulerTest do
       {daemon, task_supervisor} = start_test_daemon(sessions: FakeSessions)
       owner = self()
       name = "retry-terminal-#{failure}"
-      config = routine(Ecto.UUID.generate(), name, "schedule")
+      # Keep the scheduled occurrence outside the manual run's retry window.
+      schedule =
+        DateTime.utc_now() |> DateTime.add(3_600, :second) |> Calendar.strftime("%M %H %d %m *")
+
+      config = %{routine(Ecto.UUID.generate(), name, "schedule") | schedule: schedule}
       {:ok, persisted} = Agent.start_link(fn -> nil end)
       {:ok, terminal_attempts} = Agent.start_link(fn -> 0 end)
 
