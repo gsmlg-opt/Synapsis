@@ -5,12 +5,12 @@
   "type": "module",
   "main": "src/index.ts",
   "dependencies": {
-    "@duskmoon-dev/components": "2.0.0-rc.3",
+    "@duskmoon-dev/components": "2.0.0-rc.4",
     "react": "19.3.1",
     "phoenix": "file:../../deps/phoenix",
     "phoenix_html": "file:../../deps/phoenix_html",
     "phoenix_live_view": "file:../../deps/phoenix_live_view",
-    "preact": "^11.0.2"
+    "preact": "^11.2.0"
   },
   "devDependencies": {
     "@types/react": "19.3.0"
