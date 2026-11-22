@@ -41,7 +41,7 @@ defmodule SynapsisAgent.MixProject do
       {:gaoxy_test, "~> 0.16.6", only: :test},
       {:synapsis_sandbox, in_umbrella: true, only: :test},
       {:formata, "~> 0.3.5"},
-      {:http_fetch, "~> 1.0.0-rc.20", only: :test}
+      {:http_fetch, "~> 1.0.0-rc.20"}
     ]
   end
 end

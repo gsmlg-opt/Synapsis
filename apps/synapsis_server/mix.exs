@@ -49,8 +49,8 @@ defmodule SynapsisServer.MixProject do
       {:cors_plug, "~> 3.0"},
       {:duskmoon_bundler, "~> 10.1.12", runtime: Mix.env() in [:dev, :test]},
       {:formata, "~> 0.3.5"},
-      {:http_fetch, "~> 1.0.0-rc.20", only: :test},
-      {:http_web_socket, "~> 1.0.0-rc.20", only: :test}
+      {:http_fetch, "~> 1.0.0-rc.20"},
+      {:http_web_socket, "~> 1.0.0-rc.20"}
     ]
   end
 end

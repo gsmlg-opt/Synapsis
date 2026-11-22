@@ -48,7 +48,7 @@ defmodule SynapsisWeb.MixProject do
       {:duskmoon_bundler, "~> 10.1.12", runtime: Mix.env() in [:dev, :test]},
       {:lazy_html, "~> 0.1.13"},
       {:formata, "~> 0.3.5"},
-      {:http_fetch, "~> 1.0.0-rc.20", only: :test}
+      {:http_fetch, "~> 1.0.0-rc.20"}
     ]
   end
 
