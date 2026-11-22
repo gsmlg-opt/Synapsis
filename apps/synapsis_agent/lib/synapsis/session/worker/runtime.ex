@@ -159,6 +159,8 @@ defmodule Synapsis.Session.Worker.Runtime do
          {:ok, meta} <- Store.get_meta(data.session_id),
          :ok <-
            commit_input(data.session_id, offset, [user], meta) do
+      Persistence.broadcast(data.session_id, :prompt_committed, data.session_id)
+
       context = %{
         session: data.session,
         agent: agent,

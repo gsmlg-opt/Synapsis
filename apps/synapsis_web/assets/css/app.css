@@ -68,13 +68,27 @@ code, pre, kbd, samp {
     overflow-y: auto;
   }
 
+  #session-model-form .form-group-disabled {
+    opacity: 1;
+  }
+
+  #session-model-selector:disabled {
+    color: var(--color-on-surface-variant);
+    opacity: 1;
+  }
+
+  .synapsis-react-chat {
+    --chat-thread-width: 52rem;
+  }
+
   .synapsis-react-chat > section {
     min-height: 0;
     overflow: hidden;
   }
 
   .synapsis-react-chat [data-chat-messages] {
-    padding: 1rem;
+    padding-block: 0.875rem;
+    padding-inline: max(0.75rem, calc((100% - var(--chat-thread-width)) / 2));
   }
 
   .synapsis-react-chat > section > button {
@@ -84,24 +98,26 @@ code, pre, kbd, samp {
     font-size: 0.75rem;
   }
 
-  .synapsis-react-chat .chat-composer {
-    flex-shrink: 0;
-    margin: 0 0.75rem 0.75rem;
-    background: var(--color-surface-container-low);
+  .synapsis-react-chat :is(.chat-composer, .synapsis-chat-status, .synapsis-chat-queue, .synapsis-chat-question) {
+    inline-size: min(calc(100% - 1.5rem), var(--chat-thread-width));
+    margin-inline: auto;
   }
 
-  .synapsis-react-chat .synapsis-chat-status {
-    margin: 0 0.75rem 0.5rem;
+  .synapsis-react-chat .chat-composer {
+    flex-shrink: 0;
+    margin-block: 0 0.75rem;
+    padding: 0.625rem 0.75rem;
+    border-color: var(--color-outline-variant);
+    background: var(--color-surface-container-low);
   }
 
   .synapsis-react-chat .synapsis-chat-queue {
     flex-shrink: 0;
-    margin: 0 0.75rem 0.5rem;
   }
 
   .synapsis-chat-question {
     flex-shrink: 0;
-    margin: 0 0.75rem 0.75rem;
+    margin-block: 0 0.5rem;
     padding: 0.75rem;
     border: 1px solid var(--color-outline-variant);
     border-radius: var(--radius-box, 0.75rem);
@@ -283,6 +299,10 @@ code, pre, kbd, samp {
   el-dm-chat[variant="filled"] el-dm-markdown::part(content) {
     color: var(--synapsis-chat-filled-fg);
   }
+}
+
+.synapsis-react-chat [aria-label="Transcript scrolling"] {
+  inset-inline-end: max(0.75rem, calc((100% - var(--chat-thread-width)) / 2));
 }
 
 /* Agent working indicator — bouncing dots */

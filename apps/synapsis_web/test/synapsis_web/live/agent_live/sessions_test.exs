@@ -764,6 +764,7 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
     end
 
     test "send hook accepts an image-only prompt", %{conn: conn} do
+      hold_prompt_preparation()
       session = create_image_session()
 
       {:ok, view, _html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
@@ -772,11 +773,19 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       assert_push_event(view, "clear_chat_input", %{})
 
+      assert_receive {:prompt_preparing, discovery}, 5_000
+      assert Sessions.get_messages(session.id) == []
+      assert [%{id: local_id}] = Enum.filter(chat_snapshot(view).messages, &(&1.role == "user"))
+      send(discovery, :continue_prompt)
+
       assert_eventually(fn ->
         Enum.any?(Sessions.get_messages(session.id), &(&1.role == "user"))
       end)
 
-      assert %Synapsis.Message{parts: [%Synapsis.Part.Image{media_type: "image/png"}]} =
+      assert %Synapsis.Message{
+               id: ^local_id,
+               parts: [%Synapsis.Part.Image{media_type: "image/png"}]
+             } =
                Enum.find(Sessions.get_messages(session.id), &(&1.role == "user"))
 
       assert_image_turn_completed(session)
@@ -1214,6 +1223,190 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
   end
 
   describe "React chat protocol" do
+    @tag :tmp_dir
+    @tag :functional
+    test "a user message can be forked, retried or edited at its own history boundary", %{
+      conn: conn,
+      tmp_dir: tmp_dir
+    } do
+      alias Synapsis.Agent.TestSupport.DeterministicProvider
+      alias Synapsis.{Message, Part, Providers}
+
+      {:ok, counter} = Agent.start_link(fn -> %{provider_requests: []} end)
+      provider = DeterministicProvider.start!(counter: counter, text: "branch reply")
+
+      {:ok, provider_config} =
+        Providers.create(%{
+          name: provider.name,
+          type: "openai_responses",
+          base_url: provider.base_url,
+          api_key_encrypted: "test-key"
+        })
+
+      {:ok, agent} =
+        AgentConfigs.create(%{
+          name: "message-actions",
+          provider: provider.name,
+          model: "gpt-4o",
+          tools: [],
+          tool_contract_version: 1,
+          config: %{"workspace_path" => tmp_dir}
+        })
+
+      {:ok, source} =
+        Sessions.create(agent.name, %{
+          agent: agent.name,
+          provider: provider.name,
+          model: agent.model,
+          config: %{"subagents" => true, "memory_context" => false}
+        })
+
+      on_exit(fn ->
+        Sessions.delete(source.id)
+        AgentConfigs.delete(agent)
+        Providers.delete(provider_config.id)
+        DeterministicProvider.stop(provider)
+      end)
+
+      [before_prompt, before_reply, selected, later] =
+        for {role, text} <- [
+              {"user", "earlier prompt"},
+              {"assistant", "earlier reply"},
+              {"user", "selected prompt 👀"},
+              {"assistant", "later reply"}
+            ] do
+          {:ok, message} =
+            Message.append(source.id, %{
+              role: role,
+              parts: [%Part.Text{content: text}]
+            })
+
+          message
+        end
+
+      path = ~p"/agent/agents/#{agent.name}/sessions/#{source.id}"
+      {:ok, view, _} = live(conn, path)
+
+      assert %{actions: actions} =
+               Enum.find(chat_snapshot(view).messages, &(&1.id == selected.id))
+
+      assert Enum.map(actions, & &1.id) == ~w(edit_message fork_message retry_message)
+
+      rejected = %{
+        "action" => "fork_message",
+        "message_id" => later.id,
+        "request_id" => "invalid"
+      }
+
+      render_hook(view, "chat.action", Map.merge(chat_scope(view), rejected))
+      assert {:ok, [%{id: id}]} = Sessions.list(agent.name)
+      assert id == source.id
+
+      branch = fn action, opts ->
+        params =
+          Map.merge(opts, %{
+            "action" => action,
+            "message_id" => selected.id,
+            "request_id" => action
+          })
+
+        render_hook(view, "chat.action", Map.merge(chat_scope(view), params))
+        branch_id = view |> assert_patch() |> Path.basename()
+        refute branch_id == source.id
+        on_exit(fn -> Sessions.delete(branch_id) end)
+        branch_id
+      end
+
+      fork_id = branch.("fork_message", %{})
+      prefix = [before_prompt.parts, before_reply.parts]
+      assert Enum.map(Sessions.get_messages(fork_id), & &1.parts) == prefix ++ [selected.parts]
+      assert Agent.get(counter, & &1.provider_requests) == []
+
+      for {action, opts, text} <- [
+            {"retry_message", %{}, "selected prompt 👀"},
+            {"edit_message", %{"text" => "edited prompt"}, "edited prompt"}
+          ] do
+        render_patch(view, path)
+        assert_patch(view, path)
+        branch_id = branch.(action, opts)
+
+        assert_eventually(fn ->
+          snapshot = Worker.snapshot(branch_id)
+          refute snapshot.status == :error, snapshot[:error] || "#{action} failed"
+          match?([_, _, %{role: "user"}, %{role: "assistant"}], Sessions.get_messages(branch_id))
+        end)
+
+        [first, second, prompt, reply] = Sessions.get_messages(branch_id)
+        assert [first.parts, second.parts] == prefix
+        assert prompt.parts == [%Part.Text{content: text}]
+        assert reply.parts == [%Part.Text{content: "branch reply"}]
+      end
+
+      assert length(Agent.get(counter, & &1.provider_requests)) == 2
+      assert Sessions.get_messages(source.id) == [before_prompt, before_reply, selected, later]
+    end
+
+    for action <- ["edit_message", "retry_message"] do
+      @branch_action action
+      test "#{action} preserves the selected image through a new turn", %{conn: conn} do
+        alias Synapsis.{Image, Message, Part}
+
+        hold_prompt_preparation()
+        source = create_image_session()
+        on_exit(fn -> Sessions.delete(source.id) end)
+        {:ok, [image]} = Image.decode_payloads([png_image_payload()])
+        original = %Part.Text{content: "Original caption"}
+        {:ok, prompt} = Message.append(source.id, %{role: "user", parts: [original, image]})
+        {:ok, view, _} = live(conn, ~p"/agent/agents/main/sessions/#{source.id}")
+
+        render_hook(
+          view,
+          "chat.action",
+          Map.merge(chat_scope(view), %{
+            "action" => @branch_action,
+            "message_id" => prompt.id,
+            "request_id" => @branch_action,
+            "text" => "Caption"
+          })
+        )
+
+        id = view |> assert_patch() |> Path.basename()
+        refute id == source.id
+        on_exit(fn -> Sessions.delete(id) end)
+
+        assert_receive {:prompt_preparing, discovery}, 5_000
+        assert Sessions.get_messages(id) == []
+        assert [local] = Enum.filter(chat_snapshot(view).messages, &(&1.role == "user"))
+
+        assert local.content ==
+                 if(@branch_action == "edit_message", do: "Caption", else: original.content)
+
+        assert Enum.any?(local.metadata.parts, &(&1.type == "image" and &1.data == image.data))
+
+        send(discovery, :continue_prompt)
+        assert_receive {:image_provider_request, request}, 5_000
+        assert provider_request_has_image?(request)
+
+        assert [%{id: message_id, parts: parts} | _] = Sessions.get_messages(id)
+        assert message_id == local.id
+
+        assert_eventually(fn ->
+          match?(
+            [%{id: ^message_id, metadata: %{tokenCount: count}}] when count > 0,
+            Enum.filter(chat_snapshot(view).messages, &(&1.role == "user"))
+          )
+        end)
+
+        if @branch_action == "edit_message" do
+          assert parts == [%Part.Text{content: "Caption"}, image]
+        else
+          assert parts == [original, image]
+        end
+
+        assert Sessions.get_messages(source.id) == [prompt]
+      end
+    end
+
     test "streaming deltas are ordered and sync recovers canonical text without changing mount data",
          %{conn: conn} do
       {:ok, session} =
@@ -2300,6 +2493,69 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
   defp chat_scope(view) do
     chat = chat_snapshot(view)
     %{"id" => chat.id, "conversation_id" => chat.conversation_id}
+  end
+
+  defp hold_prompt_preparation do
+    owner = self()
+    fixture = Gaoxy.Test.open()
+
+    Gaoxy.Test.stub(fixture, "POST", "/mcp", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      request = Jason.decode!(body)
+
+      result =
+        case request["method"] do
+          "initialize" ->
+            %{
+              "protocolVersion" => request["params"]["protocolVersion"],
+              "capabilities" => %{"tools" => %{}},
+              "serverInfo" => %{"name" => "prompt-preparation", "version" => "1"}
+            }
+
+          "tools/list" ->
+            send(owner, {:prompt_preparing, self()})
+
+            receive do
+              :continue_prompt -> %{"tools" => []}
+            after
+              10_000 -> raise "prompt preparation was not released"
+            end
+
+          _notification ->
+            %{}
+        end
+
+      if request["id"] do
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(
+          200,
+          Jason.encode!(%{jsonrpc: "2.0", id: request["id"], result: result})
+        )
+      else
+        Plug.Conn.resp(conn, 202, "")
+      end
+    end)
+
+    assert {:ok, source} =
+             Synapsis.MCPConfigs.create(%{
+               name: "prompt-preparation-#{System.unique_integer([:positive])}",
+               transport: "streamable_http",
+               url: Gaoxy.Test.url(fixture, "/mcp")
+             })
+
+    agent = AgentConfigs.get_by_name("main")
+    selection = %{"default" => "none", "sources" => %{source.id => %{"mode" => "all"}}}
+
+    assert {:ok, _} =
+             AgentConfigs.update(agent, %{
+               config: Map.put(agent.config || %{}, "mcp_selection", selection)
+             })
+
+    on_exit(fn ->
+      Synapsis.MCP.stop(source.name)
+      Synapsis.MCPConfigs.delete(source)
+    end)
   end
 
   defp png_image_payload do

@@ -30,6 +30,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
        sessions: [],
        current_session: nil,
        messages: [],
+       branch_prompt: nil,
        queued_inputs: [],
        streaming_text: "",
        reply_presentation: nil,
@@ -44,7 +45,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
        session_status: "idle",
        awaiting_session_idle: false,
        delete_session: nil,
-       show_sidebar: true,
+       show_sidebar: false,
        react_chat: nil,
        react_chat_initial: nil
      )}
@@ -71,13 +72,25 @@ defmodule SynapsisWeb.AgentLive.Sessions do
         {status, in_flight, user_questions, roster, permissions, error, presentation} =
           live_session_state(session)
 
+        messages =
+          case socket.assigns.branch_prompt do
+            %Synapsis.Message{session_id: ^session_id} = prompt
+            when status in @running_statuses ->
+              echo_prompt(messages, prompt)
+
+            _ ->
+              messages
+          end
+
         {:noreply,
          assign(socket,
            agent_id: agent_id,
            sessions: sessions,
            current_session: session,
+           show_sidebar: false,
            configured_models: Providers.configured_models(),
            messages: messages,
+           branch_prompt: nil,
            queued_inputs: PendingInputStore.queued_prompts(session.id),
            streaming_text: in_flight,
            reply_presentation: presentation,
@@ -138,6 +151,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
        sessions: sessions,
        current_session: nil,
        messages: [],
+       branch_prompt: nil,
        queued_inputs: [],
        streaming_text: "",
        reply_presentation: nil,
@@ -329,6 +343,30 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
   end
 
+  defp chat_event("chat.action", %{"action" => action, "message_id" => id} = params, socket)
+       when action in ~w(edit_message fork_message retry_message) and is_binary(id) do
+    source = socket.assigns.current_session
+
+    with true <- is_binary(params["request_id"]) and params["request_id"] != "",
+         true <- message_action_available?(socket, id, action),
+         message <- Enum.find(socket.assigns.messages, &(&1.id == id)),
+         {:ok, input} <- SessionChat.user_prompt_input(message),
+         {:ok, prompt} <- branch_prompt(action, params, input),
+         {:ok, branch} <-
+           Sessions.fork(source.id, at_message: id, include_message: is_nil(prompt)) do
+      publish_message_branch(socket, branch, prompt)
+    else
+      {:error, :invalid_message} ->
+        {%{status: "error", message: "Enter a message within the size limit"}, socket}
+
+      {:error, _reason} ->
+        {%{status: "error", message: "Could not create a session at this message"}, socket}
+
+      _ ->
+        {%{status: "error", message: "Message action is unavailable"}, socket}
+    end
+  end
+
   defp chat_event("chat.action", %{"action" => "regenerate", "message_id" => id}, socket) do
     valid? = Enum.any?(socket.assigns.messages, &(&1.id == id and &1.role == "assistant"))
 
@@ -407,6 +445,62 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
   defp operation_reply(_result, socket),
     do: {%{status: "error", message: "Session action failed"}, socket}
+
+  defp message_action_available?(socket, message_id, action) do
+    case Enum.find(socket.assigns.react_chat.messages, &(&1.id == message_id)) do
+      %{actions: actions} ->
+        Enum.any?(actions, &(&1.id == action and not Map.get(&1, :disabled, false)))
+
+      nil ->
+        false
+    end
+  end
+
+  defp branch_prompt("fork_message", _params, _input), do: {:ok, nil}
+
+  defp branch_prompt("retry_message", _params, {text, images}),
+    do: validate_branch_prompt(text, images)
+
+  defp branch_prompt("edit_message", %{"text" => text}, {_original, images}) when is_binary(text),
+    do: validate_branch_prompt(String.trim(text), images)
+
+  defp branch_prompt(_action, _params, _input), do: {:error, :invalid_message}
+
+  defp validate_branch_prompt(text, images) do
+    if byte_size(text) <= @max_content_bytes and (String.trim(text) != "" or images != []),
+      do: {:ok, {text, images}},
+      else: {:error, :invalid_message}
+  end
+
+  defp publish_message_branch(socket, branch, prompt) do
+    result =
+      case prompt do
+        nil -> {:ok, nil}
+        {text, images} -> send_operator_message(branch.id, text, images)
+      end
+
+    case result do
+      {:ok, submitted} ->
+        {%{status: "ok"},
+         socket
+         |> assign(:branch_prompt, submitted)
+         |> push_patch(to: ~p"/agent/agents/#{branch.agent}/sessions/#{branch.id}")}
+
+      {:error, reason} ->
+        Logger.warning("message_branch_send_failed",
+          session_id: branch.id,
+          reason: inspect(reason)
+        )
+
+        message =
+          if reason in [:unknown_outcome, :timeout, :worker_timeout, :worker_unavailable],
+            do: "New session created. Check it to confirm whether the message was sent.",
+            else: "New session created. Could not send the message."
+
+        {%{status: "error", message: message},
+         assign(socket, :sessions, load_sessions(socket.assigns.agent_id))}
+    end
+  end
 
   defp queued_input_reply(result, id, socket) do
     drop = fn socket ->
@@ -745,33 +839,15 @@ defmodule SynapsisWeb.AgentLive.Sessions do
         session_id = socket.assigns.current_session.id
         running? = running_session_status?(socket.assigns.session_status)
 
-        socket =
-          if running? do
-            socket
-          else
-            # Optimistic update: show the user message immediately for a new turn.
-            optimistic_msg = %Synapsis.Message{
-              id: Ecto.UUID.generate(),
-              session_id: session_id,
-              role: "user",
-              parts: optimistic_user_parts(content, image_parts),
-              inserted_at: DateTime.utc_now()
-            }
-
-            socket
-            |> update(:messages, &(&1 ++ [optimistic_msg]))
-            |> assign(:session_status, "streaming")
-            |> assign(:tool_calls, %{})
-          end
-
         case send_operator_message(session_id, content, image_parts) do
-          :ok ->
+          {:ok, submitted} ->
             socket =
-              if running? or subagents_enabled?(socket.assigns.current_session) do
+              if running? do
                 socket
               else
-                # Reload from DB to get the real persisted message with correct ID/timestamps
-                assign(socket, :messages, Sessions.get_messages(session_id))
+                socket
+                |> update(:messages, &echo_prompt(&1, submitted))
+                |> assign(session_status: "streaming", tool_calls: %{})
               end
 
             {%{status: "ok"}, push_event(socket, "clear_chat_input", %{})}
@@ -801,9 +877,21 @@ defmodule SynapsisWeb.AgentLive.Sessions do
            InputContext.capture_operator(session_id, %{
              requester_id: Approval.operator_id(),
              origin: "liveview"
-           }) do
-      Sessions.send_message(session_id, content, image_parts, input_context)
+           }),
+         :ok <- Sessions.send_message(session_id, content, image_parts, input_context) do
+      {:ok,
+       %Synapsis.Message{
+         id: input_context["input_id"],
+         session_id: session_id,
+         role: "user",
+         parts: optimistic_user_parts(content, image_parts),
+         inserted_at: DateTime.utc_now()
+       }}
     end
+  end
+
+  defp echo_prompt(messages, prompt) do
+    if Enum.any?(messages, &(&1.id == prompt.id)), do: messages, else: messages ++ [prompt]
   end
 
   defp optimistic_user_parts("", [_image | _] = image_parts), do: image_parts
@@ -979,6 +1067,13 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     {:noreply, update(socket, :queued_inputs, &Enum.reject(&1, fn input -> input.id == id end))}
   end
 
+  defp handle_session_info({:prompt_committed, id}, socket) do
+    case socket.assigns.current_session do
+      %{id: ^id} -> {:noreply, assign(socket, :messages, Sessions.get_messages(id))}
+      _ -> {:noreply, socket}
+    end
+  end
+
   defp handle_session_info({"music_completion_applied", %{session_id: id}}, socket) do
     case socket.assigns.current_session do
       %{id: ^id} ->
@@ -1106,6 +1201,9 @@ defmodule SynapsisWeb.AgentLive.Sessions do
       <.dm_btn
         variant="ghost"
         phx-click="toggle_sidebar"
+        aria-label={if(@show_sidebar, do: "Close sessions", else: "Open sessions")}
+        aria-controls="agent-session-sidebar"
+        aria-expanded={to_string(@show_sidebar)}
         class="md:hidden fixed top-16 left-2 z-20"
       >
         <.dm_mdi name={if(@show_sidebar, do: "close", else: "menu")} class="w-5 h-5" />
@@ -1113,10 +1211,11 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
       <%!-- Sidebar --%>
       <aside
+        id="agent-session-sidebar"
         class={[
-          "w-72 bg-surface-container text-on-surface border-r border-outline-variant flex flex-col shrink-0 transition-transform shadow-lg md:shadow-none",
-          "fixed md:relative inset-y-0 left-0 z-10 md:z-auto md:translate-x-0 pt-16 md:pt-0",
-          if(@show_sidebar, do: "translate-x-0", else: "-translate-x-full")
+          "w-64 bg-surface-container text-on-surface border-r border-outline-variant flex flex-col shrink-0 transition-transform shadow-lg md:shadow-none",
+          "fixed md:relative inset-y-0 left-0 z-10 md:z-auto md:visible md:translate-x-0 pt-16 md:pt-0",
+          if(@show_sidebar, do: "translate-x-0", else: "invisible -translate-x-full")
         ]}
         data-agent-session-sidebar
       >
@@ -1146,12 +1245,8 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               <h2 class="text-sm font-semibold truncate">
                 {agent_display_name(@agent_config, @agent_id)}
               </h2>
-              <p class="text-xs text-on-surface-variant truncate">
-                <%= if @provider_configured do %>
-                  Ready to chat
-                <% else %>
-                  Agent model unavailable
-                <% end %>
+              <p :if={not @provider_configured} class="text-xs text-on-surface-variant truncate">
+                Agent model unavailable
               </p>
             </div>
           </div>
@@ -1198,17 +1293,17 @@ defmodule SynapsisWeb.AgentLive.Sessions do
       <main class="flex-1 min-w-0 flex flex-col">
         <%= if @current_session do %>
           <%!-- Session header --%>
-          <div class="flex items-center justify-between border-b border-outline-variant bg-surface-container-low px-4 py-3">
-            <div class="flex items-center gap-3 min-w-0">
+          <div
+            id="session-header"
+            class="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-outline-variant bg-surface-container-low py-2 pl-14 pr-3 md:px-4"
+          >
+            <div class="flex min-w-0 flex-1 basis-48 items-center gap-2">
               <.dm_mdi
                 name={@agent_config.icon || "robot-happy-outline"}
                 class="w-5 h-5 text-primary shrink-0"
               />
               <div class="min-w-0">
-                <h2 class="font-medium text-sm truncate">
-                  {@current_session.title ||
-                    "Session #{String.slice(@current_session.id || "", 0..7)}"}
-                </h2>
+                <h2 class="font-medium text-sm truncate">{session_title(@current_session)}</h2>
                 <div class="text-xs text-on-surface-variant">
                   <span class="text-primary/70" data-session-agent-meta>
                     {@agent_config.label || String.capitalize(@agent_id)}
@@ -1216,7 +1311,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
                 </div>
               </div>
             </div>
-            <div class="flex items-center gap-2 flex-wrap justify-end">
+            <div class="flex min-w-0 flex-wrap items-center gap-2">
               <.session_model_selector
                 session={@current_session}
                 models={@configured_models}
@@ -1224,7 +1319,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               />
               <.dm_btn
                 id="session-subagents-toggle"
-                variant={if(subagents_enabled?(@current_session), do: "secondary", else: "ghost")}
+                variant="ghost"
                 size="xs"
                 phx-click="toggle_subagents"
                 aria-pressed={to_string(subagents_enabled?(@current_session))}
@@ -1240,20 +1335,12 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               >
                 <.dm_mdi name="refresh" class="w-4 h-4" /> Retry
               </.dm_btn>
-              <.dm_btn
-                :if={@session_status in ~w(streaming tool_executing)}
-                variant="ghost"
-                size="xs"
-                phx-click="cancel_stream"
-              >
-                <.dm_mdi name="stop" class="w-4 h-4" /> Cancel
-              </.dm_btn>
             </div>
           </div>
 
           <.subagents_panel
             :if={
-              subagents_enabled?(@current_session) || @subagent_roster.agents != [] ||
+              @subagent_roster.agents != [] ||
                 @runtime_permissions != [] || subagents_need_attention?(@subagent_roster)
             }
             roster={@subagent_roster}
@@ -1514,14 +1601,16 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     assigns = assign(assigns, selected: selected, model_groups: groups)
 
     ~H"""
-    <form id="session-model-form" phx-change="switch_model" class="min-w-48 max-w-xs">
+    <form id="session-model-form" phx-change="switch_model" class="min-w-0 max-w-full sm:max-w-52">
       <.dm_select
         id="session-model-selector"
         name="model_id"
         label="Session model"
-        size="sm"
+        label_class="sr-only"
+        select_class="max-w-full truncate"
+        size="xs"
         disabled={@busy}
-        helper={
+        title={
           if @selected,
             do: "#{@selected.context_window} context tokens",
             else: "Current model unavailable; select an available model"
@@ -1561,74 +1650,68 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     <section
       id="session-subagents"
       aria-label="Subagents"
-      class="max-h-72 overflow-y-auto border-b border-outline-variant px-4 py-2"
+      class="max-h-52 space-y-2 overflow-y-auto border-b border-outline-variant bg-surface-container-low px-4 py-2"
     >
-      <.dm_card variant="bordered" padding="sm" body_class="space-y-2">
-        <div class="flex items-center justify-between gap-2 text-xs">
-          <h3 class="font-semibold">Subagents</h3>
-          <span class="text-on-surface-variant">{length(@roster.agents)} agents</span>
-        </div>
-        <div :if={subagents_need_attention?(@roster)} role="status" class="text-xs space-y-1">
-          <.dm_badge variant="warning" size="sm">Recovery required</.dm_badge>
-          <p>
-            <%= if @roster[:error] == :storage_unavailable do %>
-              Agent status is temporarily unavailable.
-            <% else %>
-              Some agent work could not be confirmed. Subagents are unavailable until the session is recovered.
-            <% end %>
-          </p>
-          <p :if={@roster[:root]} class="text-on-surface-variant">
-            Session work: {subagent_status(@roster.root.status)}
-          </p>
-        </div>
-        <p
-          :if={@roster.agents == [] && not subagents_need_attention?(@roster)}
-          class="text-xs text-on-surface-variant"
-        >
-          The assistant can delegate tasks to agents in this session.
+      <div class="flex items-center justify-between gap-2 text-xs">
+        <h3 class="font-semibold">Subagents</h3>
+        <span :if={@roster.agents != []} class="text-on-surface-variant">
+          {length(@roster.agents)}
+        </span>
+      </div>
+      <div :if={subagents_need_attention?(@roster)} role="status" class="text-xs space-y-1">
+        <.dm_badge variant="warning" size="sm">Recovery required</.dm_badge>
+        <p>
+          <%= if @roster[:error] == :storage_unavailable do %>
+            Agent status is temporarily unavailable.
+          <% else %>
+            Some agent work could not be confirmed. Subagents are unavailable until the session is recovered.
+          <% end %>
         </p>
-        <ul :if={@roster.agents != []} class="flex flex-wrap gap-2" aria-label="Session agents">
-          <li
-            :for={agent <- @roster.agents}
-            class="flex items-center gap-2 rounded-md bg-surface-container px-2 py-1 text-xs"
-          >
-            <span class="font-medium">{agent.name}</span>
-            <.dm_badge size="sm">{subagent_status(agent.status)}</.dm_badge>
-            <span :if={agent[:historical] == true} class="text-on-surface-variant">Historical</span>
-          </li>
-        </ul>
-        <div
-          :for={pending <- @permissions}
-          data-runtime-permission={pending.interaction_id}
-          class="rounded-md border border-outline-variant p-2 text-xs space-y-2"
+        <p :if={@roster[:root]} class="text-on-surface-variant">
+          Session work: {subagent_status(@roster.root.status)}
+        </p>
+      </div>
+      <ul :if={@roster.agents != []} class="flex flex-wrap gap-2" aria-label="Session agents">
+        <li
+          :for={agent <- @roster.agents}
+          class="flex items-center gap-2 rounded-md bg-surface-container px-2 py-1 text-xs"
         >
-          <p>
-            <span class="font-semibold">{approval_agent_name(pending)}</span>
-            requests permission to use <span class="font-mono">{pending.request.tool_name}</span>
-          </p>
-          <pre class="max-h-24 overflow-auto whitespace-pre-wrap break-all text-on-surface-variant">{Jason.encode!(pending.request.arguments, pretty: true)}</pre>
-          <div class="flex gap-2">
-            <.dm_btn
-              variant="primary"
-              size="xs"
-              phx-click="resolve_runtime_permission"
-              phx-value-interaction-id={pending.interaction_id}
-              phx-value-decision="allow"
-            >
-              Allow
-            </.dm_btn>
-            <.dm_btn
-              variant="ghost"
-              size="xs"
-              phx-click="resolve_runtime_permission"
-              phx-value-interaction-id={pending.interaction_id}
-              phx-value-decision="deny"
-            >
-              Deny
-            </.dm_btn>
-          </div>
+          <span class="font-medium">{agent.name}</span>
+          <.dm_badge size="sm">{subagent_status(agent.status)}</.dm_badge>
+          <span :if={agent[:historical] == true} class="text-on-surface-variant">Historical</span>
+        </li>
+      </ul>
+      <div
+        :for={pending <- @permissions}
+        data-runtime-permission={pending.interaction_id}
+        class="rounded-md border border-outline-variant p-2 text-xs space-y-2"
+      >
+        <p>
+          <span class="font-semibold">{approval_agent_name(pending)}</span>
+          requests permission to use <span class="font-mono">{pending.request.tool_name}</span>
+        </p>
+        <pre class="max-h-24 overflow-auto whitespace-pre-wrap break-all text-on-surface-variant">{Jason.encode!(pending.request.arguments, pretty: true)}</pre>
+        <div class="flex gap-2">
+          <.dm_btn
+            variant="primary"
+            size="xs"
+            phx-click="resolve_runtime_permission"
+            phx-value-interaction-id={pending.interaction_id}
+            phx-value-decision="allow"
+          >
+            Allow
+          </.dm_btn>
+          <.dm_btn
+            variant="ghost"
+            size="xs"
+            phx-click="resolve_runtime_permission"
+            phx-value-interaction-id={pending.interaction_id}
+            phx-value-decision="deny"
+          >
+            Deny
+          </.dm_btn>
         </div>
-      </.dm_card>
+      </div>
     </section>
     """
   end

@@ -4,7 +4,7 @@ defmodule Synapsis.SessionCoupledPublicationFunctionalTest do
 
   alias Concord.{KV, Turso}
   alias Concord.KV.Record
-  alias Synapsis.{Message, Session}
+  alias Synapsis.{Message, Session, Sessions}
   alias Synapsis.Session.{Fork, Sharing, Store}
 
   @timeout 5_000
@@ -36,7 +36,7 @@ defmodule Synapsis.SessionCoupledPublicationFunctionalTest do
       assert destination.status == "idle"
       assert %DateTime{} = destination.inserted_at
       assert destination.updated_at == destination.inserted_at
-      expected = copied_turns(messages)
+      expected = copied_turns(destination, messages)
       assert_destination(destination, expected, before)
       assert Message.list_by_session(source.id) == messages
     end
@@ -53,9 +53,49 @@ defmodule Synapsis.SessionCoupledPublicationFunctionalTest do
 
     assert {:ok, destination} = Fork.fork(source.id, at_message: target.id)
     register_cleanup(destination.id)
-    assert_destination(destination, copied_turns(Enum.take(messages, 2)), before)
+    assert_destination(destination, copied_turns(destination, Enum.take(messages, 2)), before)
     assert length(Message.list_by_session(destination.id)) == 2
     assert Message.list_by_session(source.id) == messages
+  end
+
+  test "an exclusive fork copies only the messages before a selected prompt" do
+    source = source_session()
+    register_cleanup(source.id)
+    assert :ok = Store.put_meta(source.id, Session.to_meta(source))
+    [preceding, target, _later] = messages = source_messages(source.id, 3)
+    assert :ok = Message.persist_list(source.id, messages)
+
+    assert {:ok, destination} =
+             Fork.fork(source.id, at_message: target.id, include_message: false)
+
+    register_cleanup(destination.id)
+
+    assert [%Message{id: copied_id, parts: parts}] = Message.list_by_session(destination.id)
+    assert {:ok, _} = Ecto.UUID.cast(copied_id)
+    refute copied_id == preceding.id
+    assert parts == preceding.parts
+    assert Message.list_by_session(source.id) == messages
+  end
+
+  test "legacy turns with equal content can be addressed without rewriting the source" do
+    source = source_session()
+    register_cleanup(source.id)
+    assert :ok = Store.put_meta(source.id, Session.to_meta(source))
+    [message] = source_messages(source.id, 1)
+    legacy = %{message | id: nil}
+    assert :ok = Message.persist_list(source.id, [legacy, legacy])
+
+    assert [%Message{id: first}, %Message{id: second}] = Sessions.get_messages(source.id)
+    assert is_binary(first) and is_binary(second) and first != second
+
+    assert {:ok, %{messages: [%Message{id: ^first}, %Message{id: ^second}]}} =
+             Sessions.get(source.id)
+
+    assert {:ok, destination} = Fork.fork(source.id, at_message: first)
+    register_cleanup(destination.id)
+    assert [%Message{parts: parts}] = Message.list_by_session(destination.id)
+    assert parts == legacy.parts
+    assert Message.list_by_session(source.id) == [legacy, legacy]
   end
 
   for count <- [0, 500] do
@@ -183,15 +223,22 @@ defmodule Synapsis.SessionCoupledPublicationFunctionalTest do
     end)
   end
 
-  defp copied_turns(messages) do
-    Enum.map(messages, fn message ->
+  defp copied_turns(destination, messages) do
+    {:ok, turns} = Store.list_turns(destination.id)
+    ids = Enum.map(turns, & &1.id)
+    assert length(Enum.uniq(ids)) == length(messages)
+    assert Enum.all?(ids, &match?({:ok, _}, Ecto.UUID.cast(&1)))
+    assert MapSet.disjoint?(MapSet.new(ids), MapSet.new(messages, & &1.id))
+
+    Enum.zip_with(messages, ids, fn message, id ->
       [%Synapsis.Part.Text{content: text}] = message.parts
 
       %{
-        id: nil,
+        id: id,
         inserted_at: nil,
         role: message.role,
         token_count: message.token_count,
+        internal_turn_source: message.internal_turn_source,
         parts: [%{type: "text", text: text}]
       }
     end)

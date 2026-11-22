@@ -188,7 +188,7 @@ defmodule Synapsis.Sessions do
   end
 
   defp with_messages(%Session{} = session),
-    do: %{session | messages: Message.list_by_session(session.id)}
+    do: %{session | messages: get_messages(session.id)}
 
   # Ordinary creation retains its existing cleanup path. Suggested acceptance
   # uses the atomic fresh initialization helper above and never rolls back here.
@@ -394,7 +394,20 @@ defmodule Synapsis.Sessions do
   end
 
   def get_messages(session_id, opts \\ []) do
-    messages = Message.list_by_session(session_id)
+    messages =
+      session_id
+      |> Message.list_by_session()
+      |> Enum.with_index(fn
+        %Message{id: nil} = message, index ->
+          # Earlier forks and imports stored turns without IDs. Include the position
+          # and content so repeated prompts are distinct and stale references fail.
+          key = :erlang.term_to_binary({session_id, index, message}, [:deterministic])
+          id = Base.url_encode64(:crypto.hash(:sha256, key), padding: false)
+          %{message | id: "legacy-" <> id}
+
+        message, _index ->
+          message
+      end)
 
     case Keyword.get(opts, :limit) do
       nil -> messages
@@ -472,8 +485,11 @@ defmodule Synapsis.Sessions do
   def fork(session_id, opts \\ []) do
     case Synapsis.Session.Fork.fork(session_id, opts) do
       {:ok, new_session} ->
-        {:ok, _pid} = Synapsis.Session.DynamicSupervisor.start_session(new_session.id)
-        {:ok, new_session}
+        persist_and_start_session(
+          new_session,
+          new_session.agent,
+          Synapsis.Session.DynamicSupervisor
+        )
 
       error ->
         error

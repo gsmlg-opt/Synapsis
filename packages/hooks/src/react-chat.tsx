@@ -4,6 +4,7 @@ import { Markdown } from '@duskmoon-dev/components/markdown'
 import { Button } from '@duskmoon-dev/components/button'
 import { Form } from '@duskmoon-dev/components/form'
 import { Input } from '@duskmoon-dev/components/input'
+import { copyChatText } from './chat-clipboard'
 import { encodeChatImages } from './chat-image-input'
 import { useSynapsisChatSubmission } from './chat-submission'
 import { createChatRequestId } from './chat-request-id'
@@ -74,22 +75,71 @@ function Part({ part }: { part: Record<string, any> }) {
   }
 }
 
+const copyIconPath = 'M8 16H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2M10 8h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z'
+const copiedIconPath = 'm5 12 4 4L19 6'
+const retryIconPath = 'M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6'
+const messageActionIcons = new Map([
+  ['edit_message', 'm14 5 5 5M5 19l4-1L20 7a1.4 1.4 0 0 0 0-2l-1-1a1.4 1.4 0 0 0-2 0L6 15l-1 4Z'],
+  ['fork_message', 'M6 8v8m12-8v1a6 6 0 0 1-6 6H6M8 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0Zm12 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM8 18a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z'],
+  ['retry_message', retryIconPath],
+  ['regenerate', retryIconPath],
+  ['dismiss_heartbeat', 'M6 6l12 12M18 6 6 18']
+])
+
+function MessageActionButton({ label, title = label, iconPath, disabled, onClick }: {
+  label: string
+  title?: string
+  iconPath?: string
+  disabled?: boolean
+  onClick: () => void
+}) {
+  return <Button type="button" size={iconPath ? 'xs' : 'sm'} shape={iconPath ? 'square' : undefined}
+    color="neutral" appearance="ghost" aria-label={label} title={title} disabled={disabled} onClick={onClick}>
+    {iconPath ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <path d={iconPath} />
+    </svg> : label}
+  </Button>
+}
+
 function Message(props: ChatProps) {
   const { message, bridge, connected, synchronizing, targetId, timeline, metadata } = props
   const [notice, setNotice] = useState('')
   const [pending, setPending] = useState(false)
+  const [editText, setEditText] = useState<string | null>(null)
+  const pendingAction = useRef(false)
   const meta = message.metadata || {}
   const user = message.role === 'user'
+  const copied = notice === 'Copied'
+  async function copy() {
+    setNotice(await copyChatText(message.content) ? 'Copied' : 'Copy failed')
+  }
   async function action(name: string, extra: Record<string, unknown> = {}) {
+    if (pendingAction.current) return false
+    pendingAction.current = true
     setPending(true)
     setNotice('')
-    try { await bridge.send('action', { action: name, message_id: message.id, ...extra }) }
-    catch (error) { setNotice(error instanceof Error ? error.message : 'Action failed') }
-    finally { setPending(false) }
+    try {
+      await bridge.send('action', { action: name, message_id: message.id, request_id: createChatRequestId(), ...extra })
+      return true
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Action failed')
+      return false
+    } finally {
+      pendingAction.current = false
+      setPending(false)
+    }
   }
   const disabled = !connected || synchronizing || pending
+  const editAction = message.actions?.find((item: Record<string, any>) => item.id === 'edit_message')
+  const editDisabled = disabled || !editAction || editAction.disabled || editAction.eligible === false
   const heartbeat = meta.heartbeat
   const codeAgent = meta.codeAgent
+  if (message.role === 'assistant' && message.status === 'streaming' &&
+      !message.content && !meta.reasoning && !message.tools?.length && !meta.parts?.length &&
+      !meta.permissions?.length && !message.error && !heartbeat && !codeAgent) {
+    return <span id={targetId} className="absolute" aria-hidden="true" />
+  }
   const timestampValue = meta.timestamp || heartbeat?.timestamp
   const timestamp = timestampValue && new Date(timestampValue)
   const time = timestamp && !Number.isNaN(timestamp.getTime()) ? timestamp.toLocaleTimeString() : null
@@ -129,14 +179,33 @@ function Message(props: ChatProps) {
     </Content>
     {message.error && message.role !== 'error' && <p role="alert" className="text-error">{message.error}</p>}
     <Chat.Footer>
+      {editText !== null && <form className="mb-2 w-full min-w-0 space-y-2" onSubmit={async event => {
+        event.preventDefault()
+        if (!editDisabled && await action('edit_message', { text: editText })) setEditText(null)
+      }}>
+        <Input.TextArea aria-label="Edit message" value={editText} onChange={event => setEditText(event.target.value)}
+          rows={3} maxLength={256000} resize="vertical" autoFocus disabled={editDisabled} />
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button type="button" size="xs" appearance="ghost" disabled={pending} onClick={() => setEditText(null)}>Cancel</Button>
+          <Button type="submit" size="xs" disabled={editDisabled}>Send in new session</Button>
+        </div>
+      </form>}
       <Chat.Actions hover>
-        {message.content && <Button size="sm" appearance="ghost" onClick={async () => {
-          try { await navigator.clipboard.writeText(message.content); setNotice('Copied') }
-          catch { setNotice('Copy failed') }
-        }}>Copy</Button>}
-        {(message.actions || []).map((item: Record<string, any>) => <Button key={item.id} size="sm" appearance="ghost" disabled={disabled || item.disabled || item.eligible === false} onClick={() => action(item.id)}>{item.label}</Button>)}
+        {message.content && <MessageActionButton label="Copy" title={copied ? 'Copied' : 'Copy'}
+          iconPath={copied ? copiedIconPath : copyIconPath} onClick={copy} />}
+        {(message.actions || []).map((item: Record<string, any>) => <MessageActionButton key={item.id}
+          label={item.label} title={item.title} iconPath={messageActionIcons.get(item.id)}
+          disabled={disabled || item.disabled || item.eligible === false || (item.id === 'edit_message' && editText !== null)}
+          onClick={() => {
+            if (item.id === 'edit_message') {
+              setNotice('')
+              setEditText(message.content)
+            } else {
+              void action(item.id)
+            }
+          }} />)}
       </Chat.Actions>
-      {notice && <span role="status" className="text-xs text-on-surface-variant">{notice}</span>}
+      <span role="status" className={notice && !copied ? 'text-xs text-on-surface-variant' : 'sr-only'}>{notice}</span>
     </Chat.Footer>
   </Row>
 }
@@ -291,13 +360,13 @@ export function createSynapsisReactChat(factory: any) {
       canSubmit={canSubmit}
       busy={busy || steering}
       generating={active}
-      minRows={3}
+      minRows={1}
       maxRows={8}
       error={localNotice || notice || undefined}
       sendLabel={admission.sendLabel || (active && attachmentsAllowed ? 'Queue' : 'Send')}
       stopLabel="Stop"
       attachLabel="Attach images"
-      textareaProps={{ name: 'content', 'aria-label': 'Message', placeholder: 'Send a message… (Ctrl/Cmd+Enter)', onPaste: event => {
+      textareaProps={{ name: 'content', 'aria-label': 'Message', placeholder: 'Write a message…', title: 'Send with Ctrl/Cmd+Enter', onPaste: event => {
         if (!attachmentsAllowed) return
         const pasted = Array.from(event.clipboardData.files).filter(file => file.type.startsWith('image/'))
         if (pasted.length) { event.preventDefault(); changeFiles([...files, ...pasted]) }

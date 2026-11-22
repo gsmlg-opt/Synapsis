@@ -3,63 +3,56 @@ defmodule Synapsis.Session.Fork do
 
   alias Synapsis.{Message, Session, Sessions}
 
+  @doc "Copy through `:at_message`, or stop before it with `include_message: false`."
   def fork(session_id, opts \\ []) do
     message_id = Keyword.get(opts, :at_message)
+    include_message? = Keyword.get(opts, :include_message, true)
 
-    case Sessions.get(session_id) do
-      {:error, :not_found} -> {:error, :not_found}
-      {:ok, session} -> do_fork(session, message_id)
+    with {:ok, session} <- Sessions.get(session_id),
+         {:ok, messages} <- prefix(session.messages, message_id, include_message?) do
+      do_fork(session, messages)
     end
   end
 
-  defp do_fork(session, message_id) do
-    messages = load_messages(session.id)
+  defp prefix(messages, nil, _include_message?), do: {:ok, messages}
 
-    messages_to_copy =
-      if message_id do
-        target = Enum.find(messages, fn m -> m.id == message_id end)
-
-        if is_nil(target) do
-          :message_not_found
-        else
-          Enum.take_while(messages, fn m -> m.id != message_id end) ++ [target]
-        end
-      else
-        messages
-      end
-
-    if messages_to_copy == :message_not_found do
-      {:error, :message_not_found}
-    else
-      now = DateTime.utc_now()
-
-      new_session = %Session{
-        id: Ecto.UUID.generate(),
-        provider: session.provider,
-        model: session.model,
-        agent: session.agent,
-        title: "Fork of #{session.title || session.id}",
-        config: session.config || %{},
-        status: "idle",
-        inserted_at: now,
-        updated_at: now
-      }
-
-      copied =
-        Enum.map(messages_to_copy, fn msg ->
-          %Message{
-            session_id: new_session.id,
-            role: msg.role,
-            parts: msg.parts,
-            token_count: msg.token_count
-          }
-        end)
-
-      with :ok <- Message.persist_list(new_session.id, copied, Session.to_meta(new_session)) do
-        {:ok, new_session}
-      end
+  defp prefix(messages, message_id, include_message?) do
+    case Enum.split_while(messages, &(&1.id != message_id)) do
+      {_, []} -> {:error, :message_not_found}
+      {prefix, [target | _]} when include_message? -> {:ok, prefix ++ [target]}
+      {prefix, [_target | _]} -> {:ok, prefix}
     end
   end
 
-  defp load_messages(session_id), do: Message.list_by_session(session_id)
+  defp do_fork(session, messages) do
+    now = DateTime.utc_now()
+
+    new_session = %Session{
+      id: Ecto.UUID.generate(),
+      provider: session.provider,
+      model: session.model,
+      agent: session.agent,
+      title: "Fork of #{session.title || session.id}",
+      config: session.config || %{},
+      status: "idle",
+      inserted_at: now,
+      updated_at: now
+    }
+
+    copied =
+      Enum.map(messages, fn msg ->
+        %Message{
+          id: Ecto.UUID.generate(),
+          session_id: new_session.id,
+          role: msg.role,
+          parts: msg.parts,
+          token_count: msg.token_count,
+          internal_turn_source: msg.internal_turn_source
+        }
+      end)
+
+    with :ok <- Message.persist_list(new_session.id, copied, Session.to_meta(new_session)) do
+      {:ok, new_session}
+    end
+  end
 end

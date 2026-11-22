@@ -20,7 +20,7 @@ defmodule SynapsisWeb.AgentLive.SessionsSubagentsTest do
              "Subagents enabled"
            )
 
-    assert has_element?(view, "#session-subagents", "0 agents")
+    refute has_element?(view, "#session-subagents")
 
     view |> element("#session-subagents-toggle") |> render_click()
     assert {:ok, %Session{config: %{"subagents" => false}}} = Sessions.get(session.id)
@@ -38,7 +38,7 @@ defmodule SynapsisWeb.AgentLive.SessionsSubagentsTest do
     reconnected |> element("#session-subagents-toggle") |> render_click()
     assert {:ok, %Session{config: %{"subagents" => true}}} = Sessions.get(session.id)
     assert has_element?(reconnected, "#session-subagents-toggle[aria-pressed='true']")
-    assert has_element?(reconnected, "#session-subagents", "0 agents")
+    refute has_element?(reconnected, "#session-subagents")
   end
 
   test "roster comes from the live worker on mount and reconnect and accepts updates", %{

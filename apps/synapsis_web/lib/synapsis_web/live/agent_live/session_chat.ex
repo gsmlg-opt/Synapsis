@@ -1,7 +1,7 @@
 defmodule SynapsisWeb.AgentLive.SessionChat do
   @moduledoc "Presentation projection for the Agent session React Chat island."
 
-  alias Synapsis.Part
+  alias Synapsis.{Message, Part}
   alias Synapsis.Session.EventReply
   alias SynapsisWeb.{MessageHelpers, ToolResultView}
 
@@ -22,11 +22,15 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
 
     displayed = assigns.messages |> Enum.map(&display_message/1) |> Enum.reject(&is_nil/1)
     results = settled_tool_results(displayed)
-    can_regenerate? = assigns.session_status == "idle" and not waiting? and not subagents?
+
+    message_actions = %{
+      regenerate: assigns.session_status == "idle" and not waiting? and not subagents?,
+      branch_and_send: assigns.session_status in ~w(idle error) and not waiting? and not recovery?
+    }
 
     %{
       messages:
-        Enum.flat_map(displayed, &message(&1, label, can_regenerate?, results)) ++
+        Enum.flat_map(displayed, &message(&1, label, message_actions, results)) ++
           live_messages(assigns, label, active?) ++
           Enum.map(assigns.heartbeat_notifications, &heartbeat_message/1) ++
           Enum.map(Enum.sort(assigns.code_agent_sessions), &code_agent_message/1),
@@ -83,7 +87,7 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
         do: {id, result}
   end
 
-  defp message(message, label, can_regenerate?, results) do
+  defp message(message, label, availability, results) do
     raw_parts = message.parts || []
 
     visible =
@@ -95,11 +99,11 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
     if raw_parts != [] and visible == [] do
       []
     else
-      [message(message, visible, label, can_regenerate?, results)]
+      [message(message, visible, label, availability, results)]
     end
   end
 
-  defp message(message, visible, label, can_regenerate?, results) do
+  defp message(message, visible, label, availability, results) do
     parts = Enum.map(visible, &settle(part(&1, message.role), results))
 
     %{
@@ -114,13 +118,46 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
         tokenCount: message.token_count || 0
       },
       tools: [],
-      actions:
-        if(message.role == "assistant" and can_regenerate?,
-          do: [%{id: "regenerate", label: "Regenerate"}],
-          else: []
-        )
+      actions: message_actions(message, availability)
     }
   end
+
+  defp message_actions(%Message{role: "assistant"}, %{regenerate: true}),
+    do: [%{id: "regenerate", label: "Regenerate"}]
+
+  defp message_actions(message, availability) do
+    case user_prompt_input(message) do
+      {:ok, _input} ->
+        [
+          %{id: "edit_message", label: "Edit", disabled: not availability.branch_and_send},
+          %{id: "fork_message", label: "Fork", title: "Fork at this message"},
+          %{
+            id: "retry_message",
+            label: "Retry",
+            title: "Retry in a new session",
+            disabled: not availability.branch_and_send
+          }
+        ]
+
+      :error ->
+        []
+    end
+  end
+
+  @doc "Recover a user-authored chat prompt with its durable attachments."
+  def user_prompt_input(%Message{role: "user", id: id, internal_turn_source: nil, parts: parts})
+      when is_binary(id) and id != "" and is_list(parts) do
+    if Enum.all?(parts, &(is_struct(&1, Part.Text) or is_struct(&1, Part.Image))) do
+      text = Enum.join(for(%Part.Text{content: content} <- parts, do: content), "\n\n")
+      images = for %Part.Image{} = image <- parts, do: image
+
+      if String.trim(text) != "" or images != [], do: {:ok, {text, images}}, else: :error
+    else
+      :error
+    end
+  end
+
+  def user_prompt_input(_message), do: :error
 
   defp live_messages(assigns, label, active?) do
     presentation = Map.get(assigns, :reply_presentation)

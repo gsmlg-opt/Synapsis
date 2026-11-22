@@ -279,9 +279,15 @@ defmodule SynapsisServer.SessionControllerTest do
 
       %{"data" => %{"id" => original_id}} = json_response(create_conn, 201)
 
+      original_permission = Store.get_value(original_id, "permission")
       conn = post(conn, "/api/sessions/#{original_id}/fork", %{})
       assert %{"data" => %{"id" => forked_id}} = json_response(conn, 201)
       assert forked_id != original_id
+
+      assert %{session_id: ^forked_id, tool_contract_version: 1} =
+               Store.get_value(forked_id, "permission")
+
+      assert Store.get_value(original_id, "permission") == original_permission
     end
   end
 
