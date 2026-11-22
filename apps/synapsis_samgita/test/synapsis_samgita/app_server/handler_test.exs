@@ -99,6 +99,25 @@ defmodule SynapsisSamgita.AppServer.HandlerTest do
     assert status["processing_status"] == "completed"
   end
 
+  test "legacy and device keys cannot collide even when a legacy id resembles the scoped format" do
+    device_id = Ecto.UUID.generate()
+    legacy_id = "device/" <> device_id <> "/evt-h1"
+    legacy_event = %{@event | "event_id" => legacy_id, "payload" => %{"sequence" => 10}}
+    assert {:ok, :new, _} = Inbox.record(legacy_event)
+    assert {:ok, :new, _} = Inbox.record(@event, device_id)
+    assert {:ok, :duplicate, _} = Inbox.record(legacy_event)
+    assert {:ok, :duplicate, _} = Inbox.record(@event, device_id)
+    assert {:ok, %{"event" => %{"payload" => %{"sequence" => 10}}}} = Inbox.get(legacy_id)
+
+    assert {:ok, %{"event" => %{"payload" => %{"sequence" => 1}}}} =
+             Inbox.get("evt-h1", device_id)
+
+    assert {:ok, _} = Inbox.mark_processed("evt-h1", "device done", "decision-device", device_id)
+    assert {:ok, %{"processing_status" => "pending"}} = Inbox.get(legacy_id)
+    assert {:ok, %{"processing_status" => "completed"}} = Inbox.get("evt-h1", device_id)
+    assert length(Inbox.list(10)) == 2
+  end
+
   defp call(server, method, params, command_id) do
     {response, server} = raw_call(server, method, params, command_id)
     assert Map.has_key?(response, "result"), inspect(response)

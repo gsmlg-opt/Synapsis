@@ -156,4 +156,61 @@ defmodule SynapsisSamgita.APITest do
     Gaoxy.Test.close(s)
     assert {:error, %{status: nil, code: "transport_error"}} = API.connect(c)
   end
+
+  test "task create and assign preserve durable command IDs, parent and version", %{
+    server: server,
+    conn: conn
+  } do
+    conn = %{conn | connection_id: "current-device-connection"}
+    create_id = Ecto.UUID.generate()
+    assign_id = Ecto.UUID.generate()
+
+    Gaoxy.Test.expect_once(server, "POST", "/api/agent/projects/p-1/tasks", fn request ->
+      assert Map.new(request.req_headers)["x-agent-connection"] == "current-device-connection"
+      {attrs, request} = body(request)
+
+      assert %{
+               "title" => "Child task",
+               "parent_task_id" => "parent-1",
+               "required_capabilities" => [],
+               "command_id" => ^create_id
+             } = attrs
+
+      json(request, 201, %{"data" => %{"id" => "child-1", "version" => 1}})
+    end)
+
+    Gaoxy.Test.expect_once(
+      server,
+      "POST",
+      "/api/agent/projects/p-1/tasks/child-1/assign",
+      fn request ->
+        {attrs, request} = body(request)
+
+        assert attrs == %{
+                 "expected_version" => 1,
+                 "assignee_agent_id" => "worker-1",
+                 "command_id" => assign_id
+               }
+
+        json(request, 200, %{
+          "data" => %{"id" => "child-1", "version" => 2, "assignee_agent_id" => "worker-1"}
+        })
+      end
+    )
+
+    assert {:ok, %{"id" => "child-1"}} =
+             API.create_task(
+               conn,
+               "p-1",
+               %{
+                 "title" => "Child task",
+                 "parent_task_id" => "parent-1",
+                 "required_capabilities" => []
+               },
+               command_id: create_id
+             )
+
+    assert {:ok, %{"assignee_agent_id" => "worker-1"}} =
+             API.assign_task(conn, "p-1", "child-1", 1, "worker-1", command_id: assign_id)
+  end
 end

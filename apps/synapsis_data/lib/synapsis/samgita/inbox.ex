@@ -28,17 +28,20 @@ defmodule Synapsis.Samgita.Inbox do
   @type entry :: %{String.t() => term()}
 
   @spec record(map()) :: {:ok, :new | :duplicate, entry} | {:error, :conflict | term}
-  def record(%{"event_id" => event_id, "delivery_attempt_id" => attempt_id} = event)
+  def record(event, device_id \\ nil)
+
+  def record(%{"event_id" => event_id, "delivery_attempt_id" => attempt_id} = event, device_id)
       when is_binary(event_id) and is_binary(attempt_id) do
     logical = Map.delete(event, "delivery_attempt_id")
 
-    cas(event_id, fn
+    cas(storage_id(device_id, event_id), fn
       nil ->
         now = now()
 
         {:ok, :new,
          %{
            "event" => logical,
+           "device_id" => device_id,
            "last_delivery_attempt_id" => attempt_id,
            "acceptance" => "durable",
            "processing_status" => "pending",
@@ -55,8 +58,8 @@ defmodule Synapsis.Samgita.Inbox do
   end
 
   @spec get(String.t()) :: {:ok, entry} | {:error, :not_found | term}
-  def get(event_id) do
-    case Concord.KV.get(key(event_id), engine: :turso, timeout: @timeout) do
+  def get(event_id, device_id \\ nil) do
+    case Concord.KV.get(key(storage_id(device_id, event_id)), engine: :turso, timeout: @timeout) do
       {:ok, entry} -> {:ok, entry}
       {:error, :not_found} -> {:error, :not_found}
       {:error, _} = error -> error
@@ -111,7 +114,7 @@ defmodule Synapsis.Samgita.Inbox do
 
   @spec mark_processed(String.t(), String.t(), String.t() | nil) ::
           {:ok, entry} | {:error, :not_found | term}
-  def mark_processed(event_id, note, decision_id \\ nil) when is_binary(note) do
+  def mark_processed(event_id, note, decision_id \\ nil, device_id \\ nil) when is_binary(note) do
     fields =
       %{"processing_status" => "completed", "note" => note}
       |> then(
@@ -121,7 +124,7 @@ defmodule Synapsis.Samgita.Inbox do
         )
       )
 
-    cas(event_id, fn
+    cas(storage_id(device_id, event_id), fn
       nil -> {:error, :not_found}
       entry -> {:ok, :updated, Map.merge(entry, fields)}
     end)
@@ -129,7 +132,13 @@ defmodule Synapsis.Samgita.Inbox do
   end
 
   @spec record_report(String.t(), map()) :: {:ok, entry} | {:error, :not_found | :conflict | term}
-  def record_report(event_id, %{"decision_id" => decision_id, "status" => status} = report) do
+  def record_report(event_id, report, device_id \\ nil)
+
+  def record_report(
+        event_id,
+        %{"decision_id" => decision_id, "status" => status} = report,
+        device_id
+      ) do
     fields = %{
       "decision_id" => decision_id,
       "processing_status" => status,
@@ -137,7 +146,7 @@ defmodule Synapsis.Samgita.Inbox do
       "result" => Map.get(report, "result")
     }
 
-    cas(event_id, fn
+    cas(storage_id(device_id, event_id), fn
       nil ->
         {:error, :not_found}
 
@@ -231,8 +240,22 @@ defmodule Synapsis.Samgita.Inbox do
     do:
       @index_prefix <> (received_at || "") <> "/" <> String.replace_prefix(entry_key, @prefix, "")
 
-  defp entry_key_of(index_key),
-    do: @prefix <> (index_key |> String.split("/") |> List.last())
+  defp entry_key_of(index_key) do
+    [_received_at, suffix] =
+      index_key |> String.replace_prefix(@index_prefix, "") |> String.split("/", parts: 2)
+
+    @prefix <> suffix
+  end
+
+  defp storage_id(nil, event_id), do: event_id
+  defp storage_id(device_id, event_id), do: {device_id, event_id}
+
+  defp key({device_id, event_id}),
+    do:
+      @prefix <>
+        "~device/" <>
+        Base.url_encode64(device_id, padding: false) <>
+        "/" <> Base.url_encode64(event_id, padding: false)
 
   defp key(event_id), do: @prefix <> Base.url_encode64(event_id, padding: false)
   defp now, do: DateTime.utc_now() |> DateTime.to_iso8601()

@@ -5,7 +5,7 @@ defmodule SynapsisSamgita do
   """
 
   require Logger
-  alias SynapsisSamgita.{API, Attempt, Connection, Events}
+  alias SynapsisSamgita.{API, Attempt, Connection, Events, Inbound}
 
   defdelegate connect, to: Connection
   defdelegate disconnect, to: Connection
@@ -14,29 +14,30 @@ defmodule SynapsisSamgita do
   def subscribe, do: Events.subscribe_status()
   def subscribe_attempts, do: Events.subscribe_attempts()
 
-  def list_attempts, do: Connection.attempts()
+  def list_attempts(device_id \\ nil),
+    do: Enum.filter(Connection.attempts(), &(Map.get(&1, :device_id) == device_id))
 
-  def list_projects do
-    with {:ok, conn} <- Connection.api_conn(), do: API.list_projects(conn)
+  def list_projects(device_id \\ nil) do
+    with {:ok, conn} <- api_conn(device_id), do: API.list_projects(conn)
   end
 
-  def project_context(project_id) do
-    with {:ok, conn} <- Connection.api_conn(), do: API.project_context(conn, project_id)
+  def project_context(project_id, device_id \\ nil) do
+    with {:ok, conn} <- api_conn(device_id), do: API.project_context(conn, project_id)
   end
 
-  def get_task(project_id, task_id) do
-    with {:ok, conn} <- Connection.api_conn(), do: API.get_task(conn, project_id, task_id)
+  def get_task(project_id, task_id, device_id \\ nil) do
+    with {:ok, conn} <- api_conn(device_id), do: API.get_task(conn, project_id, task_id)
   end
 
-  def list_tasks(project_id) do
-    with {:ok, conn} <- Connection.api_conn() do
-      API.list_tasks(conn, project_id, Connection.status().agent_id)
+  def list_tasks(project_id, device_id \\ nil) do
+    with {:ok, conn} <- api_conn(device_id) do
+      API.list_tasks(conn, project_id, agent_id(conn))
     end
   end
 
   @doc "Claim `task` on this connection's session for the project and supervise the attempt."
-  def claim(project_id, %{"id" => task_id, "version" => version}) do
-    with {:ok, conn} <- Connection.api_conn(),
+  def claim(project_id, %{"id" => task_id, "version" => version}, device_id \\ nil) do
+    with {:ok, conn} <- api_conn(device_id),
          {:ok, session_id} <- session_for(conn, project_id, task_id),
          {:ok, attempt} <- claim_on(conn, project_id, task_id, version, session_id) do
       start_attempt(conn, project_id, Map.put_new(attempt, "task_id", task_id))
@@ -44,12 +45,14 @@ defmodule SynapsisSamgita do
   end
 
   defp session_for(conn, project_id, task_id) do
-    case Connection.session(project_id) do
+    key = session_key(conn, project_id)
+
+    case Connection.session(key) do
       nil ->
         external_id = "synapsis-#{task_id}-#{Ecto.UUID.generate()}"
 
         with {:ok, %{"id" => id}} <- API.create_session(conn, project_id, external_id) do
-          Connection.put_session(project_id, id)
+          Connection.put_session(key, id)
           {:ok, id}
         end
 
@@ -62,7 +65,7 @@ defmodule SynapsisSamgita do
   defp claim_on(conn, project_id, task_id, version, session_id) do
     with {:error, %{code: code}} = error when code in ~w(not_found ownership_lost invalid) <-
            API.claim(conn, project_id, task_id, version, session_id) do
-      Connection.forget_session(project_id)
+      Connection.forget_session(session_key(conn, project_id))
       error
     end
   end
@@ -91,12 +94,13 @@ defmodule SynapsisSamgita do
   delivery so Samgita records it completed (Samgita does not re-poll accepted
   deliveries). The local completion stands even if the report fails.
   """
-  def mark_processed(event_id, note) do
+  def mark_processed(event_id, note, device_id \\ nil) do
     decision_id = Ecto.UUID.generate()
 
-    with {:ok, entry} <- Synapsis.Samgita.Inbox.mark_processed(event_id, note, decision_id) do
+    with {:ok, entry} <-
+           Synapsis.Samgita.Inbox.mark_processed(event_id, note, decision_id, device_id) do
       Events.broadcast_inbox_changed(event_id)
-      {:ok, %{entry: entry, reported: report_processed(entry, decision_id, note)}}
+      {:ok, %{entry: entry, reported: report_processed(entry, decision_id, note, device_id)}}
     end
   end
 
@@ -105,16 +109,17 @@ defmodule SynapsisSamgita do
   defp report_processed(
          %{"event" => %{"event_id" => event_id, "project_ref" => project_id}},
          decision_id,
-         note
+         note,
+         device_id
        )
        when is_binary(project_id) do
-    with {:ok, conn} <- Connection.api_conn(),
+    with {:ok, conn} <- api_conn(device_id),
          {:ok, deliveries} <- API.list_deliveries(conn, project_id),
          %{} = delivery <-
            Enum.find(
              deliveries,
              &(&1["event_id"] == event_id and &1["state"] in @reportable and
-                 &1["agent_id"] == Connection.status().agent_id)
+                 &1["agent_id"] == agent_id(conn))
            ),
          {:ok, _} <-
            API.report_delivery(
@@ -132,24 +137,42 @@ defmodule SynapsisSamgita do
     end
   end
 
-  defp report_processed(_entry, _decision_id, _note), do: {:error, "no_project"}
+  defp report_processed(_entry, _decision_id, _note, _device_id), do: {:error, "no_project"}
 
   # Samgita accepts only allowlisted text fields in a report result.
   defp report_result(""), do: nil
   defp report_result(note), do: %{"summary" => String.slice(note, 0, 2000)}
 
-  def attempt_start(attempt_id), do: with_attempt(attempt_id, &Attempt.start_work/1)
+  def attempt_start(attempt_id, device_id \\ nil),
+    do: with_attempt(attempt_id, device_id, &Attempt.start_work/1)
 
-  def attempt_progress(attempt_id, summary),
-    do: with_attempt(attempt_id, &Attempt.progress(&1, summary))
+  def attempt_progress(attempt_id, summary, device_id \\ nil),
+    do: with_attempt(attempt_id, device_id, &Attempt.progress(&1, summary))
 
-  def attempt_report(attempt_id, outcome, effects_resolved, result),
-    do: with_attempt(attempt_id, &Attempt.report(&1, outcome, effects_resolved, result))
+  def attempt_report(attempt_id, outcome, effects_resolved, result, device_id \\ nil),
+    do:
+      with_attempt(attempt_id, device_id, &Attempt.report(&1, outcome, effects_resolved, result))
 
-  defp with_attempt(attempt_id, fun) do
+  defp with_attempt(attempt_id, device_id, fun) do
     case Registry.lookup(SynapsisSamgita.AttemptRegistry, attempt_id) do
-      [{pid, _}] -> fun.(pid)
-      [] -> {:error, %{status: nil, code: "attempt_not_active", detail: nil}}
+      [{pid, _}] ->
+        if Map.get(Attempt.view(pid), :device_id) == device_id,
+          do: fun.(pid),
+          else: {:error, %{status: nil, code: "wrong_device", detail: nil}}
+
+      [] ->
+        {:error, %{status: nil, code: "attempt_not_active", detail: nil}}
     end
   end
+
+  def api_conn(nil), do: Connection.api_conn()
+  def api_conn(device_id), do: Inbound.api_conn(device_id)
+
+  defp agent_id(%{agent_id: id}), do: id
+  defp agent_id(_), do: Connection.status().agent_id
+
+  defp session_key(%{device_id: id, connection_id: connection}, project_id),
+    do: {id, connection, project_id}
+
+  defp session_key(_, project_id), do: project_id
 end

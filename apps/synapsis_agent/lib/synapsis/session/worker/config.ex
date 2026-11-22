@@ -9,6 +9,7 @@ defmodule Synapsis.Session.Worker.Config do
       session.agent
       |> Synapsis.Agent.Resolver.resolve(session.config)
       |> apply_daemon_run_tools(session)
+      |> apply_samgita_planning_tools(session)
 
     agent
     |> Map.put(:configured_default_model, configured_identity(agent))
@@ -64,6 +65,24 @@ defmodule Synapsis.Session.Worker.Config do
 
   defp nonblank(value, fallback) when value in [nil, ""], do: fallback
   defp nonblank(value, _fallback), do: value
+
+  # This dedicated coordinator session only returns a decomposition. The saved
+  # Agent's regular native/MCP selection remains unchanged for ordinary runs.
+  defp apply_samgita_planning_tools(agent, %Session{config: %{"samgita_coordination" => true}}) do
+    agent
+    |> Map.put(:tools, [])
+    |> Map.put(:resolved_tools, [])
+    |> Map.put(:tool_modules, %{})
+    |> Map.put(:toolset_id, nil)
+    |> Map.put(:toolset_ids, [])
+    |> Map.put(:tool_contract_version, 1)
+    |> Map.put(:deferred_tool_names, [])
+    |> Map.put(:mcp_selection, %{"default" => "none", "sources" => %{}})
+    |> Map.put(:mcp_resource_source_ids, [])
+    |> Map.delete(:tool_selection_error)
+  end
+
+  defp apply_samgita_planning_tools(agent, _session), do: agent
 
   defp apply_daemon_run_tools(agent, %Session{config: %{"daemon_run_id" => _}} = session) do
     Synapsis.Agent.Daemon.NativeSelection.overlay(agent, session)

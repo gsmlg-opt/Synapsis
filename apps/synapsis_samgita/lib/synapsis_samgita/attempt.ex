@@ -42,8 +42,11 @@ defmodule SynapsisSamgita.Attempt do
 
   defp name(opts) do
     case Keyword.get(opts, :registry, SynapsisSamgita.AttemptRegistry) do
-      nil -> nil
-      registry -> {:via, Registry, {registry, opts[:attempt]["id"]}}
+      nil ->
+        nil
+
+      registry ->
+        {:via, Registry, {registry, opts[:attempt]["id"], Map.get(opts[:conn], :device_id)}}
     end
   end
 
@@ -55,6 +58,7 @@ defmodule SynapsisSamgita.Attempt do
       conn: Keyword.fetch!(opts, :conn),
       project_id: Keyword.fetch!(opts, :project_id),
       id: attempt["id"],
+      device_id: Keyword.fetch!(opts, :conn) |> Map.get(:device_id),
       task_id: attempt["task_id"],
       state: attempt["state"],
       version: attempt["version"],
@@ -238,6 +242,7 @@ defmodule SynapsisSamgita.Attempt do
   defp view_of(state) do
     Map.take(state, [
       :id,
+      :device_id,
       :project_id,
       :task_id,
       :state,

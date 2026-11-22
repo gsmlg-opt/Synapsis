@@ -247,4 +247,42 @@ defmodule Synapsis.Session.Worker.ConfigTest do
     assert {:ok, persisted} = Synapsis.Session.Store.get_meta(session.id)
     assert Session.from_meta(persisted).model == "old"
   end
+
+  test "Samgita decomposition sessions have no tools while the saved Agent retains its selection" do
+    name = "samgita-planning-#{System.unique_integer([:positive])}"
+
+    {:ok, agent} =
+      Synapsis.AgentConfigs.create(%{
+        name: name,
+        tools: ["memory::search"],
+        tool_contract_version: 1,
+        config: %{"mcp_selection" => %{"default" => "all", "sources" => %{}}}
+      })
+
+    on_exit(fn -> Synapsis.AgentConfigs.delete(agent) end)
+
+    session = %Session{
+      id: Ecto.UUID.generate(),
+      agent: name,
+      provider: "anthropic",
+      model: "test-model",
+      config: %{}
+    }
+
+    ordinary = Config.resolve_agent(session)
+    assert ordinary.tools == ["memory::search"]
+    assert ordinary.mcp_selection == %{"default" => "all", "sources" => %{}}
+
+    planning =
+      Config.resolve_agent(%{
+        session
+        | config: %{"samgita_coordination" => true, "subagents" => false}
+      })
+
+    assert planning.tools == []
+    assert planning.deferred_tool_names == []
+    assert planning.mcp_selection == %{"default" => "none", "sources" => %{}}
+    assert planning.mcp_resource_source_ids == []
+    assert Synapsis.AgentConfigs.get(agent.id).tools == ["memory::search"]
+  end
 end

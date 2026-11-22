@@ -7,7 +7,13 @@ defmodule SynapsisSamgita.Application do
     children = [
       {Registry, keys: :unique, name: SynapsisSamgita.AttemptRegistry},
       {DynamicSupervisor, name: SynapsisSamgita.AttemptSupervisor, strategy: :one_for_one},
-      SynapsisSamgita.Connection
+      {Registry, keys: :unique, name: SynapsisSamgita.DeviceRegistry},
+      {DynamicSupervisor, name: SynapsisSamgita.DeviceSupervisor, strategy: :one_for_one},
+      {Task.Supervisor, name: SynapsisSamgita.TaskSupervisor},
+      SynapsisSamgita.Connection,
+      SynapsisSamgita.Execution,
+      SynapsisSamgita.Coordinator,
+      SynapsisSamgita.Inbound
     ]
 
     opts = [strategy: :one_for_one, name: SynapsisSamgita.Supervisor]

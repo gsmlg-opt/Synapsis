@@ -29,6 +29,9 @@ defmodule SynapsisSamgita.MixProject do
     [
       {:synapsis_core, in_umbrella: true},
       {:synapsis_data, in_umbrella: true},
+      {:synapsis_agent, in_umbrella: true},
+      {:synapsis_local_agents, in_umbrella: true},
+      {:http_web_socket, "~> 1.0.0-rc.5"},
       {:samgita_protocol, "~> 0.4.0"},
       {:samgita_protocol_websocket, "~> 0.4.0"},
       {:websock_adapter, "~> 0.15.1", hex: :gaoxy_websock_adapter, override: true},

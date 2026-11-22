@@ -3,8 +3,9 @@ defmodule SynapsisSamgita.AppServer.Handler do
   samgita_protocol host for `project_events.v1`.
 
   Events are committed to `Synapsis.Samgita.Inbox` before the result is returned,
-  so `acceptance` is always `"durable"`. Processing is operator-driven this phase:
-  entries stay `pending` until marked processed or reported.
+  so `acceptance` is always `"durable"`. Device-scoped execution and coordinator
+  journals consume assigned Tasks and responsible-manager project requests.
+  Other entries stay pending until the operator processes or reports them.
   """
   @behaviour SamgitaProtocol.Handler
 
@@ -22,10 +23,14 @@ defmodule SynapsisSamgita.AppServer.Handler do
 
   @impl true
   def handle_request("project/event.receive", %{"event" => event}, _context, state) do
-    case Inbox.record(event) do
+    device_id = device_id(state)
+
+    case Inbox.record(event, device_id) do
       {:ok, tag, entry} ->
+        :ok = enqueue(device_id, event)
         if tag == :new, do: Logger.info("samgita_event_received", event_id: event["event_id"])
         Events.broadcast_inbox_changed(event["event_id"])
+        if tag == :new and device_id, do: Events.broadcast_device_event(device_id, event)
 
         {:ok,
          %{
@@ -41,14 +46,14 @@ defmodule SynapsisSamgita.AppServer.Handler do
   end
 
   def handle_request("project/event.status", %{"event_id" => event_id}, _context, state) do
-    case Inbox.get(event_id) do
+    case Inbox.get(event_id, device_id(state)) do
       {:ok, entry} -> {:ok, status_result(event_id, entry), state}
       error -> {:error, to_error(error), state}
     end
   end
 
   def handle_request("project/event.report", %{"event_id" => event_id} = params, _context, state) do
-    case Inbox.record_report(event_id, params) do
+    case Inbox.record_report(event_id, params, device_id(state)) do
       {:ok, _entry} ->
         Events.broadcast_inbox_changed(event_id)
 
@@ -74,6 +79,16 @@ defmodule SynapsisSamgita.AppServer.Handler do
     |> put_present("decision_id", entry["decision_id"])
     |> put_present("decision", entry["decision"])
     |> put_present("result", entry["result"])
+  end
+
+  defp device_id(%{device_id: id}), do: id
+  defp device_id(_), do: nil
+
+  defp enqueue(nil, _event), do: :ok
+
+  defp enqueue(id, event) do
+    with :ok <- SynapsisSamgita.Execution.enqueue(id, event),
+         do: SynapsisSamgita.Coordinator.enqueue(id, event)
   end
 
   defp put_present(map, _key, nil), do: map

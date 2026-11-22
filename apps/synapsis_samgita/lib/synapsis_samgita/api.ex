@@ -54,6 +54,22 @@ defmodule SynapsisSamgita.API do
     write(conn, "/projects/#{project_id}/deliveries/#{delivery["id"]}/report", body, opts)
   end
 
+  @doc "Create logical project work. The coordinator supplies a durable command ID."
+  def create_task(conn, project_id, attrs, opts \\ []),
+    do: write(conn, "/projects/#{project_id}/tasks", attrs, opts)
+
+  def assign_task(conn, project_id, task_id, version, agent_id, opts \\ []),
+    do:
+      write(
+        conn,
+        "/projects/#{project_id}/tasks/#{task_id}/assign",
+        %{"expected_version" => version, "assignee_agent_id" => agent_id},
+        opts
+      )
+
+  def list_events(conn, project_id, after_sequence \\ 0),
+    do: read(conn, "/projects/#{project_id}/events", limit: 100, after: after_sequence)
+
   @spec create_session(conn, String.t(), String.t(), keyword) :: result
   def create_session(conn, project_id, external_id, opts \\ []),
     do: write(conn, "/projects/#{project_id}/sessions", %{"external_id" => external_id}, opts)
