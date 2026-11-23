@@ -3,7 +3,7 @@ Code.require_file("rel/filesystem_runtime.exs", __DIR__)
 defmodule Synapsis.MixProject do
   use Mix.Project
 
-  @version "0.3.1"
+  @version "0.4.0"
 
   def project do
     [
