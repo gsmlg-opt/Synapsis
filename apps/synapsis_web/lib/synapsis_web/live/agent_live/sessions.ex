@@ -47,7 +47,8 @@ defmodule SynapsisWeb.AgentLive.Sessions do
        delete_session: nil,
        show_sidebar: false,
        react_chat: nil,
-       react_chat_initial: nil
+       react_chat_initial: nil,
+       voice_facts: %{}
      )}
   end
 
@@ -90,6 +91,11 @@ defmodule SynapsisWeb.AgentLive.Sessions do
            show_sidebar: false,
            configured_models: Providers.configured_models(),
            messages: messages,
+           voice_facts:
+             if(Sessions.voice?(session),
+               do: Synapsis.Voice.History.recovery(session.id),
+               else: %{}
+             ),
            branch_prompt: nil,
            queued_inputs: PendingInputStore.queued_prompts(session.id),
            streaming_text: in_flight,
@@ -176,6 +182,14 @@ defmodule SynapsisWeb.AgentLive.Sessions do
       configured_models: Providers.configured_models()
     )
   end
+
+  defp agent_model_ready?(%{
+         kind: :voice,
+         provider: provider,
+         voice_model: model,
+         enabled: enabled
+       }),
+       do: enabled and is_binary(provider) and provider != "" and is_binary(model) and model != ""
 
   defp agent_model_ready?(%{provider: provider}) when provider in [nil, ""], do: false
 
@@ -975,6 +989,16 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
   end
 
+  def handle_info({:voice_history, id}, %{assigns: %{current_session: %{id: id}}} = socket) do
+    {:noreply,
+     assign(socket,
+       messages: Sessions.get_recent_messages(id, limit: 100),
+       voice_facts: Synapsis.Voice.History.recovery(id)
+     )}
+  end
+
+  def handle_info({:voice_history, _}, socket), do: {:noreply, socket}
+
   def handle_info({:provider_catalog_changed}, socket) do
     {:noreply, socket |> refresh_model_catalog() |> sync_chat()}
   end
@@ -1311,7 +1335,10 @@ defmodule SynapsisWeb.AgentLive.Sessions do
                 </div>
               </div>
             </div>
-            <div class="flex min-w-0 flex-wrap items-center gap-2">
+            <div
+              :if={!Sessions.voice?(@current_session)}
+              class="flex min-w-0 flex-wrap items-center gap-2"
+            >
               <.session_model_selector
                 session={@current_session}
                 models={@configured_models}
@@ -1347,7 +1374,16 @@ defmodule SynapsisWeb.AgentLive.Sessions do
             permissions={@runtime_permissions}
           />
 
+          <.voice_controls
+            :if={Sessions.voice?(@current_session)}
+            session={@current_session}
+            agent={@agent_config}
+            messages={@messages}
+            facts={@voice_facts}
+          />
+
           <.dm_react_chat
+            :if={!Sessions.voice?(@current_session)}
             id={@react_chat_initial.id}
             conversation_id={@react_chat_initial.conversation_id}
             messages={@react_chat_initial.messages}
@@ -1440,6 +1476,122 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   end
 
   # --- Helpers ---
+
+  attr :session, :map, required: true
+  attr :agent, :map, required: true
+  attr :messages, :list, required: true
+  attr :facts, :map, required: true
+
+  defp voice_controls(assigns) do
+    ~H"""
+    <section class="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4">
+      <div
+        id={"voice-controls-#{@session.id}"}
+        phx-hook="VoiceControls"
+        phx-update="ignore"
+        data-session={@session.id}
+        data-token={SynapsisServer.VoiceChannel.token(@session.id)}
+        data-mode={@agent[:audio_mode] || "browser"}
+        data-input={@agent[:audio_input_device]}
+        data-output={@agent[:audio_output_device]}
+        data-active="false"
+        data-ready="false"
+        class="group flex flex-col gap-3"
+      >
+        <div class="flex flex-wrap items-end gap-3">
+          <label class="flex min-w-28 flex-col gap-1 text-sm">
+            Audio endpoint
+            <select name="mode" class="select select-sm">
+              <option value="browser" selected={@agent[:audio_mode] != "host"}>Browser</option>
+              <option value="host" selected={@agent[:audio_mode] == "host"}>Host</option>
+            </select>
+          </label>
+          <label class="flex min-w-32 flex-col gap-1 text-sm">
+            Microphone
+            <select name="input_device" class="select select-sm max-w-64">
+              <option value="">System default</option>
+            </select>
+          </label>
+          <label class="flex min-w-32 flex-col gap-1 text-sm">
+            Speaker
+            <select name="output_device" class="select select-sm max-w-64">
+              <option value="">System default</option>
+            </select>
+          </label>
+          <.dm_btn type="button" size="sm" variant="ghost" data-action="devices">
+            Refresh devices
+          </.dm_btn>
+          <.dm_btn type="button" size="sm" variant="primary" data-action="start" disabled>
+            Start call
+          </.dm_btn>
+        </div>
+        <div class="hidden flex-wrap gap-2 group-data-[active=true]:flex">
+          <.dm_btn type="button" size="sm" variant="secondary" data-action="switch">
+            Switch devices
+          </.dm_btn>
+          <.dm_btn type="button" size="sm" variant="secondary" data-action="mute" aria-pressed="false">
+            Mute microphone
+          </.dm_btn>
+          <.dm_btn type="button" size="sm" variant="secondary" data-action="commit_audio" hidden>
+            Send audio
+          </.dm_btn>
+          <.dm_btn type="button" size="sm" variant="secondary" data-action="stop_playback">
+            Stop playback
+          </.dm_btn>
+          <.dm_btn type="button" size="sm" variant="error" data-action="stop">
+            Hang up
+          </.dm_btn>
+        </div>
+        <p data-voice-status role="status" class="text-sm text-on-surface-variant">
+          Connecting controls
+        </p>
+        <p data-voice-devices class="text-xs text-on-surface-variant">
+          Host uses the microphone and speakers on {to_string(:net_adm.localhost())}.
+        </p>
+        <p data-voice-playback class="text-xs text-on-surface-variant"></p>
+        <p data-voice-transcript class="text-sm text-on-surface-variant"></p>
+        <p data-voice-caption class="whitespace-pre-wrap text-sm"></p>
+        <ul data-voice-tasks class="space-y-2 text-sm"></ul>
+      </div>
+
+      <div :if={@messages != []} class="space-y-3 border-t border-outline-variant pt-3">
+        <div :for={message <- @messages} class="text-sm">
+          <p class="font-medium">{String.capitalize(message.role)}</p>
+          <%= for part <- message.parts do %>
+            <%= case part do %>
+              <% %Synapsis.Part.CommittedAudio{} = audio -> %>
+                <p class="whitespace-pre-wrap">
+                  {get_in(@facts, [
+                    :voice_transcript,
+                    audio.connection_generation <> ":" <> audio.item_id
+                  ]) || "Voice input"}
+                </p>
+              <% %Synapsis.Part.SpokenAudio{} = audio -> %>
+                <p class="whitespace-pre-wrap">{audio.text}</p>
+                <p class="text-xs text-on-surface-variant">{playback_label(@facts, audio)}</p>
+              <% %Synapsis.Part.Text{content: content} -> %>
+                <p class="whitespace-pre-wrap">{content}</p>
+              <% _ -> %>
+            <% end %>
+          <% end %>
+        </div>
+      </div>
+    </section>
+    """
+  end
+
+  defp playback_label(facts, audio) do
+    key =
+      audio.connection_generation <>
+        ":" <> audio.item_id <> ":" <> Integer.to_string(audio.content_index)
+
+    case get_in(facts, [:voice_playback, key]) do
+      %{interrupted: false} -> "Playback complete"
+      %{interrupted: true, cursor: ms} when is_integer(ms) -> "Playback stopped at #{ms} ms"
+      %{interrupted: true} -> "Playback stopped · position unavailable"
+      _ -> "Generated speech"
+    end
+  end
 
   defp start_chat(socket) do
     session_id = socket.assigns.current_session.id

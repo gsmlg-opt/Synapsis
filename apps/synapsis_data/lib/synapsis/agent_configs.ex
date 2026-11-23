@@ -262,6 +262,7 @@ defmodule Synapsis.AgentConfigs do
       |> Map.delete(:id)
       |> Map.new(fn
         {:config, config} -> {"config", Formata.JSON.encode!(config || %{})}
+        {:kind, kind} -> {"kind", Atom.to_string(kind)}
         {key, value} when key in [:tools, :toolset_ids] -> {Atom.to_string(key), value || []}
         {key, value} -> {Atom.to_string(key), value}
       end)
@@ -299,8 +300,16 @@ defmodule Synapsis.AgentConfigs do
       "label" => r.label,
       "icon" => r.icon,
       "description" => r.description,
+      "kind" => Atom.to_string(r.kind),
       "provider" => r.provider,
       "model" => r.model,
+      "voice_model" => r.voice_model,
+      "voice" => r.voice,
+      "voice_turn_detection" => r.voice_turn_detection,
+      "audio_mode" => r.audio_mode,
+      "audio_input_device" => r.audio_input_device,
+      "audio_output_device" => r.audio_output_device,
+      "voice_delegate" => r.voice_delegate,
       "system_prompt" => r.system_prompt,
       "tools" => r.tools || [],
       "tool_contract_version" => r.tool_contract_version,

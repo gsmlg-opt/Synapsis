@@ -34,7 +34,8 @@ defmodule SynapsisProvider.MixProject do
       {:backplane_ai_protocol, "~> 1.10.94"},
       {:gaoxy_test, "~> 0.16.6", only: :test},
       {:formata, "~> 0.3.5"},
-      {:http_fetch, "~> 1.0.0-rc.20"}
+      {:http_fetch, "~> 1.0.0-rc.20"},
+      {:http_web_socket, "~> 1.0.0-rc.20"}
     ]
   end
 end

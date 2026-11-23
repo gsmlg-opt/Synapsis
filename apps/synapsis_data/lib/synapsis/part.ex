@@ -77,6 +77,15 @@ defmodule Synapsis.Part do
     }
   end
 
+  defp load_part(%{"type" => "spoken_audio"} = part), do: Synapsis.Part.SpokenAudio.from_map(part)
+
+  defp load_part(%{"type" => "committed_audio"} = data) do
+    %Synapsis.Part.CommittedAudio{
+      item_id: data["item_id"],
+      connection_generation: data["connection_generation"]
+    }
+  end
+
   defp load_part(%{"type" => "audio"} = data) do
     %Synapsis.Part.Audio{
       descriptor: data["descriptor"],
@@ -166,6 +175,20 @@ defmodule Synapsis.Part do
       "name" => p.name
     }
   end
+
+  defp dump_part(%Synapsis.Part.SpokenAudio{} = part),
+    do:
+      part
+      |> Map.from_struct()
+      |> Map.new(fn {key, value} -> {to_string(key), value} end)
+      |> Map.put("type", "spoken_audio")
+
+  defp dump_part(%Synapsis.Part.CommittedAudio{} = part),
+    do: %{
+      "type" => "committed_audio",
+      "item_id" => part.item_id,
+      "connection_generation" => part.connection_generation
+    }
 
   defp dump_part(%Synapsis.Part.Audio{} = p) do
     %{

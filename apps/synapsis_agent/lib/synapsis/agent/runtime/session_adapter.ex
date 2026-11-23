@@ -51,6 +51,11 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
   def prompt(pid, context, content), do: GenServer.cast(pid, {:prompt, context, content})
   def input(pid, content), do: GenServer.cast(pid, {:input, content})
   def cancel(pid), do: GenServer.cast(pid, :cancel)
+  def voice_input(pid, content), do: GenServer.cast(pid, {:voice_input, content})
+
+  def cancel_child(pid, agent_id, run_id),
+    do: GenServer.call(pid, {:cancel_child, agent_id, run_id}, 3_000)
+
   def resolve(pid, id, decision), do: GenServer.cast(pid, {:resolve, id, decision})
 
   def answer_question(pid, id, response),
@@ -314,6 +319,19 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     end
   end
 
+  def handle_call({:cancel_child, agent_id, run_id}, _from, state) do
+    case state.child_sessions[agent_id] do
+      %{identity: %{run_id: ^run_id}, binding: binding, closing: false} when is_map(binding) ->
+        state = put_in(state.child_sessions[agent_id].closing, true)
+
+        {:reply, :ok,
+         job(state, {:voice_child_cancel, agent_id, run_id}, fn -> Session.close(binding) end)}
+
+      _ ->
+        {:reply, {:error, :task_not_running}, state}
+    end
+  end
+
   def handle_call({:child_options, request, run_id, parent}, from, state) do
     if state.closing or state.error do
       {:reply, failure(:resource_conflict, "Subagent admission is closed"), state}
@@ -371,8 +389,9 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
                     intent
                   ),
                 :ok <- RunInventory.retain(locator),
-                :ok <- GoalLifecycle.retain(attribution),
-                do: :ok
+                :ok <- GoalLifecycle.retain(attribution) do
+             {:context, select_child_configuration(request, parent_context)}
+           end
          end)}
       else
         _ ->
@@ -438,6 +457,15 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
          prepare(self_host(state), state, context, run_id, content)
        end)}
     end
+  end
+
+  def handle_cast({:voice_input, content}, %{root: root} = state) when is_pid(root) do
+    {:noreply, job(state, {:voice_input, content}, fn -> Conversation.prompt(root, content) end)}
+  end
+
+  def handle_cast({:voice_input, _}, state) do
+    notify(state, {:voice_input_result, {:error, :runtime_unavailable}})
+    {:noreply, state}
   end
 
   def handle_cast({:input, content}, state) do
@@ -554,6 +582,10 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
              do: status,
              else: Map.put(status, :cleanup, close_sessions(state))
          end)}
+
+      event.type == :turn_interrupted and is_pid(state.root) and state.context[:voice_session] ->
+        {:noreply,
+         job(state, :voice_interrupted_history, fn -> Conversation.status(state.root) end)}
 
       event.type == :interaction_requested ->
         {:noreply, remember_permission(state, {:root, state.root}, run_id, event)}
@@ -944,13 +976,40 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
   defp finish_job(:prepare_inputs, {:error, error}, state),
     do: finish_job(:prepare, {:error, error}, state)
 
-  defp finish_job({:child_prepare, from, request, run_id, parent, context, intent}, :ok, state) do
+  defp finish_job(:voice_interrupted_history, %{messages: messages}, state) do
+    notify(state, {:voice_turn_interrupted, messages})
+    {:noreply, state}
+  end
+
+  defp finish_job({:voice_input, _content}, result, state) do
+    notify(state, {:voice_input_result, result})
+    {:noreply, state}
+  end
+
+  defp finish_job({:voice_child_cancel, agent_id, run_id}, result, state) do
+    notify(state, {:voice_child_cancelled, agent_id, run_id, result})
+    {:noreply, state}
+  end
+
+  defp finish_job(
+         {:child_prepare, from, request, run_id, parent, _, intent},
+         {:context, result},
+         state
+       ) do
     {reply, state} =
       if state.closing or state.error do
         {failure(:resource_conflict, "Subagent admission is closed"), state}
       else
-        {:reply, reply, state} = prepared_child(request, run_id, parent, context, intent, state)
-        {reply, state}
+        case result do
+          {:ok, context} ->
+            {:reply, reply, state} =
+              prepared_child(request, run_id, parent, context, intent, state)
+
+            {reply, state}
+
+          {:error, _} = error ->
+            {error, state}
+        end
       end
 
     GenServer.reply(from, reply)
@@ -1275,7 +1334,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     locator = RunInventory.root(state.session_id, state.store, run_id, context.mode_provenance)
 
     with :ok <- RunInventory.retain(locator),
-         {:ok, history} <- ProviderMessages.from_host(context.messages),
+         {:ok, history} <- canonical_history(context),
          {history, content, image_payloads} = ProviderMessages.reference_images(history, content),
          {:ok, selection} <- Profiles.selection(context),
          {:ok, plan} <- Discovery.plan(context.agent, selection),
@@ -1380,8 +1439,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
   defp prepared_child(request, run_id, parent, parent_context, intent, state) do
     identity = parent.child
 
-    with :ok <- child_configuration(request, parent_context),
-         {:ok, messages} <- fork_messages(state, request, parent) do
+    with {:ok, messages} <- fork_messages(state, request, parent, parent_context) do
       case reserve_child_session(state, identity, run_id, parent.authority) do
         {:ok, binding, state} ->
           result =
@@ -1674,7 +1732,15 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
         GenServer.call(adapter, {:tool_context, identity, catalog}, 5_000)
       end
 
-      provider_context = Map.put(provider_context, :tool_context_resolver, tool_context_resolver)
+      provider_context =
+        provider_context
+        |> Map.put(:tool_context_resolver, tool_context_resolver)
+        |> Map.put(:voice_session, context[:voice_session])
+
+      provider =
+        if is_pid(context[:voice_session]) and not child?,
+          do: Synapsis.Voice.ProviderAdapter,
+          else: state.provider
 
       host_context = %{
         mode_provenance: context.mode_provenance,
@@ -1707,7 +1773,9 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
          incarnation: incarnation,
          store: Store,
          context: state.store,
-         provider: state.provider,
+         provider: provider,
+         provider_idle_timeout: if(provider == Synapsis.Voice.ProviderAdapter, do: 30_000),
+         provider_total_timeout: if(provider == Synapsis.Voice.ProviderAdapter, do: 180_000),
          provider_context: provider_context,
          host_context: host_context,
          hooks: Policy,
@@ -1722,7 +1790,8 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
          effect_timeout: 600_000,
          commit_timeout: 5_000,
          cleanup_timeout: if("synapsis::browser" in selection, do: 20_000, else: 5_000)
-       ], metadata}
+       ]
+       |> Enum.reject(fn {_key, value} -> is_nil(value) end), metadata}
     end
   end
 
@@ -2296,6 +2365,62 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     end
   end
 
+  defp canonical_history(%{native_history: history}), do: {:ok, history}
+  defp canonical_history(context), do: ProviderMessages.from_host(context.messages)
+
+  defp select_child_configuration(request, %{agent: %{kind: :voice}} = context) do
+    opts = request.options
+
+    target =
+      if opts["agent_type"] in [nil, "", "default"],
+        do: context.agent.voice_delegate,
+        else: opts["agent_type"]
+
+    with true <- opts["fork_turns"] in [nil, "none"],
+         true <- opts["model"] in [nil, ""] and opts["reasoning_effort"] in [nil, ""],
+         true <- is_binary(target) and target != "",
+         {:ok, %{kind: :standard} = agent} <-
+           Synapsis.Agent.Resolver.resolve_configured(target, context.session.config),
+         {:ok, agent} <- Synapsis.Agent.Tools.MCPSources.refresh(agent),
+         %{provider: provider, model: model} <-
+           Config.configured_default_model(target, context.session.config),
+         {:ok, provider_config} <- Synapsis.Providers.runtime_config(provider),
+         :ok <- Synapsis.Providers.ensure_model_runtime_available(provider_config, model),
+         workspace = Path.expand(agent[:workspace_path] || File.cwd!()),
+         {:ok, workspace} <- Synapsis.Session.Worker.Boot.ensure_workspace_path(workspace) do
+      agent = Map.merge(agent, %{provider: provider, model: model})
+
+      prompt =
+        Synapsis.Agent.ContextBuilder.build_system_prompt(:coding,
+          agent_config: agent,
+          agent_id: agent.name,
+          workspace_path: workspace,
+          memory_context: false
+        )
+
+      {:ok,
+       context
+       |> Map.merge(%{
+         agent: agent,
+         provider_config: provider_config,
+         project_path: workspace,
+         child_system_prompt: prompt,
+         cross_type_fork: true
+       })
+       |> Map.delete(:voice_session)}
+    else
+      _ ->
+        failure(
+          :unsupported_capability,
+          "Voice delegation requires an enabled saved standard Agent, its own model and fork_turns=none"
+        )
+    end
+  end
+
+  defp select_child_configuration(request, context) do
+    with :ok <- child_configuration(request, context), do: {:ok, context}
+  end
+
   defp child_configuration(request, context) do
     opts = request.options
     model = context.agent[:model] || context.session.model
@@ -2315,7 +2440,9 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     end
   end
 
-  defp fork_messages(state, request, parent) do
+  defp fork_messages(_state, _request, _parent, %{cross_type_fork: true}), do: {:ok, []}
+
+  defp fork_messages(state, request, parent, _context) do
     mode = request.options["fork_turns"] || "all"
 
     if mode == "none" do

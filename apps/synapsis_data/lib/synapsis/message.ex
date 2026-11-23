@@ -194,6 +194,16 @@ defmodule Synapsis.Message do
   defp encode_part(%Synapsis.Part.Audio{} = part),
     do: %{type: "audio", descriptor: part.descriptor, delivery: part.delivery, name: part.name}
 
+  defp encode_part(%Synapsis.Part.SpokenAudio{} = part),
+    do: part |> Map.from_struct() |> Map.put(:type, "spoken_audio")
+
+  defp encode_part(%Synapsis.Part.CommittedAudio{} = part),
+    do: %{
+      type: "committed_audio",
+      item_id: part.item_id,
+      connection_generation: part.connection_generation
+    }
+
   defp encode_part(other), do: %{type: "unknown", raw: inspect(other)}
 
   defp decode_turn(turn, session_id) do
@@ -267,6 +277,14 @@ defmodule Synapsis.Message do
       descriptor: fetch(p, :descriptor),
       delivery: fetch(p, :delivery),
       name: fetch(p, :name)
+    }
+
+  defp decode_part(%{type: "spoken_audio"} = part), do: Synapsis.Part.SpokenAudio.from_map(part)
+
+  defp decode_part(%{type: "committed_audio"} = part),
+    do: %Synapsis.Part.CommittedAudio{
+      item_id: fetch(part, :item_id),
+      connection_generation: fetch(part, :connection_generation)
     }
 
   defp decode_part(_other), do: %Synapsis.Part.Text{content: ""}

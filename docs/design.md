@@ -16,6 +16,7 @@ OpenClaw 只作为**产品形态参考**（常驻、记忆、技能、自动化�
 
 - Agent 执行统一使用 Backplane 系列（`backplane_agent_runtime`、`backplane_ai_protocol`、`backplane_mcp_protocol`、`backplane_skill_protocol`）。会话回合由 Backplane `Conversation` 执行。
 - OpenAI 兼容提供方（包括 Backplane）统一使用 Responses API。已有提供方沿用原地址和凭据，端点须支持 `POST /v1/responses`。Perplexity 网页搜索使用 Search API（`POST /search`）。
+- 实时语音 Agent 通过 Backplane Realtime 使用宿主或浏览器设备，执行仍由同一 Conversation 管理。参见 [实时语音 Agent](realtime-voice.md)。
 - Skills、MCP、Memory 与 Sigma 等其他 Backplane agent 共享相同的运行时代码和调用方式，Synapsis 不另造一套协议。
 - 存储沿用 ADR-006：会话进程是在途回合的读权威，Concord 保存每回合快照，配置为 TOML，记忆为文件。
 

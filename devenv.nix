@@ -8,6 +8,7 @@ in
   env.SYNAPSIS_FILESYSTEM_NODE = "${pkgs-stable.nodejs_24}/bin/node";
   # Use Vize's supported source selector on Linux with older host glibc.
   env.VIZE_EX_BUILD = lib.mkIf pkgs.stdenv.isLinux "1";
+  env.SYNAPSIS_PULSE_LIBRARY = lib.mkIf pkgs.stdenv.isLinux "${pkgs-stable.libpulseaudio}/lib/libpulse-simple.so.0";
 
   packages = with pkgs-stable; [
     git
@@ -18,6 +19,8 @@ in
     beam28Packages.elixir-ls
   ] ++ lib.optionals stdenv.isLinux [
     inotify-tools
+    python3
+    pulseaudio
     stdenv.cc
   ];
 

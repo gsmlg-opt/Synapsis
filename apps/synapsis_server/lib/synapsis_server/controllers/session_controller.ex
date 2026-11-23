@@ -342,6 +342,12 @@ defmodule SynapsisServer.SessionController do
     %{type: "video", descriptor: part.descriptor, delivery: part.delivery, name: part.name}
   end
 
+  defp serialize_part(%Synapsis.Part.CommittedAudio{} = part),
+    do: part |> Map.from_struct() |> Map.put(:type, "committed_audio")
+
+  defp serialize_part(%Synapsis.Part.SpokenAudio{} = part),
+    do: part |> Map.from_struct() |> Map.put(:type, "spoken_audio")
+
   defp serialize_part(%Synapsis.Part.Audio{} = part) do
     %{type: "audio", descriptor: part.descriptor, delivery: part.delivery, name: part.name}
   end

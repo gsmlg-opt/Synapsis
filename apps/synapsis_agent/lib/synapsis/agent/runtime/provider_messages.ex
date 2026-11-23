@@ -150,6 +150,13 @@ defmodule Synapsis.Agent.Runtime.ProviderMessages do
 
   defp host_part(block, _image_payloads), do: host_part(block)
 
+  defp host_part(%{type: :spoken_audio} = block),
+    do: {:ok, Synapsis.Part.SpokenAudio.from_map(block)}
+
+  defp host_part(%{type: :committed_audio, item_id: item, connection_generation: generation})
+       when is_binary(item) and is_binary(generation),
+       do: {:ok, %Synapsis.Part.CommittedAudio{item_id: item, connection_generation: generation}}
+
   defp host_part(%{type: :text, text: text}) when is_binary(text),
     do: {:ok, %Text{content: text}}
 
@@ -226,6 +233,18 @@ defmodule Synapsis.Agent.Runtime.ProviderMessages do
     do: {:ok, %{type: :text, text: DeliveredImage.summary(part)}}
 
   defp runtime_part(%Video{} = part), do: {:ok, %{type: :text, text: Video.summary(part)}}
+
+  defp runtime_part(%Synapsis.Part.SpokenAudio{} = part),
+    do: {:ok, part |> Map.from_struct() |> Map.put(:type, :spoken_audio)}
+
+  defp runtime_part(%Synapsis.Part.CommittedAudio{} = part),
+    do:
+      {:ok,
+       %{
+         type: :committed_audio,
+         item_id: part.item_id,
+         connection_generation: part.connection_generation
+       }}
 
   defp runtime_part(%Audio{} = part), do: {:ok, %{type: :text, text: Audio.summary(part)}}
 

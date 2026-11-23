@@ -31,6 +31,9 @@ defmodule Synapsis.Session.Worker.Boot do
 
   defp reset_transient_status(session), do: session
 
+  defp boot(%Session{config: %{"agent_kind" => "voice"}}, _session_id),
+    do: {:stop, :voice_session_required}
+
   defp boot(session, session_id) do
     Process.flag(:trap_exit, true)
 

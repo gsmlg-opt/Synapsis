@@ -41,9 +41,17 @@ defmodule Synapsis.Agent.Resolver do
           raw |> from_db() |> apply_project_agent_config(project_config) |> snapshot_skills()
 
         cond do
-          not agent.enabled -> {:error, :agent_unavailable}
-          Map.has_key?(agent, :skill_discovery_error) -> {:error, agent.skill_discovery_error}
-          true -> {:ok, agent}
+          not agent.enabled ->
+            {:error, :agent_unavailable}
+
+          agent.kind == :voice and not valid_saved?(raw) ->
+            {:error, :invalid_voice_configuration}
+
+          Map.has_key?(agent, :skill_discovery_error) ->
+            {:error, agent.skill_discovery_error}
+
+          true ->
+            {:ok, agent}
         end
 
       nil ->
@@ -56,9 +64,7 @@ defmodule Synapsis.Agent.Resolver do
     AgentConfigs.list_enabled()
   end
 
-  defp from_db(raw) do
-    # Keep names, links and the uncast version from one source snapshot. Ecto
-    # accepts values such as "1" that are not explicit native provenance.
+  defp saved_changeset(raw) do
     config =
       case raw["config"] do
         json when is_binary(json) ->
@@ -71,10 +77,19 @@ defmodule Synapsis.Agent.Resolver do
           config
       end
 
-    ac =
-      %AgentConfig{}
-      |> AgentConfig.changeset(Map.put(raw, "config", config))
-      |> Ecto.Changeset.apply_changes()
+    {AgentConfig.changeset(%AgentConfig{}, Map.put(raw, "config", config)), config}
+  end
+
+  defp valid_saved?(raw) do
+    {changeset, _} = saved_changeset(raw)
+    changeset.valid?
+  end
+
+  defp from_db(raw) do
+    # Keep names, links and the uncast version from one source snapshot. Ecto
+    # accepts values such as "1" that are not explicit native provenance.
+    {changeset, config} = saved_changeset(raw)
+    ac = Ecto.Changeset.apply_changes(changeset)
 
     selection = %{
       tools: raw["tools"] || [],
@@ -96,6 +111,14 @@ defmodule Synapsis.Agent.Resolver do
       label: ac.label || String.capitalize(ac.name),
       icon: ac.icon || "robot-outline",
       description: ac.description || "",
+      kind: ac.kind,
+      voice_model: ac.voice_model,
+      voice: ac.voice,
+      voice_turn_detection: ac.voice_turn_detection,
+      audio_mode: ac.audio_mode,
+      audio_input_device: ac.audio_input_device,
+      audio_output_device: ac.audio_output_device,
+      voice_delegate: ac.voice_delegate,
       model: ac.model,
       provider: ac.provider,
       system_prompt: ac.system_prompt || default_system_prompt(),
@@ -135,6 +158,7 @@ defmodule Synapsis.Agent.Resolver do
       label: attrs.label,
       icon: attrs.icon,
       description: attrs.description,
+      kind: :standard,
       model: Map.get(attrs, :model),
       provider: Map.get(attrs, :provider),
       system_prompt: attrs.system_prompt,

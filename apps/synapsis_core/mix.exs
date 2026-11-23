@@ -33,7 +33,7 @@ defmodule SynapsisCore.MixProject do
     [
       {:synapsis_data, in_umbrella: true},
       {:synapsis_provider, in_umbrella: true},
-      {:backplane_agent_runtime, "~> 1.10.94"},
+      {:backplane_agent_runtime, "~> 1.10.95"},
       {:backplane_skill_protocol, "~> 1.10.94"},
       {:phoenix_pubsub, "~> 2.4.1"},
       {:telemetry_metrics, "~> 1.0"},

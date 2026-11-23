@@ -3,6 +3,7 @@ defmodule SynapsisServer.UserSocket do
 
   channel "agent:daemon", SynapsisServer.AgentDaemonChannel
   channel "session:*", SynapsisServer.SessionChannel
+  channel "voice:*", SynapsisServer.VoiceChannel
 
   @impl true
   def connect(_params, socket, _connect_info) do

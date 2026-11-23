@@ -3,7 +3,8 @@ defmodule Synapsis.Sessions do
 
   # Worker lives in synapsis_agent (compiled after synapsis_core)
   # DebugStore lives in synapsis_server (compiled after synapsis_core)
-  @compile {:no_warn_undefined, [Synapsis.Session.Worker, SynapsisServer.DebugStore]}
+  @compile {:no_warn_undefined,
+            [Synapsis.Session.Worker, Synapsis.VoiceSession, SynapsisServer.DebugStore]}
 
   # ADR-006 C4: sessions persist in the node-local Concord store (Session.Store),
   # not Postgres. `meta` holds the session fields; messages are durable turns.
@@ -18,9 +19,20 @@ defmodule Synapsis.Sessions do
     agent = opts[:agent] || agent_name || "main"
     agent_config = Synapsis.Agent.Resolver.resolve(agent)
     config = opts[:config] || %{}
-    provider = opts[:provider] || agent_config.provider || default_provider(config, agent)
-    model = opts[:model] || agent_config.model || default_model(config, provider, agent)
-    config = model_selection_config(config, provider, model)
+    voice? = agent_config.kind == :voice
+
+    {provider, model, config} =
+      if voice? do
+        {agent_config.provider, agent_config.voice_model,
+         config |> Map.drop(["provider_id", "model_id"]) |> Map.put("agent_kind", "voice")}
+      else
+        provider = opts[:provider] || agent_config.provider || default_provider(config, agent)
+        model = opts[:model] || agent_config.model || default_model(config, provider, agent)
+
+        {provider, model,
+         model_selection_config(Map.delete(config, "agent_kind"), provider, model)}
+      end
+
     config = if opts[:interactive] == true, do: Map.put(config, "interactive", true), else: config
 
     attrs = %{
@@ -35,7 +47,8 @@ defmodule Synapsis.Sessions do
     now = DateTime.utc_now()
     changeset = Session.changeset(%Session{}, attrs)
 
-    if changeset.valid? and creation_model_available?(provider, model) do
+    if changeset.valid? and
+         if(voice?, do: agent_config.enabled, else: creation_model_available?(provider, model)) do
       session =
         changeset
         |> Ecto.Changeset.apply_changes()
@@ -150,6 +163,7 @@ defmodule Synapsis.Sessions do
       end
 
     if match?({:ok, _}, result) do
+      Synapsis.VoiceSession.delete(session_id)
       Synapsis.Session.DynamicSupervisor.stop_session(session_id)
       clear_debug_entries(session_id)
     end
@@ -197,7 +211,7 @@ defmodule Synapsis.Sessions do
       protect_operation(fn ->
         with :ok <- Store.put_meta(session.id, Session.to_meta(session)),
              {:ok, _permission} <- apply_agent_permission(session, agent),
-             {:ok, _pid} <- session_runtime.start_session(session.id),
+             :ok <- start_session_runtime(session, session_runtime),
              {:ok, effective_session} <- get(session.id) do
           {:ok, effective_session}
         end
@@ -215,6 +229,20 @@ defmodule Synapsis.Sessions do
           {:error, cleanup_reason} ->
             {:error, {:session_create_failed, reason, {:cleanup_failed, cleanup_reason}}}
         end
+    end
+  end
+
+  def voice?(%Session{config: %{"agent_kind" => "voice"}}), do: true
+  def voice?(_), do: false
+
+  defp start_session_runtime(session, runtime) do
+    if voice?(session) do
+      :ok
+    else
+      case runtime.start_session(session.id) do
+        {:ok, _pid} -> :ok
+        error -> error
+      end
     end
   end
 
@@ -301,8 +329,8 @@ defmodule Synapsis.Sessions do
   def send_message(session_id, content, image_parts)
       when is_binary(content) and is_list(image_parts) do
     if Enum.all?(image_parts, &match?(%Synapsis.Part.Image{}, &1)) do
-      ensure_session_running(session_id)
-      Synapsis.Session.Worker.send_message(session_id, content, image_parts)
+      with :ok <- ensure_session_running(session_id),
+           do: Synapsis.Session.Worker.send_message(session_id, content, image_parts)
     else
       {:error, :invalid_image_parts}
     end
@@ -314,8 +342,8 @@ defmodule Synapsis.Sessions do
   def send_message(session_id, content, image_parts, input_context)
       when is_binary(content) and is_list(image_parts) do
     with :ok <- Synapsis.Session.InputContext.validate(input_context, session_id),
-         true <- Enum.all?(image_parts, &match?(%Synapsis.Part.Image{}, &1)) do
-      ensure_session_running(session_id)
+         true <- Enum.all?(image_parts, &match?(%Synapsis.Part.Image{}, &1)),
+         :ok <- ensure_session_running(session_id) do
       Synapsis.Session.Worker.send_message(session_id, content, image_parts, input_context)
     else
       false -> {:error, :invalid_image_parts}
@@ -548,11 +576,23 @@ defmodule Synapsis.Sessions do
         :ok
 
       [] ->
-        case Synapsis.Session.DynamicSupervisor.start_session(session_id) do
-          {:ok, _pid} -> :ok
-          {:error, {:already_started, _}} -> :ok
-          error -> error
+        case Store.get_meta(session_id) do
+          {:ok, meta} ->
+            if voice?(Session.from_meta(meta)),
+              do: {:error, :voice_session_required},
+              else: start_worker(session_id)
+
+          error ->
+            error
         end
+    end
+  end
+
+  defp start_worker(session_id) do
+    case Synapsis.Session.DynamicSupervisor.start_session(session_id) do
+      {:ok, _pid} -> :ok
+      {:error, {:already_started, _}} -> :ok
+      error -> error
     end
   end
 

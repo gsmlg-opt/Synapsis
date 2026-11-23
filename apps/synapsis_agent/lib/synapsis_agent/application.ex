@@ -11,6 +11,8 @@ defmodule SynapsisAgent.Application do
       {Registry, keys: :unique, name: Synapsis.Session.TaskSupervisorRegistry},
       {Registry, keys: :unique, name: Synapsis.Agent.Registry},
       Synapsis.Session.DynamicSupervisor,
+      {Registry, keys: :unique, name: Synapsis.Voice.Registry},
+      {DynamicSupervisor, strategy: :one_for_one, name: Synapsis.Voice.Supervisor},
       Synapsis.Agent.Supervisor
     ]
 

@@ -7,7 +7,7 @@
     "apps/synapsis_web"
   ],
   "scripts": {
-    "test:hooks": "node --experimental-strip-types --test packages/hooks/test/*.test.ts",
+    "test:hooks": "node --experimental-strip-types --test packages/hooks/test/*.test.ts apps/synapsis_web/test/js/voice/*.test.ts",
     "typecheck": "tsc --noEmit -p apps/synapsis_web/tsconfig.json && tsc --noEmit -p packages/hooks/tsconfig.json"
   },
   "devDependencies": {

@@ -1,6 +1,7 @@
 import 'phoenix_html'
 import { Socket } from 'phoenix'
 import { LiveSocket } from 'phoenix_live_view'
+import { VoiceControls } from './voice/hook'
 import '@duskmoon-dev/el-alert/register'
 import '@duskmoon-dev/el-chat/register'
 import '@duskmoon-dev/el-markdown/register'
@@ -127,6 +128,7 @@ const liveSocket = new LiveSocket('/live', Socket, {
     ...DuskmoonHooks,
     WebComponentHook,
     ThemeSwitcher,
+    VoiceControls,
     ...Hooks,
     DuskmoonReactForm: createSynapsisReactFormHook(DuskmoonReactForm),
     SynapsisReactChat: createSynapsisReactChat(createDuskmoonReactChat)

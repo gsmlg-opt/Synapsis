@@ -8,6 +8,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
   alias Synapsis.{AgentConfig, AgentConfigs, AgentSkills, Providers, Skills, Toolsets}
   alias Synapsis.Agent.Tools.Web.{Fetch, Search}
   alias SynapsisWeb.AgentLive.BrowserSettings
+  alias Synapsis.Provider.Realtime.Catalog, as: RealtimeCatalog
 
   @config_tabs ~w(overview workspace runtime tools skills prompt management)
   @wizard_steps ~w(overview workspace runtime tools skills prompt)
@@ -29,6 +30,9 @@ defmodule SynapsisWeb.AgentLive.Agents do
        skills: [],
        toolsets: [],
        providers: [],
+       voice_providers: [],
+       realtime_models: [],
+       realtime_catalog_status: :not_loaded,
        active_config_tab: "overview",
        wizard_mode: false,
        form_revision: 0,
@@ -106,7 +110,33 @@ defmodule SynapsisWeb.AgentLive.Agents do
     attrs = web_fetch_form_attrs(attrs, socket)
     agent = preview_agent(socket.assigns.agent, attrs, socket.assigns.providers)
     agent = mcp_preview(agent, params)
+
+    socket =
+      if agent.provider != socket.assigns.agent.provider do
+        socket
+        |> cancel_async(:realtime_catalog)
+        |> assign(realtime_models: [], realtime_catalog_status: :not_loaded)
+      else
+        socket
+      end
+
     {:noreply, socket |> assign(agent: agent) |> assign_mcp_catalog()}
+  end
+
+  def handle_event("refresh_realtime_models", _params, socket) do
+    provider = socket.assigns.agent.provider
+
+    {:noreply,
+     socket
+     |> assign(realtime_catalog_status: :loading)
+     |> start_async(:realtime_catalog, fn ->
+       result =
+         with {:ok, config} <- Synapsis.Provider.Registry.get(provider) do
+           RealtimeCatalog.list(config)
+         end
+
+       {provider, result}
+     end)}
   end
 
   def handle_event("refresh_mcp_tools", _params, socket),
@@ -180,6 +210,26 @@ defmodule SynapsisWeb.AgentLive.Agents do
   end
 
   @impl true
+  def handle_async(:realtime_catalog, {:ok, {provider, result}}, socket) do
+    if socket.assigns.agent && socket.assigns.agent.provider == provider do
+      case result do
+        {:ok, models} ->
+          {:noreply, assign(socket, realtime_models: models, realtime_catalog_status: :loaded)}
+
+        {:error, reason} ->
+          {:noreply,
+           assign(socket, realtime_models: [], realtime_catalog_status: {:error, reason})}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_async(:realtime_catalog, {:exit, _reason}, socket) do
+    {:noreply,
+     assign(socket, realtime_models: [], realtime_catalog_status: {:error, :unavailable})}
+  end
+
   def handle_async(:agent_mcp_catalog, {:ok, result}, socket) do
     failures =
       if is_map(result),
@@ -239,6 +289,9 @@ defmodule SynapsisWeb.AgentLive.Agents do
           toolsets={@toolsets}
           skills={@skills}
           providers={@providers}
+          voice_providers={@voice_providers}
+          realtime_models={@realtime_models}
+          realtime_catalog_status={@realtime_catalog_status}
           mcp_sources={@mcp_sources}
           mcp_catalog={@mcp_catalog}
           mcp_loading={@mcp_loading}
@@ -268,6 +321,9 @@ defmodule SynapsisWeb.AgentLive.Agents do
                   </h2>
                   <.dm_badge :if={agent.is_default} variant="primary" size="sm">default</.dm_badge>
                   <.dm_badge :if={!agent.enabled} variant="ghost" size="sm">disabled</.dm_badge>
+                  <.dm_badge :if={agent.kind == :voice} variant="secondary" size="sm">
+                    Voice Agent
+                  </.dm_badge>
                 </div>
                 <p class="text-xs text-on-surface-variant mt-1">{agent.description}</p>
                 <div class="flex flex-wrap gap-2 text-xs text-on-surface-variant mt-3">
@@ -302,6 +358,9 @@ defmodule SynapsisWeb.AgentLive.Agents do
   attr :toolsets, :list, required: true
   attr :skills, :list, required: true
   attr :providers, :list, required: true
+  attr :voice_providers, :list, required: true
+  attr :realtime_models, :list, required: true
+  attr :realtime_catalog_status, :any, required: true
   attr :mcp_sources, :list, required: true
   attr :mcp_catalog, :list, required: true
   attr :mcp_loading, :boolean, required: true
@@ -346,7 +405,8 @@ defmodule SynapsisWeb.AgentLive.Agents do
       assigns.wizard_mode,
       Enum.map(assigns.toolsets, & &1.id),
       Enum.map(assigns.skills, & &1.id),
-      assigns.form_revision
+      assigns.form_revision,
+      assigns.agent.kind
     ]
 
     assigns =
@@ -397,6 +457,9 @@ defmodule SynapsisWeb.AgentLive.Agents do
               </span>
               <.dm_badge :if={@agent.is_default} variant="primary" size="sm">default</.dm_badge>
               <.dm_badge :if={!@agent.enabled} variant="ghost" size="sm">disabled</.dm_badge>
+              <.dm_badge :if={@agent.kind == :voice} variant="secondary" size="sm">
+                Voice Agent
+              </.dm_badge>
             </div>
             <p class="text-sm text-on-surface-variant mt-1">
               Agent workspace for memory files, notes, tools, skills, and runtime policy.
@@ -533,7 +596,13 @@ defmodule SynapsisWeb.AgentLive.Agents do
                 <.readonly_field :if={@action == :config} label="Name" value={@agent.name} />
                 <.dm_react_field type="text" name="agent[label]" label="Label" />
                 <.dm_react_field type="text" name="agent[icon]" label="Icon" />
-                <div class="form-group">
+                <.dm_select
+                  name="agent[kind]"
+                  label="Agent type"
+                  options={[{"standard", "Standard Agent"}, {"voice", "Voice Agent"}]}
+                  value={Atom.to_string(@agent.kind)}
+                />
+                <div :if={@agent.kind == :standard} class="form-group">
                   <label for="agent-provider-model-picker-provider" class="form-label">
                     <span>Default model</span>
                   </label>
@@ -569,7 +638,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
                     />
                   </div>
                 </div>
-                <div class="form-group">
+                <div :if={@agent.kind == :standard} class="form-group">
                   <label for="agent-backup-model-picker-provider" class="form-label">
                     <span>Backup model</span>
                   </label>
@@ -596,6 +665,89 @@ defmodule SynapsisWeb.AgentLive.Agents do
                       value={fallback_model_state_value(@agent)}
                     />
                   </div>
+                </div>
+                <div :if={@agent.kind == :voice} data-voice-settings class="md:col-span-2 space-y-4">
+                  <.dm_select
+                    name="agent[provider]"
+                    label="Backplane connection"
+                    options={voice_provider_options(@voice_providers, @agent.provider)}
+                    value={@agent.provider || ""}
+                  />
+                  <.dm_input
+                    name="agent[voice_model]"
+                    value={@agent.voice_model}
+                    label="Realtime model"
+                    placeholder="provider/model"
+                    list="agent-realtime-models"
+                    required
+                  />
+                  <datalist id="agent-realtime-models">
+                    <option :for={model <- @realtime_models} value={model.id}>{model.name}</option>
+                  </datalist>
+                  <div class="flex flex-wrap items-center gap-3">
+                    <.dm_btn
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      phx-click="refresh_realtime_models"
+                      disabled={@realtime_catalog_status == :loading}
+                    >
+                      Refresh Realtime models
+                    </.dm_btn>
+                    <p class="text-xs text-on-surface-variant" role="status">
+                      {realtime_catalog_message(@realtime_catalog_status, @realtime_models)}
+                    </p>
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <.dm_select
+                      name="agent[voice]"
+                      label="Voice"
+                      value={@agent.voice}
+                      options={Enum.map(AgentConfig.valid_voices(), &{&1, String.capitalize(&1)})}
+                    />
+                    <.dm_select
+                      name="agent[voice_turn_detection]"
+                      label="Turn detection"
+                      value={@agent.voice_turn_detection}
+                      options={[
+                        {"server_vad", "Voice activity"},
+                        {"semantic_vad", "Semantic"},
+                        {"manual", "Manual"}
+                      ]}
+                    />
+                    <.dm_select
+                      name="agent[audio_mode]"
+                      label="Audio endpoint"
+                      value={@agent.audio_mode}
+                      options={[{"browser", "This browser"}, {"host", "Synapsis host"}]}
+                    />
+                  </div>
+                  <p class="text-xs text-on-surface-variant">
+                    Host devices belong to the machine running Synapsis. Device availability is checked when a call starts.
+                  </p>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <.dm_input
+                      name="agent[audio_input_device]"
+                      value={@agent.audio_input_device}
+                      label="Preferred input device ID"
+                      placeholder="System default"
+                    />
+                    <.dm_input
+                      name="agent[audio_output_device]"
+                      value={@agent.audio_output_device}
+                      label="Preferred output device ID"
+                      placeholder="System default"
+                    />
+                  </div>
+                  <.dm_select
+                    name="agent[voice_delegate]"
+                    value={@agent.voice_delegate || ""}
+                    label="Default task Agent"
+                    options={voice_delegate_options(@agents, @agent.voice_delegate)}
+                  />
+                  <p class="text-xs text-on-surface-variant">
+                    Start a call from a session to activate audio.
+                  </p>
                 </div>
                 <.dm_textarea
                   name="agent[description]"
@@ -1193,6 +1345,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
       toolsets: Toolsets.list(),
       skills: Skills.list(),
       providers: load_providers(),
+      voice_providers: voice_providers(),
       mcp_sources: Synapsis.MCPConfigs.list()
     )
   end
@@ -1255,8 +1408,16 @@ defmodule SynapsisWeb.AgentLive.Agents do
         :label,
         :icon,
         :description,
+        :kind,
         :provider,
         :model,
+        :voice_model,
+        :voice,
+        :voice_turn_detection,
+        :audio_mode,
+        :audio_input_device,
+        :audio_output_device,
+        :voice_delegate,
         :fallback_models,
         :reasoning_effort,
         :model_tier,
@@ -1266,6 +1427,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
         :system_prompt
       ])
       |> Map.new(fn {key, value} -> {Atom.to_string(key), value} end)
+      |> Map.put("kind", Atom.to_string(agent.kind))
       |> Map.put("reasoning_effort", agent.reasoning_effort || "medium")
       |> Map.put("model_tier", agent.model_tier || "default")
       |> Map.put("max_tokens", agent.max_tokens || 8192)
@@ -1343,7 +1505,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
     {workspace_path, attrs} = Map.pop(attrs, "workspace_path")
 
     attrs
-    |> merge_provider_model_state()
+    |> merge_agent_model_state()
     |> merge_fallback_model_state()
     |> Map.delete("provider_model_state")
     |> Map.delete("fallback_model_state")
@@ -1366,7 +1528,8 @@ defmodule SynapsisWeb.AgentLive.Agents do
     model = normalize_form_value(Map.get(attrs, "model", agent.model))
 
     model =
-      if model_supported?(model, models) do
+      if preview_kind(Map.get(attrs, "kind"), agent.kind) == :voice or
+           model_supported?(model, models) do
         model
       else
         nil
@@ -1375,11 +1538,19 @@ defmodule SynapsisWeb.AgentLive.Agents do
     %{
       agent
       | name: Map.get(attrs, "name", agent.name),
+        kind: preview_kind(Map.get(attrs, "kind"), agent.kind),
         label: Map.get(attrs, "label", agent.label),
         icon: Map.get(attrs, "icon", agent.icon),
         description: Map.get(attrs, "description", agent.description),
         provider: provider,
         model: model,
+        voice_model: Map.get(attrs, "voice_model", agent.voice_model),
+        voice: Map.get(attrs, "voice", agent.voice),
+        voice_turn_detection: Map.get(attrs, "voice_turn_detection", agent.voice_turn_detection),
+        audio_mode: Map.get(attrs, "audio_mode", agent.audio_mode),
+        audio_input_device: Map.get(attrs, "audio_input_device", agent.audio_input_device),
+        audio_output_device: Map.get(attrs, "audio_output_device", agent.audio_output_device),
+        voice_delegate: Map.get(attrs, "voice_delegate", agent.voice_delegate),
         fallback_models: Map.get(attrs, "fallback_models", agent.fallback_models),
         reasoning_effort: Map.get(attrs, "reasoning_effort", agent.reasoning_effort),
         model_tier: Map.get(attrs, "model_tier", agent.model_tier),
@@ -1395,6 +1566,13 @@ defmodule SynapsisWeb.AgentLive.Agents do
   end
 
   defp preview_agent(agent, _attrs, _providers), do: agent
+
+  defp preview_kind("voice", _), do: :voice
+  defp preview_kind("standard", _), do: :standard
+  defp preview_kind(_, current), do: current
+
+  defp merge_agent_model_state(%{"kind" => "voice"} = attrs), do: attrs
+  defp merge_agent_model_state(attrs), do: merge_provider_model_state(attrs)
 
   defp normalize_form_value(value) when value in [nil, ""], do: nil
   defp normalize_form_value(value), do: value
@@ -1799,6 +1977,62 @@ defmodule SynapsisWeb.AgentLive.Agents do
     |> Enum.sort_by(& &1.name)
   end
 
+  defp voice_providers do
+    Synapsis.Provider.Registry.list()
+    |> Enum.filter(fn {_name, config} ->
+      config[:type] in ["openai", "openai_responses", "openai_compat"] and
+        match?({:ok, _}, RealtimeCatalog.connection(config))
+    end)
+    |> Enum.map(&elem(&1, 0))
+    |> Enum.sort()
+  end
+
+  defp voice_provider_options(providers, selected) do
+    names = if selected in [nil, ""], do: providers, else: Enum.uniq([selected | providers])
+    [{"", "Select a connection"} | Enum.map(names, &{&1, &1})]
+  end
+
+  defp voice_delegate_options(agents, selected) do
+    options =
+      agents
+      |> Enum.filter(&(&1.enabled && &1.kind == :standard))
+      |> Enum.map(&{&1.name, agent_label(&1)})
+
+    options =
+      if selected not in [nil, ""] and not List.keymember?(options, selected, 0),
+        do: [{selected, selected <> " (unavailable)"} | options],
+        else: options
+
+    [{"", "Choose when delegating"} | options]
+  end
+
+  defp realtime_catalog_message(:not_loaded, _),
+    do: "Discover Realtime models or enter a qualified provider/model."
+
+  defp realtime_catalog_message(:loading, _), do: "Loading Realtime models…"
+
+  defp realtime_catalog_message(:loaded, []),
+    do:
+      "No configured Realtime models. A passthrough service may accept an explicit provider/model."
+
+  defp realtime_catalog_message(:loaded, models),
+    do: "#{length(models)} Realtime models available."
+
+  defp realtime_catalog_message({:error, :forbidden}, _),
+    do: "Realtime catalog access was denied."
+
+  defp realtime_catalog_message({:error, :unauthorized}, _),
+    do: "The connection needs authentication."
+
+  defp realtime_catalog_message({:error, :realtime_not_configured}, _),
+    do: "Realtime is unavailable on this connection."
+
+  defp realtime_catalog_message({:error, :named_endpoint_unsupported}, _),
+    do: "Realtime requires a root Backplane connection."
+
+  defp realtime_catalog_message({:error, _}, _),
+    do: "Unable to load the Realtime catalog. Check the connection."
+
   defp provider_model_cascader_options(providers) do
     providers
     |> Enum.map(fn provider ->
@@ -1960,6 +2194,8 @@ defmodule SynapsisWeb.AgentLive.Agents do
     suffix = if agent.is_default, do: " (default)", else: ""
     "#{agent_label(agent)}#{suffix}"
   end
+
+  defp model_summary(%AgentConfig{kind: :voice, voice_model: model}), do: model || "-"
 
   defp model_summary(%AgentConfig{provider: provider, model: model} = agent) do
     base =
