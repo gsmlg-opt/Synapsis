@@ -426,6 +426,7 @@ defmodule Synapsis.VoiceSession do
     do:
       {:noreply, state |> checkpoint(messages) |> Map.put(:run_phase, :waiting) |> offer_input()}
 
+  # TODO(upstream): gsmlg-opt/backplane#184 — Preserve child mail through root detach and rebind.
   def handle_info({:runtime_event, _, _, %{type: :run_completed}}, state),
     do: {:noreply, state |> Map.put(:run_phase, :idle) |> offer_input() |> publish()}
 

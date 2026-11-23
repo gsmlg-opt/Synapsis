@@ -64,6 +64,12 @@ Synapsis 锁定 `backplane_agent_runtime 1.10.95`，使用有限响应的
 Backplane `v1.10.95` 或兼容新版，运行其迁移并给 Realtime 服务配置独立的会话输入和
 输出预算。旧路由迁移会保留原有额度。连续 24 kHz 音频需要显式检查额度和时长。
 
+## 发布阻塞
+
+当普通子 Agent 恰逢语音根回合退役时完成，Backplane 1.10.95 可能将结果投递标为
+`unknown_outcome`。最终结果仍可归档，但可能缺席下一次模型响应。当前等待已发布的
+Backplane 修复，届时需重新验证挂断后的结果交付。 [Backplane #184](https://github.com/gsmlg-opt/backplane/issues/184)
+
 ## 验收范围
 
 本地 WebSocket 和 HTTP fixture 可证明 Synapsis 会话、共享运行时和上游协议的接线，
