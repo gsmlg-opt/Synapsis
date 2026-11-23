@@ -5677,14 +5677,14 @@
         "version": "1.10.94"
       },
       "backplane_mcp_protocol": {
-        "outer_checksum": "b0a3cf8bc9f85a08491e5f67c4be750d6ee0f12ae70c2393018ef79bf71d5111",
-        "package_checksum": "a57f4559c049aa4d8e01a92ae96a1ed4899ca203a8e6b3af23db8a5dca804840",
-        "version": "1.10.94"
+        "outer_checksum": "d3fc4f4735e066d7feedfae43540c3f5840f10f92c93654b00cc4e2b4e43af10",
+        "package_checksum": "023e0807b955936f6f0ad6b27c2e07034d38da0e117e86791b83c7f54e7d6102",
+        "version": "1.10.95"
       },
       "backplane_plugin_protocol": {
-        "outer_checksum": "7832e813c88aa4cd363a37d46f58da710c41f55f1f5559022ba2951b73aad1df",
-        "package_checksum": "3721659a40bfb8092fe792e84bff563b7a56c1ae874159f0ceddcb93b88ee67d",
-        "version": "1.10.94"
+        "outer_checksum": "b49efbc3214590e2fbfa507f77ce0f4783591564c7a21f6b18de452f3f51f776",
+        "package_checksum": "2ca2e1400654472175a96d53dec35bf75408b2b1527a01c3bac8ac7ac7616bb8",
+        "version": "1.10.95"
       },
       "backplane_skill_protocol": {
         "outer_checksum": "d96c0ef5f870c5929a506ad37918326a6c3cf5b2a0ac430c5f55a59f6a559da3",
@@ -5697,9 +5697,9 @@
         "version": "0.3.5"
       }
     },
-    "outer_checksum": "270179f4320a54fdb8ec3e87c68a129eec85c3d3e1f603c7bee7820427a1dedd",
+    "outer_checksum": "e31f94d093136bc1c455fbfd420094208798ebce93cd2378ab68dbdd7f42ba71",
     "package": "backplane_agent_runtime",
-    "package_checksum": "a7b9afe3fe290f621a564e33cccce73c5d996ca2017fc8bb9edfa0c9a3c2d82f",
+    "package_checksum": "0121bf3282b188b9941fba0fec1e0844d15d1c12228a6e3d83900327e8616cae",
     "public_apis": [
       {
         "exports": [
@@ -5743,7 +5743,7 @@
         ],
         "module": "Elixir.Backplane.AgentRuntime.Codex.Tools",
         "source": "lib/backplane/agent_runtime/codex/tools.ex",
-        "source_sha256": "6d734ff5c5c13f58aaede53a403c668c5d7535a576eb4383042d8dc062c0c18f"
+        "source_sha256": "14360ad7d7070f8690c616ef580916734d71494bf04404ac128a8ca7e0863240"
       },
       {
         "exports": [
@@ -6064,7 +6064,7 @@
         ],
         "module": "Elixir.Backplane.AgentRuntime.Execution",
         "source": "lib/backplane/agent_runtime/execution.ex",
-        "source_sha256": "575989015ebe702466768861473feb27f6eb3db655d2f764863edac2bcf86c5e"
+        "source_sha256": "468deb1126b01dd9db56bca1d63cac8266c709080370acb28257fc69a45ded92"
       },
       {
         "exports": [
@@ -6101,7 +6101,7 @@
         ],
         "module": "Elixir.Backplane.AgentRuntime.Conversation",
         "source": "lib/backplane/agent_runtime/conversation.ex",
-        "source_sha256": "caa3f4b9feaa7ae540fdc43b2111b06619bf5afc932e019a3e55bca0cad1cd40"
+        "source_sha256": "b67425b0f7f735aa74da47e5450472e37120f3c6bb03db4ae0ec709a2bd5ab7d"
       },
       {
         "callbacks": [
@@ -6122,7 +6122,7 @@
           "tool_effect_timeout/2"
         ],
         "source": "lib/backplane/agent_runtime/conversation_adapter.ex",
-        "source_sha256": "b02f32ed4ce1301bbfb6f1bcef93962129b8fc46fed0ea5c1d9fdcb8ac649ebd"
+        "source_sha256": "24418acb97e347389386f9dc761f7570c92c3f36e20ba96cae35410294b185ab"
       },
       {
         "callbacks": [
@@ -6183,7 +6183,7 @@
       }
     ],
     "repository": "hexpm",
-    "version": "1.10.94"
+    "version": "1.10.95"
   },
   "readable_fetch": {
     "authority": {
