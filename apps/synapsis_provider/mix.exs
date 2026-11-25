@@ -31,7 +31,7 @@ defmodule SynapsisProvider.MixProject do
     [
       {:synapsis_data, in_umbrella: true},
       {:phoenix_pubsub, "~> 2.4.1"},
-      {:backplane_ai_protocol, "~> 1.10.94"},
+      {:backplane_ai_protocol, "~> 1.10.98"},
       {:gaoxy_test, "~> 0.16.6", only: :test},
       {:formata, "~> 0.3.5"},
       {:http_fetch, "~> 1.0.0-rc.20"},

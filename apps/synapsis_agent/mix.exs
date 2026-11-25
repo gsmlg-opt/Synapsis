@@ -35,7 +35,7 @@ defmodule SynapsisAgent.MixProject do
       {:synapsis_provider, in_umbrella: true},
       {:synapsis_mcp, in_umbrella: true},
       {:synapsis_workspace, in_umbrella: true},
-      {:backplane_agent_runtime, "~> 1.10.95"},
+      {:backplane_agent_runtime, "~> 1.10.98"},
       {:crontab, "~> 1.2.1"},
       {:tzdata, "~> 1.2.2"},
       {:gaoxy_test, "~> 0.16.6", only: :test},

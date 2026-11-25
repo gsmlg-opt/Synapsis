@@ -33,8 +33,8 @@ defmodule SynapsisMcp.MixProject do
       {:synapsis_core, in_umbrella: true},
       {:synapsis_data, in_umbrella: true},
       {:synapsis_provider, in_umbrella: true},
-      {:backplane_mcp_protocol, "~> 1.10.94"},
-      {:backplane_skill_protocol, "~> 1.10.94"},
+      {:backplane_mcp_protocol, "~> 1.10.98"},
+      {:backplane_skill_protocol, "~> 1.10.98"},
       {:gaoxy_test, "~> 0.16.6", only: :test},
       {:formata, "~> 0.3.5"},
       {:http_fetch, "~> 1.0.0-rc.20"}

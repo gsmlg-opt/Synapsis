@@ -239,7 +239,7 @@ defmodule Synapsis.Session.NativeSessionReadAdoptionFunctionalTest do
           source: "native_committed",
           coverage: "retained_runs",
           observation: "sequential",
-          runtime_version: "1.10.95",
+          runtime_version: "1.10.98",
           retained_runs: 0,
           observed_runs: 0,
           provider_attempts: 0,

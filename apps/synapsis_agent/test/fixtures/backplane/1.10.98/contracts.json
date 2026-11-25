@@ -5672,24 +5672,24 @@
   "provenance": {
     "dependency_packages": {
       "backplane_ai_protocol": {
-        "outer_checksum": "4b2e66f48d30c500517b4bd4fda3d4ae80558aa6cf032e568b6a7b3bc5261cac",
-        "package_checksum": "954731a6afc16590146a6536d58adc14e6c5229d9b92a8d7bdbffe4ba1a27225",
-        "version": "1.10.94"
+        "outer_checksum": "c328e9cb3ab1fa0629a695c7997fbf17f1815b11ee38e941ba2df9deffeb599e",
+        "package_checksum": "f73ab5f53aa2630b5d5d39f9e9cbbd8c37023aaf02c2cc8380af7bd814b329ad",
+        "version": "1.10.98"
       },
       "backplane_mcp_protocol": {
-        "outer_checksum": "d3fc4f4735e066d7feedfae43540c3f5840f10f92c93654b00cc4e2b4e43af10",
-        "package_checksum": "023e0807b955936f6f0ad6b27c2e07034d38da0e117e86791b83c7f54e7d6102",
-        "version": "1.10.95"
+        "outer_checksum": "7ed13785c8f7dbf234dc9e6994b79ef82ca21847244bbd5c9c4ea3590241643e",
+        "package_checksum": "21afc99c2651526dc07fdf83fcbd9be44d8ee23406a2abfd70a714dff9fcf2bf",
+        "version": "1.10.98"
       },
       "backplane_plugin_protocol": {
-        "outer_checksum": "b49efbc3214590e2fbfa507f77ce0f4783591564c7a21f6b18de452f3f51f776",
-        "package_checksum": "2ca2e1400654472175a96d53dec35bf75408b2b1527a01c3bac8ac7ac7616bb8",
-        "version": "1.10.95"
+        "outer_checksum": "11b450117371bb8e516fb8e3e24459e02035dae6bd4123a17572703751d9cfc4",
+        "package_checksum": "8d9e50b2ee1fd73251ff4dc2f57676d92851998cc49bbe63d1f24ac249850333",
+        "version": "1.10.98"
       },
       "backplane_skill_protocol": {
-        "outer_checksum": "d96c0ef5f870c5929a506ad37918326a6c3cf5b2a0ac430c5f55a59f6a559da3",
-        "package_checksum": "7496b7029e870ed6a5656a6c7ac1fc3ef965a2aae9a8b84ab678caffe1b47a5f",
-        "version": "1.10.94"
+        "outer_checksum": "fd258b1fe8482a231e7b180dcff96c6224198a84952d636e2c143eb44b52a78d",
+        "package_checksum": "bf0ad59936ac3745eb8f9fc336c7631472aaf02a4f7e0113b2a0d8694175aac4",
+        "version": "1.10.98"
       },
       "formata": {
         "outer_checksum": "6aa9db0069420c340a21d88eea87f74728300b88ff6ceb8f08207626413dcef2",
@@ -5697,9 +5697,9 @@
         "version": "0.3.5"
       }
     },
-    "outer_checksum": "e31f94d093136bc1c455fbfd420094208798ebce93cd2378ab68dbdd7f42ba71",
+    "outer_checksum": "58b7fe513f4ad94d0eb781d619fcaad32ecd1cdfe7fcbb785a0241212fd994e8",
     "package": "backplane_agent_runtime",
-    "package_checksum": "0121bf3282b188b9941fba0fec1e0844d15d1c12228a6e3d83900327e8616cae",
+    "package_checksum": "d5f2b7c7842d5078c60fe5a95174c8402d43ac31bfbdd9adb6cb9cae04767e2b",
     "public_apis": [
       {
         "exports": [
@@ -5771,6 +5771,7 @@
           "contracts/2",
           "contracts/3",
           "detach_parent/2",
+          "detach_parent/3",
           "export_child/3",
           "handle_call/3",
           "handle_cast/2",
@@ -5798,7 +5799,7 @@
         ],
         "module": "Elixir.Backplane.AgentRuntime.Codex.MultiAgent",
         "source": "lib/backplane/agent_runtime/codex/multi_agent.ex",
-        "source_sha256": "b49f6cd2cbe7d45167c34b63f179b560bd585bc7cc6a6433f31c8a35527c942c"
+        "source_sha256": "f745eaa7fe61467ded4128cb030e557ad3a4928dfccceccc8e23d8225f36cc85"
       },
       {
         "exports": [
@@ -5814,6 +5815,7 @@
           "close_response/2",
           "code_change/3",
           "detach/1",
+          "detach/2",
           "fence_managed_child/1",
           "handle_call/3",
           "handle_cast/2",
@@ -5829,7 +5831,7 @@
         ],
         "module": "Elixir.Backplane.AgentRuntime.Codex.Session",
         "source": "lib/backplane/agent_runtime/codex/session.ex",
-        "source_sha256": "05f53ad19117e7bc97aafab78ac7212f5e6fdeebba476033e1781a33425fe1a8"
+        "source_sha256": "eeb53105b81f711e69f0e6504d68c3a11e41eb6909d80fe18c9b97fec9264c73"
       },
       {
         "exports": [
@@ -6101,7 +6103,7 @@
         ],
         "module": "Elixir.Backplane.AgentRuntime.Conversation",
         "source": "lib/backplane/agent_runtime/conversation.ex",
-        "source_sha256": "b67425b0f7f735aa74da47e5450472e37120f3c6bb03db4ae0ec709a2bd5ab7d"
+        "source_sha256": "9b2b16487dafb23add3fcfbf744565b600c62a2db6262fd42fa62287ab555d3e"
       },
       {
         "callbacks": [
@@ -6183,7 +6185,7 @@
       }
     ],
     "repository": "hexpm",
-    "version": "1.10.95"
+    "version": "1.10.98"
   },
   "readable_fetch": {
     "authority": {
