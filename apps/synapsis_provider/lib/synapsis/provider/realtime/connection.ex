@@ -43,8 +43,17 @@ defmodule Synapsis.Provider.Realtime.Connection do
     :ignore
   end
 
-  def receive_event({WebSocket, socket, %Close{code: code}}, socket),
-    do: {:error, if(code == 1009, do: :realtime_budget_exceeded, else: :realtime_disconnected)}
+  def receive_event({WebSocket, socket, %Close{code: code}}, socket) do
+    reason =
+      case code do
+        # TODO(upstream): gsmlg-opt/backplane#185 — Revalidate anonymous Realtime admission.
+        1008 -> :realtime_policy_rejected
+        1009 -> :realtime_budget_exceeded
+        _ -> :realtime_disconnected
+      end
+
+    {:error, reason}
+  end
 
   def receive_event({WebSocket, socket, %Error{handshake: %{status: status}}}, socket)
       when status in [400, 401, 403, 404] do

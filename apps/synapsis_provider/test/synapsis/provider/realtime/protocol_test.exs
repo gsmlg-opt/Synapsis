@@ -34,4 +34,27 @@ defmodule Synapsis.Provider.Realtime.ProtocolTest do
                nil
              )
   end
+
+  test "Realtime tools keep the object properties and omit unsupported root constraints" do
+    properties = %{
+      "content" => %{"type" => ["string", "null"]},
+      "binary" => %{"anyOf" => [%{"type" => "string"}, %{"type" => "null"}]}
+    }
+
+    schema = %{
+      "type" => "object",
+      "properties" => properties,
+      "required" => ["id"],
+      "additionalProperties" => false,
+      "anyOf" => [%{"required" => ["content"]}, %{"required" => ["binary"]}]
+    }
+
+    {[%{name: wire_name, parameters: wire_schema}], names} =
+      Protocol.tools([
+        %{name: "mcp::attachment", description: "Save attachment", parameters: schema}
+      ])
+
+    assert names[wire_name] == "mcp::attachment"
+    assert wire_schema == Map.delete(schema, "anyOf")
+  end
 end

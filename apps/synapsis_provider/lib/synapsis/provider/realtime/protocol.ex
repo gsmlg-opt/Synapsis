@@ -2,6 +2,7 @@ defmodule Synapsis.Provider.Realtime.Protocol do
   @moduledoc "OpenAI Realtime GA events for a server-side audio conversation."
 
   @pcm %{type: "audio/pcm", rate: 24_000}
+  @unsupported_tool_root_keywords ~w(oneOf anyOf allOf enum const not)
 
   def session_update(agent) do
     %{
@@ -55,7 +56,9 @@ defmodule Synapsis.Provider.Realtime.Protocol do
          type: "function",
          name: wire,
          description: tool.description,
-         parameters: tool.parameters
+         # Realtime rejects these keywords at the root of function parameters.
+         # Conversation still validates calls against the original descriptor schema.
+         parameters: Map.drop(tool.parameters, @unsupported_tool_root_keywords)
        }, Map.put(names, wire, name)}
     end)
   end
@@ -75,8 +78,17 @@ defmodule Synapsis.Provider.Realtime.Protocol do
   end
 
   def text_item(id, text) do
-    item(%{id: id, type: "message", role: "user", content: [%{type: "input_text", text: text}]})
+    input_item(id, [%{type: :text, text: text}])
   end
+
+  def input_item(id, content) do
+    item(%{id: id, type: "message", role: "user", content: Enum.map(content, &input_part/1)})
+  end
+
+  defp input_part(%{type: :text, text: text}), do: %{type: "input_text", text: text}
+
+  defp input_part(%{type: :image, media_type: media_type, data: data}),
+    do: %{type: "input_image", image_url: "data:#{media_type};base64,#{data}"}
 
   def output_item(id, call_id, result),
     do: item(%{id: id, type: "function_call_output", call_id: call_id, output: result})
