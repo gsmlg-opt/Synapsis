@@ -3,6 +3,7 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
 
   alias Synapsis.{Message, Part}
   alias Synapsis.Session.EventReply
+  alias SynapsisServer.VoiceImageController
   alias SynapsisWeb.{MessageHelpers, ToolResultView}
 
   def live_id(session_id), do: "agent-live-#{session_id}"
@@ -10,9 +11,18 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
   def snapshot(assigns) do
     user_questions = Map.get(assigns, :user_questions, [])
     waiting? = user_questions != []
-    active? = assigns.session_status in ~w(streaming tool_executing) or waiting?
     label = assistant_label(assigns.agent_config, assigns.agent_id)
     session = Map.get(assigns, :current_session, %{})
+    voice? = Synapsis.Sessions.voice?(session)
+    voice = Map.get(assigns, :voice_chat) || %{}
+    voice_phase = Map.get(voice, :phase, :offline)
+    voice_ready? = voice_phase in [:listening, :responding]
+
+    active? =
+      if voice?,
+        do: voice_phase == :responding,
+        else: assigns.session_status in ~w(streaming tool_executing) or waiting?
+
     subagents? = Synapsis.Session.subagents_enabled?(session)
     roster = Map.get(assigns, :subagent_roster, %{})
 
@@ -20,10 +30,33 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
       roster[:recovery_required] == true or not is_nil(roster[:error]) or
         get_in(roster, [:root, :status]) in [:unknown_outcome, "unknown_outcome"]
 
-    displayed = assigns.messages |> Enum.map(&display_message/1) |> Enum.reject(&is_nil/1)
+    messages = if voice?, do: Map.get(voice, :messages, []), else: assigns.messages
+
+    displayed =
+      messages
+      |> Enum.with_index(fn message, index ->
+        case display_message(message) do
+          nil ->
+            nil
+
+          message when voice? ->
+            voice_message(message, voice.facts, assigns.voice_image_token, index)
+
+          message ->
+            message
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+
+    live =
+      if voice?,
+        do: voice_reply(voice[:reply], label),
+        else: live_messages(assigns, label, active?)
+
     results = settled_tool_results(displayed)
 
     message_actions = %{
+      voice: voice?,
       regenerate: assigns.session_status == "idle" and not waiting? and not subagents?,
       branch_and_send: assigns.session_status in ~w(idle error) and not waiting? and not recovery?
     }
@@ -31,7 +64,7 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
     %{
       messages:
         Enum.flat_map(displayed, &message(&1, label, message_actions, results)) ++
-          live_messages(assigns, label, active?) ++
+          live ++
           Enum.map(assigns.heartbeat_notifications, &heartbeat_message/1) ++
           Enum.map(Enum.sort(assigns.code_agent_sessions), &code_agent_message/1),
       metadata: %{
@@ -39,23 +72,83 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
         assistantLabel: label,
         assistantAvatar: assistant_avatar(assigns.agent_config),
         attachmentsAllowed: true,
-        canStop: true,
+        canStop: not voice?,
+        voiceCall: voice?,
+        voiceQueued: Map.get(voice, :queued, 0),
         userQuestions: user_questions,
         queue: Enum.map(assigns.queued_inputs, &queue_item/1)
       },
       runtime: %{
-        phase: if(waiting?, do: "waiting_for_user", else: assigns.session_status),
+        phase:
+          if(voice?,
+            do: to_string(voice_phase),
+            else: if(waiting?, do: "waiting_for_user", else: assigns.session_status)
+          ),
         active: active?
       },
       admission: %{
         canSubmit:
-          assigns.session_status in ~w(idle error streaming tool_executing) and not recovery?,
+          if(voice?,
+            do: voice_ready?,
+            else:
+              assigns.session_status in ~w(idle error streaming tool_executing) and not recovery?
+          ),
         allowWhileStreaming: true,
-        sendLabel: if(active?, do: "Queue", else: "Send"),
-        canSteer: active? and not waiting?,
-        canRetry: assigns.session_status == "error" and not subagents?
+        sendLabel: if(active? or voice[:busy] == true, do: "Queue", else: "Send"),
+        canSteer: not voice? and active? and not waiting?,
+        canRetry: not voice? and assigns.session_status == "error" and not subagents?
       }
     }
+  end
+
+  defp voice_reply(%{id: id, text: text}, label) when text != "" do
+    [%{id: id, role: "assistant", content: text, status: "streaming", author: label, tools: []}]
+  end
+
+  defp voice_reply(_, _), do: []
+
+  defp voice_message(message, facts, token, turn_index) do
+    parts =
+      message.parts
+      |> Enum.with_index(fn
+        %Part.Image{}, part_index ->
+          {:voice_image, VoiceImageController.path(token, turn_index, part_index, message.id)}
+
+        %Part.CommittedAudio{} = audio, _ ->
+          key = audio.connection_generation <> ":" <> audio.item_id
+
+          %Part.Text{
+            content:
+              get_in(facts, [:voice_transcript, key]) || "Voice input · waiting for transcript"
+          }
+
+        %Part.SpokenAudio{} = audio, _ ->
+          key =
+            audio.connection_generation <>
+              ":" <> audio.item_id <> ":" <> Integer.to_string(audio.content_index)
+
+          playback =
+            case get_in(facts, [:voice_playback, key]) do
+              %{interrupted: false} ->
+                "Playback complete"
+
+              %{interrupted: true, cursor: ms} when is_integer(ms) ->
+                "Playback stopped at #{ms} ms"
+
+              %{interrupted: true} ->
+                "Playback stopped · position unavailable"
+
+              _ ->
+                "Generated speech"
+            end
+
+          %Part.Text{content: "#{audio.text}\n\n#{playback}"}
+
+        part, _ ->
+          part
+      end)
+
+    %{message | parts: parts}
   end
 
   # The authored input remains in durable/provider history. Only this explicit
@@ -121,6 +214,8 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
       actions: message_actions(message, availability)
     }
   end
+
+  defp message_actions(_, %{voice: true}), do: []
 
   defp message_actions(%Message{role: "assistant"}, %{regenerate: true}),
     do: [%{id: "regenerate", label: "Regenerate"}]
@@ -285,6 +380,8 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
 
   defp part(%Part.Image{} = image, _role),
     do: image |> Map.from_struct() |> Map.put(:type, "image")
+
+  defp part({:voice_image, src}, _role), do: %{type: "image", src: src}
 
   defp part(%Part.DeliveredImage{} = image, _role),
     do: %{type: "text", content: Part.DeliveredImage.summary(image)}

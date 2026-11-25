@@ -46,6 +46,8 @@ defmodule Synapsis.Runtime.StoreTest do
     assert :ok = Store.put_fact(id, :admission, "event-1", fact)
     assert {:error, :fact_conflict} = Store.put_fact(id, :admission, "event-1", %{other: true})
     assert {:ok, [^fact]} = Store.list_facts(id, :admission)
+    assert {:ok, %{"event-1" => ^fact}} = Store.list_facts_by_identity(id, :admission)
+    assert {:ok, %{}} = Store.list_facts_by_identity(id, :completion)
     assert {:ok, []} = Store.list_facts(id, :completion)
     assert {:ok, []} = Store.list_facts(id <> "other", :admission)
   end

@@ -9,6 +9,8 @@ export type PlaybackCursor = AudioIdentity & {
   audio_end_ms: number | null
   accurate: boolean
 }
+export type VolumeDevice = 'microphone' | 'speaker'
+
 export type BrowserAudioOptions = {
   inputDevice?: string | null
   outputDevice?: string | null
@@ -24,9 +26,13 @@ type SinkAudioContext = AudioContext & {
 type Segment = AudioIdentity & {
   start: number
   end: number
-  offset: number
+  offsetSamples: number
+  samples: number
   source: AudioBufferSourceNode
 }
+
+const PCM_SAMPLE_RATE = 24_000
+const MAX_QUEUED_PLAYBACK_SECONDS = 15
 
 // Capture runs outside rendering and the UI event loop. It maintains filter state
 // between device blocks and posts 20 ms PCM16 frames at the protocol sample rate.
@@ -69,27 +75,46 @@ registerProcessor('synapsis-voice-capture', VoiceCapture)
 
 /** Browser-only device owner. Constructing this object never requests permission. */
 export class BrowserAudioEndpoint {
-  private context: SinkAudioContext | null = null
-  private stream: MediaStream | null = null
-  private capture: AudioWorkletNode | null = null
-  private source: MediaStreamAudioSourceNode | null = null
-  private silent: GainNode | null = null
-  private segments: Segment[] = []
-  private nextStart = 0
-  private cursorTimer: ReturnType<typeof setInterval> | null = null
-  private closed = false
-  private opening = false
-  private readonly onPageHide = () => this.close()
-  private readonly onDeviceChange = () => {
-    void BrowserAudioEndpoint.devices()
-      .then((devices) => this.options.onState?.({ devices }))
-      .catch(() => this.fail('device_enumeration_failed'))
-  }
+  declare private context: SinkAudioContext | null
+  declare private stream: MediaStream | null
+  declare private capture: AudioWorkletNode | null
+  declare private source: MediaStreamAudioSourceNode | null
+  declare private microphoneGain: GainNode | null
+  declare private speakerGain: GainNode | null
+  declare private silent: GainNode | null
+  declare private segments: Segment[]
+  declare private nextStart: number
+  declare private cursorTimer: ReturnType<typeof setInterval> | null
+  declare private closed: boolean
+  declare private opening: boolean
+  declare private readonly onPageHide: () => void
+  declare private readonly onDeviceChange: () => void
+  declare private readonly options: BrowserAudioOptions
+  declare private readonly volumes: Record<VolumeDevice, number>
 
-  private options: BrowserAudioOptions
-
+  // WORKAROUND(upstream): duskmoon-dev/duskmoon-bundler#46
+  // Keep ES2020 constructor assignments until dev assets serve generated field helpers.
   constructor(options: BrowserAudioOptions) {
     this.options = options
+    this.context = null
+    this.stream = null
+    this.capture = null
+    this.source = null
+    this.microphoneGain = null
+    this.speakerGain = null
+    this.silent = null
+    this.segments = []
+    this.nextStart = 0
+    this.cursorTimer = null
+    this.closed = false
+    this.opening = false
+    this.volumes = { microphone: 100, speaker: 100 }
+    this.onPageHide = () => this.close()
+    this.onDeviceChange = () => {
+      void BrowserAudioEndpoint.devices()
+        .then((devices) => this.options.onState?.({ devices }))
+        .catch(() => this.fail('device_enumeration_failed'))
+    }
   }
 
   static async devices() {
@@ -142,7 +167,7 @@ export class BrowserAudioEndpoint {
       const context = new AudioContext({ latencyHint: 'interactive' }) as SinkAudioContext
       this.context = context
       if (context.sampleRate < 24000) throw new Error('unsupported_sample_rate')
-      if (this.options.outputDevice) {
+      if (this.options.outputDevice && this.options.outputDevice !== 'default') {
         if (!context.setSinkId) throw new Error('output_selection_unsupported')
         await context.setSinkId(this.options.outputDevice)
       }
@@ -160,9 +185,14 @@ export class BrowserAudioEndpoint {
         if (!this.closed) this.options.onCapture(new Uint8Array(event.data as ArrayBuffer))
       }
       this.source = context.createMediaStreamSource(stream)
+      this.microphoneGain = context.createGain()
+      this.microphoneGain.gain.value = this.volumes.microphone / 100
+      this.speakerGain = context.createGain()
+      this.speakerGain.gain.value = this.volumes.speaker / 100
+      this.speakerGain.connect(context.destination)
       this.silent = context.createGain()
       this.silent.gain.value = 0
-      this.source.connect(this.capture).connect(this.silent).connect(context.destination)
+      this.source.connect(this.microphoneGain).connect(this.capture).connect(this.silent).connect(context.destination)
       stream.getAudioTracks().forEach((track) => {
         track.addEventListener('ended', () => {
           if (!this.closed) this.fail('input_device_disconnected')
@@ -202,9 +232,16 @@ export class BrowserAudioEndpoint {
     this.options.onState?.({ muted })
   }
 
+  setVolume(device: VolumeDevice, percent: number) {
+    if (!Number.isInteger(percent) || percent < 0 || percent > 200) return
+    this.volumes[device] = percent
+    const node = device === 'microphone' ? this.microphoneGain : this.speakerGain
+    if (node) node.gain.value = percent / 100
+  }
+
   play(pcm: Uint8Array, identity: AudioIdentity) {
     const context = this.context
-    if (!context || this.closed) throw new Error('endpoint_not_ready')
+    if (!context || !this.speakerGain || this.closed) throw new Error('endpoint_not_ready')
     if (
       !pcm.byteLength ||
       pcm.byteLength % 2 ||
@@ -215,28 +252,28 @@ export class BrowserAudioEndpoint {
       identity.content_index < 0
     )
       throw new Error('invalid_audio')
-    const duration = pcm.byteLength / 48000
+    const samples = pcm.byteLength / 2
+    const duration = samples / PCM_SAMPLE_RATE
     const start = Math.max(this.nextStart, context.currentTime + 0.02)
-    if (start + duration - context.currentTime > 3) {
+    if (start + duration - context.currentTime > MAX_QUEUED_PLAYBACK_SECONDS) {
       this.fail('playback_queue_overflow')
       throw new Error('playback_queue_overflow')
     }
-    const samples = pcm.byteLength / 2
-    const buffer = context.createBuffer(1, samples, 24000)
+    const buffer = context.createBuffer(1, samples, PCM_SAMPLE_RATE)
     const target = buffer.getChannelData(0)
     const view = new DataView(pcm.buffer, pcm.byteOffset, pcm.byteLength)
     for (let index = 0; index < samples; index++)
       target[index] = view.getInt16(index * 2, true) / 32768
     const source = context.createBufferSource()
     source.buffer = buffer
-    source.connect(context.destination)
+    source.connect(this.speakerGain)
     const previous = this.segments[this.segments.length - 1]
     const sameItem =
       previous?.response_id === identity.response_id &&
       previous?.item_id === identity.item_id &&
       previous?.content_index === identity.content_index
-    const offset = sameItem ? previous.offset + previous.end - previous.start : 0
-    this.segments.push({ ...identity, start, end: start + duration, offset, source })
+    const offsetSamples = sameItem ? previous.offsetSamples + previous.samples : 0
+    this.segments.push({ ...identity, start, end: start + duration, offsetSamples, samples, source })
     source.onended = () => source.disconnect()
     source.start(start)
     this.nextStart = start + duration
@@ -251,12 +288,14 @@ export class BrowserAudioEndpoint {
     const heard = accurate ? timestamp!.contextTime! : 0
     while (this.segments.length > 1 && heard >= this.segments[1].start) this.segments.shift()
     const current = this.segments[0]
-    const elapsed = Math.max(0, Math.min(current.end, heard) - current.start)
+    const elapsedSamples = heard >= current.end
+      ? current.samples
+      : Math.max(0, Math.floor((heard - current.start) * PCM_SAMPLE_RATE))
     return {
       response_id: current.response_id,
       item_id: current.item_id,
       content_index: current.content_index,
-      audio_end_ms: accurate ? Math.floor((current.offset + elapsed) * 1000) : null,
+      audio_end_ms: accurate ? Math.floor((current.offsetSamples + elapsedSamples) * 1000 / PCM_SAMPLE_RATE) : null,
       accurate
     }
   }
@@ -281,6 +320,8 @@ export class BrowserAudioEndpoint {
     this.capture?.port.close()
     this.capture?.disconnect()
     this.source?.disconnect()
+    this.microphoneGain?.disconnect()
+    this.speakerGain?.disconnect()
     this.silent?.disconnect()
     this.stream?.getTracks().forEach((track) => track.stop())
     void this.context?.close()

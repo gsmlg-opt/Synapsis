@@ -72,6 +72,8 @@ defmodule Synapsis.VoiceSessionTest do
         kind: :voice,
         provider: voice_provider,
         voice_model: "openai/gpt-realtime",
+        browser_audio_input_volume: 70,
+        browser_audio_output_volume: 145,
         tools: ["spawn_agent", "interrupt_agent"],
         system_prompt: "VOICE ROOT FIXTURE",
         tool_contract_version: 1,
@@ -94,7 +96,28 @@ defmodule Synapsis.VoiceSessionTest do
       Registry.unregister(child_provider)
     end)
 
-    %{id: session.id, fixture: fixture, child: child}
+    %{id: session.id, fixture: fixture, child: child, agent: agent}
+  end
+
+  test "explicit browser selection uses its own saved devices and volumes", ctx do
+    assert {:ok, _} =
+             AgentConfigs.update(ctx.agent, %{
+               audio_mode: "host",
+               host_audio_input_device: "host-mic",
+               host_audio_input_volume: 40,
+               browser_audio_input_device: "browser-mic",
+               browser_audio_output_device: "browser-speaker"
+             })
+
+    assert %{options: options} = call(ctx.id, mode: "browser")
+
+    assert options == %{
+             mode: "browser",
+             input_device: "browser-mic",
+             output_device: "browser-speaker",
+             input_volume: 70,
+             output_volume: 145
+           }
   end
 
   test "one audio reference enters native history and playback-only stop preserves completion",
@@ -162,10 +185,104 @@ defmodule Synapsis.VoiceSessionTest do
 
       assert Synapsis.Voice.History.transcript(ctx.id, audio.connection_generation, ut) ==
                "Late transcript"
+
+      facts = Synapsis.Voice.History.recovery(ctx.id)
+      assert facts.voice_transcript[audio.connection_generation <> ":" <> ut] == "Late transcript"
+
+      assert %{cursor: 13, interrupted: true} =
+               facts.voice_playback[audio.connection_generation <> ":item_assistant:0"]
     end)
 
     hangup(ctx.id, generation)
     assert_receive {:realtime_closed, _}, @wait
+
+    restarted = call(ctx.id)
+    assert restarted.generation != generation
+    hangup(ctx.id, restarted.generation)
+    assert_receive {:realtime_closed, _}, @wait
+  end
+
+  test "chat text and attachments share the same Realtime call and native queue as speech", ctx do
+    %{socket: socket, options: options} = call(ctx.id)
+    assert %{input_volume: 70, output_volume: 145} = options
+
+    image = %Synapsis.Part.Image{media_type: "image/png", data: Base.encode64("image fixture")}
+    assert :ok = VoiceSession.submit(ctx.id, "Describe this image", [image])
+
+    assert_receive {:client_event, %{"type" => "conversation.item.create", "item" => item}},
+                   @wait
+
+    assert item["content"] == [
+             %{"type" => "input_text", "text" => "Describe this image"},
+             %{"type" => "input_image", "image_url" => "data:image/png;base64,#{image.data}"}
+           ]
+
+    assert %{messages: [%{id: input_id, role: "user", parts: [_, ^image]}], reply: %{text: ""}} =
+             VoiceSession.chat_snapshot(ctx.id)
+
+    assert [] = Sessions.get_messages(ctx.id)
+    assert ^image = VoiceSession.chat_image(ctx.id, input_id, 0, 1)
+    assert nil == VoiceSession.chat_image(ctx.id, "different-message", 0, 1)
+
+    refute_receive {:client_event, %{"type" => "response.create"}}, 60
+    acknowledge_item(socket, item["id"])
+    response(socket, "resp-image", item["id"])
+
+    event(socket, %{
+      "type" => "response.output_audio_transcript.delta",
+      "response_id" => "resp-image",
+      "delta" => "Image answer"
+    })
+
+    wait_for(fn ->
+      assert %{messages: [%{id: ^input_id}], reply: %{text: "Image answer"}} =
+               VoiceSession.chat_snapshot(ctx.id)
+    end)
+
+    %{reply: %{id: answer_id}} = VoiceSession.chat_snapshot(ctx.id)
+    committed(socket, "item_followup_speech")
+    done(socket, "resp-image", [assistant("item_image_answer", "Image answer")])
+    response(socket, "resp-speech", "item_followup_speech")
+    done(socket, "resp-speech", [assistant("item_speech_answer", "Speech answer")])
+
+    wait_for(fn ->
+      assert [visual, %{id: ^answer_id}, spoken, _answer2] = Sessions.get_messages(ctx.id)
+      assert visual.id == input_id
+      assert [%Synapsis.Part.Text{content: "Describe this image"}, ^image] = visual.parts
+      assert [%Synapsis.Part.CommittedAudio{item_id: "item_followup_speech"}] = spoken.parts
+
+      assert %{messages: [%{id: ^input_id}, %{id: ^answer_id}, _, _], reply: nil} =
+               VoiceSession.chat_snapshot(ctx.id)
+    end)
+  end
+
+  test "hangup releases queued images while retaining admitted attachments", ctx do
+    %{generation: generation} = call(ctx.id)
+    admitted = %Synapsis.Part.Image{media_type: "image/png", data: Base.encode64("admitted")}
+    discarded = %{admitted | data: Base.encode64("discarded")}
+
+    assert :ok = VoiceSession.submit(ctx.id, "", [admitted])
+    assert_receive {:client_event, %{"type" => "conversation.item.create"}}, @wait
+    assert :ok = VoiceSession.submit(ctx.id, "", [discarded])
+    assert %{queued: 1} = VoiceSession.chat_snapshot(ctx.id)
+
+    hangup(ctx.id, generation)
+    assert_receive {:realtime_closed, _}, @wait
+    [{owner, _}] = Elixir.Registry.lookup(Synapsis.Voice.Registry, ctx.id)
+    state = :sys.get_state(owner)
+    assert :queue.is_empty(state.inputs)
+    assert Map.values(state.image_payloads) == [admitted.data]
+  end
+
+  test "non-object Realtime errors close media without crashing the logical session", ctx do
+    %{socket: socket, generation: generation} = call(ctx.id)
+    [{owner, _}] = Elixir.Registry.lookup(Synapsis.Voice.Registry, ctx.id)
+
+    event(socket, %{"type" => "error", "error" => "gateway error"})
+    assert_receive {:voice_browser_close, ^generation}, @wait
+    assert_receive {:realtime_closed, _}, @wait
+    assert {:ok, %{phase: :error, reason: :realtime_protocol_error}} = VoiceSession.status(ctx.id)
+    assert Process.alive?(owner)
   end
 
   test "active barge-in cancels only its response and ignores late output", ctx do
@@ -390,11 +507,23 @@ defmodule Synapsis.VoiceSessionTest do
 
   test "device switching waits for release and rejects old-generation frames", ctx do
     %{generation: original} = call(ctx.id)
+
+    {:ok, scope} = Synapsis.SkillWorkshop.capture(ctx.agent.id)
+    File.mkdir_p!(Path.dirname(scope.root))
+    File.write!(scope.root, "unavailable workshop directory")
+    on_exit(fn -> File.rm(scope.root) end)
+    assert {:error, _} = Synapsis.Agent.Resolver.resolve_configured(ctx.agent.name)
+
+    assert {:ok, _} = AgentConfigs.update(ctx.agent, %{browser_audio_output_volume: 120})
     assert :ok = VoiceSession.switch(ctx.id, mode: "browser", input_device: "new-device")
     assert_receive {:voice_flush, ^original, token, true}, @wait
     refute_receive {:voice_browser_open, _, _}, 80
     VoiceSession.flushed(ctx.id, original, token, nil)
-    assert_receive {:voice_browser_open, generation, %{input_device: "new-device"}}, @wait
+
+    assert_receive {:voice_browser_open, generation,
+                    %{input_device: "new-device", output_volume: 120}},
+                   @wait
+
     assert generation != original
     assert :ok = VoiceSession.browser_ready(ctx.id, generation, %{})
 
@@ -423,16 +552,16 @@ defmodule Synapsis.VoiceSessionTest do
     end)
   end
 
-  defp call(id) do
-    assert {:ok, %{phase: :connecting}} = VoiceSession.start(id)
+  defp call(id, endpoint_options \\ []) do
+    assert {:ok, %{phase: :connecting}} = VoiceSession.start(id, endpoint_options)
     assert_receive {:upgrade, "openai/gpt-realtime", ["Bearer test-realtime"]}, @wait
     assert_receive {:realtime_wire, socket}, @wait
     assert_receive {:client_event, %{"type" => "session.update", "session" => settings}}, @wait
     assert get_in(settings, ["audio", "input", "turn_detection", "create_response"]) == false
     event(socket, %{"type" => "session.updated"})
-    assert_receive {:voice_browser_open, generation, _}, @wait
+    assert_receive {:voice_browser_open, generation, options}, @wait
     assert :ok = VoiceSession.browser_ready(id, generation, %{"echo_cancellation" => true})
-    %{socket: socket, generation: generation}
+    %{socket: socket, generation: generation, options: options}
   end
 
   defp event(socket, data), do: send(socket, {:server_event, data})

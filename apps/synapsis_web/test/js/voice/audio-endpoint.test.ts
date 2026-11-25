@@ -4,10 +4,12 @@ import { BrowserAudioEndpoint } from '../../../assets/js/voice/audio-endpoint.ts
 
 class NodeFixture {
   stopped = false
+  connectedTo: NodeFixture | null = null
   port = { onmessage: null, postMessage: () => {}, close: () => {} }
   gain = { value: 1 }
-  connect() {
-    return this
+  connect(target: NodeFixture) {
+    this.connectedTo = target
+    return target
   }
   disconnect() {}
   start() {}
@@ -24,6 +26,7 @@ class ContextFixture extends EventTarget {
   destination = new NodeFixture()
   audioWorklet = { addModule: async () => {} }
   nodes: NodeFixture[] = []
+  gains: NodeFixture[] = []
   constructor() {
     super()
     ContextFixture.current = this
@@ -32,7 +35,9 @@ class ContextFixture extends EventTarget {
     return new NodeFixture()
   }
   createGain() {
-    return new NodeFixture()
+    const node = new NodeFixture()
+    this.gains.push(node)
+    return node
   }
   createBuffer(_channels: number, count: number) {
     return { getChannelData: () => new Float32Array(count) }
@@ -97,6 +102,71 @@ test('stop playback uses the device timestamp and releases every browser resourc
   endpoint.close()
   assert.equal(track.stopped, true)
   assert.equal(ContextFixture.current.state, 'closed')
+})
+
+test('the system default speaker works without custom sink selection', async () => {
+  environment()
+  const endpoint = new BrowserAudioEndpoint({ outputDevice: 'default', onCapture() {}, onError() {} })
+  try {
+    await endpoint.start()
+  } finally {
+    endpoint.close()
+  }
+})
+
+test('a drained browser reply reports its full PCM duration across chunks', async () => {
+  environment()
+  const endpoint = new BrowserAudioEndpoint({ onCapture() {}, onError() {} })
+  await endpoint.start()
+
+  try {
+    const context = ContextFixture.current
+    const identity = { response_id: 'response', item_id: 'item', content_index: 0 }
+    context.currentTime = 100
+    endpoint.play(new Uint8Array(4800), identity)
+    endpoint.play(new Uint8Array(4800), identity)
+
+    context.heardTime = 101
+    assert.equal(endpoint.cursor()?.audio_end_ms, 200)
+  } finally {
+    endpoint.close()
+  }
+})
+
+test('the two browser gain controls are independent of capture muting', async () => {
+  const { track } = environment()
+  const endpoint = new BrowserAudioEndpoint({ onCapture() {}, onError() {} })
+  endpoint.setVolume('microphone', 75)
+  await endpoint.start()
+
+  try {
+    const context = ContextFixture.current
+    const [microphone, speaker] = context.gains
+    assert.equal(microphone.gain.value, 0.75)
+    endpoint.play(new Uint8Array(4800), { response_id: 'r', item_id: 'i', content_index: 0 })
+    endpoint.setVolume('speaker', 150)
+    assert.equal(speaker.gain.value, 1.5)
+    assert.equal(context.nodes[0].connectedTo, speaker)
+    endpoint.mute(true)
+    assert.equal(track.enabled, false)
+    assert.equal(microphone.gain.value, 0.75)
+  } finally {
+    endpoint.close()
+  }
+})
+
+test('ordinary reply bursts fit the bounded playback queue', async () => {
+  environment()
+  const errors: string[] = []
+  const endpoint = new BrowserAudioEndpoint({ onCapture() {}, onError: reason => errors.push(reason) })
+  await endpoint.start()
+
+  const frame = new Uint8Array(96_000)
+  const item = { response_id: 'r', item_id: 'item', content_index: 0 }
+  for (let index = 0; index < 7; index++) endpoint.play(frame, item)
+  assert.equal(errors.length, 0)
+  assert.throws(() => endpoint.play(frame, item), /playback_queue_overflow/)
+  assert.deepEqual(errors, ['playback_queue_overflow'])
 })
 
 test('closing while permission is pending stops the late microphone stream', async () => {

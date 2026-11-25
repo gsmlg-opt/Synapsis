@@ -38,8 +38,10 @@ defmodule Synapsis.VoiceAgentConfigTest do
       voice: "marin",
       voice_turn_detection: "semantic_vad",
       audio_mode: "host",
-      audio_input_device: "input-device",
-      audio_output_device: "output-device",
+      host_audio_input_device: "input-device",
+      host_audio_output_device: "output-device",
+      host_audio_input_volume: 0,
+      host_audio_output_volume: 65,
       voice_delegate: "builder"
     }
 
@@ -53,6 +55,78 @@ defmodule Synapsis.VoiceAgentConfigTest do
     assert {:ok, raw} = Store.get(:agent, agent.id)
     assert raw["kind"] == "voice"
     assert raw["voice_model"] == "openai/gpt-realtime"
+    assert raw["host_audio_output_volume"] == 65
+
+    assert {:ok, louder} = AgentConfigs.update(updated, %{browser_audio_output_volume: 180})
+    assert {:ok, switched} = AgentConfigs.update(louder, %{audio_mode: "host"})
+    assert switched.browser_audio_output_volume == 180
+    assert switched.host_audio_output_volume == 65
+    assert {:error, invalid} = AgentConfigs.update(switched, %{host_audio_output_volume: 180})
+    assert Keyword.has_key?(invalid.errors, :host_audio_output_volume)
+  end
+
+  test "legacy preferences migrate to their saved endpoint and stay cleared across reload" do
+    id = Ecto.UUID.generate()
+
+    assert {:ok, _} =
+             Store.put(:agent, %{
+               "id" => id,
+               "name" => "legacy-voice",
+               "kind" => "voice",
+               "provider" => "backplane",
+               "voice_model" => "openai/gpt-realtime",
+               "audio_mode" => "host",
+               "audio_input_device" => "original-host-mic",
+               "audio_output_volume" => 90
+             })
+
+    saved = AgentConfigs.get(id)
+    assert saved.host_audio_input_device == "original-host-mic"
+    assert saved.host_audio_output_volume == 90
+    assert saved.browser_audio_input_device == nil
+
+    assert {:ok, _} =
+             AgentConfigs.update(saved, %{
+               audio_mode: "browser",
+               host_audio_input_device: nil,
+               browser_audio_input_device: "new-browser-mic"
+             })
+
+    assert :ok = Store.reload(:agent)
+    updated = AgentConfigs.get(id)
+    assert updated.host_audio_input_device == nil
+    assert updated.host_audio_output_volume == 90
+    assert updated.browser_audio_input_device == "new-browser-mic"
+  end
+
+  test "the saved browser default speaker resolves to an unset override" do
+    id = Ecto.UUID.generate()
+
+    assert {:ok, _} =
+             Store.put(:agent, %{
+               "id" => id,
+               "name" => "default-speaker",
+               "kind" => "voice",
+               "provider" => "backplane",
+               "voice_model" => "openai/gpt-realtime",
+               "audio_mode" => "browser",
+               "audio_output_device" => "default",
+               "host_audio_output_device" => "default"
+             })
+
+    saved = AgentConfigs.get(id)
+    assert saved.browser_audio_output_device == nil
+    assert saved.host_audio_output_device == "default"
+
+    assert {:ok, selected} =
+             AgentConfigs.update(saved, %{browser_audio_output_device: "specific-device"})
+
+    assert selected.browser_audio_output_device == "specific-device"
+
+    assert {:ok, default} =
+             AgentConfigs.update(selected, %{browser_audio_output_device: "default"})
+
+    assert default.browser_audio_output_device == nil
   end
 
   test "voice validation requires explicit routing and rejects arbitrary audio options" do

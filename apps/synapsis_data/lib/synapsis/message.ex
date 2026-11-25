@@ -49,6 +49,13 @@ defmodule Synapsis.Message do
     end
   end
 
+  @doc "Read one durable message at its zero-based turn index."
+  def get_by_index(session_id, index) do
+    with {:ok, turn} <- Store.get_turn(session_id, index) do
+      {:ok, decode_turn(turn, session_id)}
+    end
+  end
+
   @doc "List at most `limit` newest messages in chronological order."
   @spec list_recent_by_session(String.t(), pos_integer()) :: [%__MODULE__{}]
   def list_recent_by_session(session_id, limit)

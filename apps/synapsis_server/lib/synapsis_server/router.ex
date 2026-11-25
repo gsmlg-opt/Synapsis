@@ -44,6 +44,7 @@ defmodule SynapsisServer.Router do
   scope "/api", SynapsisServer do
     get "/agent/events", SSEController, :agent_events
     get "/sessions/:id/events", SSEController, :events
+    get "/voice/images/:turn/:part/:message_id", VoiceImageController, :show
   end
 
   scope "/api", SynapsisServer do

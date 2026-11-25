@@ -5,6 +5,27 @@ function nativeFields(form: HTMLFormElement): NativeField[] {
     .filter(field => !field.closest('[data-dm-react-field]'))
 }
 
+// The outer LiveView mount can patch validation while the native form retains focus and draft values.
+function renderNativeErrors(element: HTMLElement): void {
+  const raw = element.dataset.nativeFieldErrors
+  if (raw === undefined) return
+  const errors: Record<string, string> = JSON.parse(raw)
+  for (const message of element.querySelectorAll<HTMLElement>('[data-native-field-error]')) {
+    const id = message.dataset.nativeFieldError!
+    const error = errors[id]
+    message.textContent = error || ''
+    message.hidden = !error
+    const control = element.querySelector<HTMLElement>(`#${CSS.escape(id)}`)
+    if (error) {
+      control?.setAttribute('aria-invalid', 'true')
+      control?.setAttribute('aria-errormessage', message.id)
+    } else {
+      control?.removeAttribute('aria-invalid')
+      control?.removeAttribute('aria-errormessage')
+    }
+  }
+}
+
 // WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#193
 // Keep the public upstream hook and only reconcile application native controls.
 export function createSynapsisReactFormHook(upstream: any) {
@@ -16,11 +37,16 @@ export function createSynapsisReactFormHook(upstream: any) {
       restoreNativeFields(nativeFields(this.form), this.values)
       this.initialValues = structuredClone(this.values)
       this.renderAll()
+      renderNativeErrors(this.el)
       this.handleEvent('dm:form:reset', (payload: any) => {
         if (payload.form_id === this.el.dataset.formId && payload.id !== this.el.id) {
           this.resetForm(payload.values ?? this.initialValues)
         }
       })
+    },
+    updated(this: any) {
+      upstream.updated.call(this)
+      renderNativeErrors(this.el)
     },
     bindNative(this: any) {
       // Delegation also observes controls mounted later by the model-picker hook.

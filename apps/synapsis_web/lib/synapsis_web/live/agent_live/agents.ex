@@ -9,9 +9,19 @@ defmodule SynapsisWeb.AgentLive.Agents do
   alias Synapsis.Agent.Tools.Web.{Fetch, Search}
   alias SynapsisWeb.AgentLive.BrowserSettings
   alias Synapsis.Provider.Realtime.Catalog, as: RealtimeCatalog
+  alias DuskmoonPhoenix.Component.DataEntry.ReactForm
 
-  @config_tabs ~w(overview workspace runtime tools skills prompt management)
+  @config_tabs ~w(overview audio workspace runtime tools skills prompt management)
   @wizard_steps ~w(overview workspace runtime tools skills prompt)
+  @voice_wizard_steps ~w(overview audio tools prompt workspace skills)
+  @audio_fields for mode <- ["host", "browser"],
+                    {key, field} <- AgentConfig.audio_fields(mode),
+                    do: {field, "agent-voice-#{mode}-#{key}"}
+  @voice_fields [
+                  name: "agent-voice-name",
+                  provider: "agent-voice-provider",
+                  voice_model: "agent-voice-model"
+                ] ++ @audio_fields
 
   @impl true
   def mount(_params, _session, socket) do
@@ -33,6 +43,9 @@ defmodule SynapsisWeb.AgentLive.Agents do
        voice_providers: [],
        realtime_models: [],
        realtime_catalog_status: :not_loaded,
+       voice_field_validation: %{},
+       voice_devices: nil,
+       voice_device_test: nil,
        active_config_tab: "overview",
        wizard_mode: false,
        form_revision: 0,
@@ -55,12 +68,25 @@ defmodule SynapsisWeb.AgentLive.Agents do
   end
 
   @impl true
-  def handle_event("switch_config_tab", %{"tab" => tab}, socket) when tab in @config_tabs do
-    {:noreply,
-     assign(socket,
-       active_config_tab: tab,
-       wizard_mode: socket.assigns.wizard_mode && tab in @wizard_steps
-     )}
+  def handle_event(
+        "switch_config_tab",
+        %{"tab" => tab},
+        %{assigns: %{agent: %AgentConfig{kind: kind}}} = socket
+      )
+      when tab in @config_tabs do
+    if Enum.any?(config_tabs(socket.assigns.live_action, kind), fn
+         {_, key, _} -> key == tab
+       end) do
+      {:noreply,
+       socket
+       |> assign(
+         active_config_tab: tab,
+         wizard_mode: socket.assigns.wizard_mode && tab != "management"
+       )
+       |> maybe_discover_host_devices()}
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_event("start_wizard", _params, socket) do
@@ -68,11 +94,11 @@ defmodule SynapsisWeb.AgentLive.Agents do
   end
 
   def handle_event("wizard_next", _params, socket) do
-    {:noreply, move_wizard(socket, 1)}
+    {:noreply, socket |> move_wizard(1) |> maybe_discover_host_devices()}
   end
 
   def handle_event("wizard_back", _params, socket) do
-    {:noreply, move_wizard(socket, -1)}
+    {:noreply, socket |> move_wizard(-1) |> maybe_discover_host_devices()}
   end
 
   def handle_event("finish_wizard", _params, socket) do
@@ -106,13 +132,18 @@ defmodule SynapsisWeb.AgentLive.Agents do
     end
   end
 
-  def handle_event("change_agent_form", %{"agent" => attrs} = params, socket) do
+  def handle_event("change_agent_form", params, socket),
+    do: handle_event("validate", params, socket)
+
+  def handle_event("validate", %{"agent" => attrs} = params, socket) do
     attrs = web_fetch_form_attrs(attrs, socket)
     agent = preview_agent(socket.assigns.agent, attrs, socket.assigns.providers)
     agent = mcp_preview(agent, params)
 
+    previous = socket.assigns.agent
+
     socket =
-      if agent.provider != socket.assigns.agent.provider do
+      if agent.provider != previous.provider or agent.kind != previous.kind do
         socket
         |> cancel_async(:realtime_catalog)
         |> assign(realtime_models: [], realtime_catalog_status: :not_loaded)
@@ -120,12 +151,26 @@ defmodule SynapsisWeb.AgentLive.Agents do
         socket
       end
 
-    {:noreply, socket |> assign(agent: agent) |> assign_mcp_catalog()}
+    socket =
+      if agent.kind != previous.kind do
+        assign(socket, active_config_tab: "overview", wizard_mode: false)
+      else
+        socket
+      end
+
+    {:noreply,
+     socket
+     |> assign(agent: agent)
+     |> validate_voice_fields(agent)
+     |> assign_mcp_catalog()}
   end
 
-  def handle_event("refresh_realtime_models", _params, socket) do
-    provider = socket.assigns.agent.provider
-
+  def handle_event(
+        "refresh_realtime_models",
+        _params,
+        %{assigns: %{agent: %AgentConfig{kind: :voice, provider: provider}}} = socket
+      )
+      when is_binary(provider) and provider != "" do
     {:noreply,
      socket
      |> assign(realtime_catalog_status: :loading)
@@ -138,6 +183,31 @@ defmodule SynapsisWeb.AgentLive.Agents do
        {provider, result}
      end)}
   end
+
+  def handle_event("refresh_realtime_models", _params, socket), do: {:noreply, socket}
+
+  def handle_event("refresh_voice_devices", _params, socket) do
+    {:noreply, discover_host_devices(socket)}
+  end
+
+  def handle_event(
+        "test_voice_audio",
+        %{"request" => request, "kind" => kind, "device" => device, "volume" => volume},
+        %{assigns: %{agent: %AgentConfig{kind: :voice}, voice_device_test: nil}} = socket
+      )
+      when is_binary(request) and byte_size(request) <= 128 and kind in ["microphone", "speaker"] and
+             (is_nil(device) or (is_binary(device) and byte_size(device) <= 512)) and
+             (is_nil(volume) or (is_integer(volume) and volume in 0..150)) do
+    {:reply, %{status: "testing"},
+     socket
+     |> assign(:voice_device_test, request)
+     |> start_async(:voice_device_test, fn ->
+       Synapsis.Voice.AudioEndpoint.Host.test_device(kind, device, volume)
+     end)}
+  end
+
+  def handle_event("test_voice_audio", _params, socket),
+    do: {:reply, %{status: "error", reason: "invalid_audio_test"}, socket}
 
   def handle_event("refresh_mcp_tools", _params, socket),
     do: {:noreply, maybe_refresh_mcp(socket)}
@@ -194,6 +264,12 @@ defmodule SynapsisWeb.AgentLive.Agents do
       {:error, {:browser_settings, message}} ->
         {:noreply, put_flash(socket, :error, message)}
 
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply,
+         socket
+         |> show_voice_save_errors(changeset)
+         |> put_flash(:error, save_error(changeset))}
+
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, save_error(reason))}
     end
@@ -211,7 +287,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
   @impl true
   def handle_async(:realtime_catalog, {:ok, {provider, result}}, socket) do
-    if socket.assigns.agent && socket.assigns.agent.provider == provider do
+    if match?(%AgentConfig{kind: :voice, provider: ^provider}, socket.assigns.agent) do
       case result do
         {:ok, models} ->
           {:noreply, assign(socket, realtime_models: models, realtime_catalog_status: :loaded)}
@@ -225,9 +301,51 @@ defmodule SynapsisWeb.AgentLive.Agents do
     end
   end
 
-  def handle_async(:realtime_catalog, {:exit, _reason}, socket) do
+  def handle_async(
+        :realtime_catalog,
+        {:exit, _reason},
+        %{assigns: %{realtime_catalog_status: :loading}} = socket
+      ) do
     {:noreply,
      assign(socket, realtime_models: [], realtime_catalog_status: {:error, :unavailable})}
+  end
+
+  def handle_async(:realtime_catalog, {:exit, _reason}, socket), do: {:noreply, socket}
+
+  def handle_async(:voice_devices, {:ok, {:ok, devices}}, socket) do
+    {:noreply,
+     socket
+     |> assign(voice_devices: devices)
+     |> push_event("voice_host_devices", Map.put(devices, "status", "ready"))}
+  end
+
+  def handle_async(:voice_devices, _result, socket) do
+    {:noreply,
+     socket
+     |> assign(voice_devices: :unavailable)
+     |> push_event("voice_host_devices", %{status: "unavailable"})}
+  end
+
+  def handle_async(:voice_device_test, result, socket) do
+    reply =
+      case result do
+        {:ok, {:ok, info}} ->
+          %{status: "ok", peak: info["peak"]}
+
+        {:ok, {:error, reason}} when is_binary(reason) or is_atom(reason) ->
+          %{status: "error", reason: reason}
+
+        _ ->
+          %{status: "error", reason: "audio_test_failed"}
+      end
+
+    {:noreply,
+     socket
+     |> push_event(
+       "voice_audio_test_result",
+       Map.put(reply, :request, socket.assigns.voice_device_test)
+     )
+     |> assign(:voice_device_test, nil)}
   end
 
   def handle_async(:agent_mcp_catalog, {:ok, result}, socket) do
@@ -292,6 +410,8 @@ defmodule SynapsisWeb.AgentLive.Agents do
           voice_providers={@voice_providers}
           realtime_models={@realtime_models}
           realtime_catalog_status={@realtime_catalog_status}
+          voice_field_validation={@voice_field_validation}
+          voice_devices={@voice_devices}
           mcp_sources={@mcp_sources}
           mcp_catalog={@mcp_catalog}
           mcp_loading={@mcp_loading}
@@ -361,6 +481,8 @@ defmodule SynapsisWeb.AgentLive.Agents do
   attr :voice_providers, :list, required: true
   attr :realtime_models, :list, required: true
   attr :realtime_catalog_status, :any, required: true
+  attr :voice_field_validation, :map, required: true
+  attr :voice_devices, :any, required: true
   attr :mcp_sources, :list, required: true
   attr :mcp_catalog, :list, required: true
   attr :mcp_loading, :boolean, required: true
@@ -397,6 +519,9 @@ defmodule SynapsisWeb.AgentLive.Agents do
         Map.put(assigns.draft, "mcp_selection", mcp_form_policy(mcp_policy))
       end
 
+    kind = assigns.agent.kind
+    wizard_steps = wizard_steps(kind)
+
     form_structure = [
       mcp_policy,
       Enum.map(mcp_groups, &{&1.id, &1.name, &1.enabled, &1.status, &1.tools}),
@@ -406,7 +531,13 @@ defmodule SynapsisWeb.AgentLive.Agents do
       Enum.map(assigns.toolsets, & &1.id),
       Enum.map(assigns.skills, & &1.id),
       assigns.form_revision,
-      assigns.agent.kind
+      kind,
+      if(kind == :voice,
+        do: {
+          voice_provider_options(assigns.voice_providers, assigns.agent.provider),
+          voice_delegate_options(assigns.agents, assigns.agent.voice_delegate)
+        }
+      )
     ]
 
     assigns =
@@ -428,19 +559,23 @@ defmodule SynapsisWeb.AgentLive.Agents do
       |> assign(:skill_count, length(assigns.selected_skill_ids))
       |> assign(:workspace_path, workspace_path)
       |> assign(:delete_confirmation, delete_confirmation(assigns.agent))
-      |> assign(:tabs, config_tabs(assigns.action))
-      |> assign(:wizard_steps, @wizard_steps)
-      |> assign(:wizard_step_index, wizard_step_index(assigns.active_tab))
-      |> assign(:wizard_step_count, length(@wizard_steps))
-      |> assign(:wizard_step_label, wizard_step_label(assigns.active_tab))
+      |> assign(:tabs, config_tabs(assigns.action, kind))
+      |> assign(:wizard_steps, wizard_steps)
+      |> assign(:wizard_step_index, Enum.find_index(wizard_steps, &(&1 == assigns.active_tab)))
 
     ~H"""
-    <div class="space-y-5">
-      <p :if={!@native_tool_selection} class="text-sm text-warning">
+    <div class="space-y-5" data-agent-editor={@agent.kind}>
+      <p
+        :if={show_tool_notice?(@agent, @active_tab) and !@native_tool_selection}
+        class="text-sm text-warning"
+      >
         Legacy selection or unavailable linked Toolset. Explicit migration required for legacy
         selections before native runtime use. Ordinary edits preserve saved tools, links and versions.
       </p>
-      <p :if={@native_tool_selection} class="text-sm text-on-surface-variant">
+      <p
+        :if={show_tool_notice?(@agent, @active_tab) and @native_tool_selection}
+        class="text-sm text-on-surface-variant"
+      >
         Native contract v1. Tool metadata and saved selections do not establish runtime readiness
         or grant permission. Runtime checks still apply.
       </p>
@@ -448,20 +583,24 @@ defmodule SynapsisWeb.AgentLive.Agents do
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2">
-              <.dm_mdi name={@agent.icon || "robot-outline"} class="w-6 h-6 text-primary" />
+              <.dm_mdi name={editor_icon(@agent)} class="w-6 h-6 text-primary" />
               <h2 class="text-xl font-bold truncate">
-                {if @action == :new, do: "New Agent", else: agent_label(@agent)}
+                {editor_title(@action, @agent)}
               </h2>
               <span class="text-xs font-mono px-2 py-0.5 rounded bg-surface-container-high text-on-surface-variant">
                 {@agent.name || "unsaved"}
               </span>
               <.dm_badge :if={@agent.is_default} variant="primary" size="sm">default</.dm_badge>
               <.dm_badge :if={!@agent.enabled} variant="ghost" size="sm">disabled</.dm_badge>
-              <.dm_badge :if={@agent.kind == :voice} variant="secondary" size="sm">
+              <.dm_badge
+                :if={@agent.kind == :voice and @action == :config}
+                variant="secondary"
+                size="sm"
+              >
                 Voice Agent
               </.dm_badge>
             </div>
-            <p class="text-sm text-on-surface-variant mt-1">
+            <p :if={@agent.kind == :standard} class="text-sm text-on-surface-variant mt-1">
               Agent workspace for memory files, notes, tools, skills, and runtime policy.
             </p>
           </div>
@@ -481,7 +620,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
           </div>
         </div>
 
-        <div :if={@action == :config} class="mt-5 max-w-sm">
+        <div :if={@action == :config and @agent.kind == :standard} class="mt-5 max-w-sm">
           <.dm_select
             name="agent_picker"
             label="Selected agent"
@@ -499,9 +638,11 @@ defmodule SynapsisWeb.AgentLive.Agents do
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <div class="text-sm font-semibold">
-              Wizard step {@wizard_step_index} of {@wizard_step_count}
+              Wizard step {@wizard_step_index + 1} of {length(@wizard_steps)}
             </div>
-            <div class="text-xs opacity-80">{@wizard_step_label}</div>
+            <div class="text-xs opacity-80">
+              {Enum.find_value(@tabs, fn {label, key, _} -> if key == @active_tab, do: label end)}
+            </div>
           </div>
           <div class="flex flex-wrap items-center gap-2">
             <.dm_btn
@@ -509,12 +650,12 @@ defmodule SynapsisWeb.AgentLive.Agents do
               variant="ghost"
               size="sm"
               phx-click="wizard_back"
-              disabled={@wizard_step_index == 1}
+              disabled={@wizard_step_index == 0}
             >
               Back
             </.dm_btn>
             <.dm_btn
-              :if={@wizard_step_index < @wizard_step_count}
+              :if={@wizard_step_index < length(@wizard_steps) - 1}
               type="button"
               variant="primary"
               size="sm"
@@ -523,7 +664,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
               Next Step
             </.dm_btn>
             <.dm_btn
-              :if={@wizard_step_index == @wizard_step_count}
+              :if={@wizard_step_index == length(@wizard_steps) - 1}
               type="button"
               variant="primary"
               size="sm"
@@ -536,12 +677,19 @@ defmodule SynapsisWeb.AgentLive.Agents do
       </section>
 
       <div class="grid grid-cols-1 lg:grid-cols-[13rem_minmax(0,1fr)] gap-5 items-start">
-        <nav class="rounded-lg border border-outline-variant bg-surface-container p-2">
+        <nav
+          aria-label="Agent settings"
+          class={[
+            "rounded-lg border border-outline-variant bg-surface-container p-2",
+            @agent.kind == :voice && "grid grid-cols-2 gap-1 sm:grid-cols-3 lg:block"
+          ]}
+        >
           <button
             :for={{label, key, icon} <- @tabs}
             type="button"
             phx-click="switch_config_tab"
             phx-value-tab={key}
+            aria-current={@active_tab == key && "true"}
             class={[
               "w-full flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors",
               if(@active_tab == key,
@@ -556,6 +704,22 @@ defmodule SynapsisWeb.AgentLive.Agents do
         </nav>
 
         <div class="min-w-0">
+          <div
+            :if={@agent.kind == :voice}
+            id="agent-voice-test-events"
+            phx-hook="VoiceAudioTest"
+            phx-update="ignore"
+            data-active-tab={@active_tab}
+            hidden
+          >
+          </div>
+          <.realtime_catalog
+            :if={@agent.kind == :voice}
+            models={@realtime_models}
+            status={@realtime_catalog_status}
+            provider={@agent.provider}
+            visible={@active_tab == "overview"}
+          />
           <.react_form
             for={%{}}
             as={:agent}
@@ -563,12 +727,20 @@ defmodule SynapsisWeb.AgentLive.Agents do
             values={agent_form_values(@agent, @selected_skill_ids)}
             draft={@draft}
             structure={@form_structure}
+            novalidate={@agent.kind == :voice}
             phx-submit="save_agent"
-            phx-change="change_agent_form"
+            phx-change={if @agent.kind == :voice, do: "validate", else: "change_agent_form"}
+            data-native-field-errors={
+              if @agent.kind == :voice,
+                do:
+                  Formata.JSON.encode!(
+                    Map.reject(@voice_field_validation, fn {_, error} -> is_nil(error) end)
+                  )
+            }
             class={if @active_tab == "management", do: "hidden", else: "space-y-5"}
           >
             <%!-- # WORKAROUND(upstream): duskmoon-dev/phoenix-duskmoon-ui#191 - retain native fields with required, placeholder, min, rows and resize attributes. --%>
-            <section class={tab_panel_class(@active_tab, "overview")}>
+            <section :if={@agent.kind == :standard} class={tab_panel_class(@active_tab, "overview")}>
               <div class="mb-5">
                 <h3 class="text-lg font-semibold">Overview</h3>
                 <p class="text-sm text-on-surface-variant">
@@ -596,13 +768,8 @@ defmodule SynapsisWeb.AgentLive.Agents do
                 <.readonly_field :if={@action == :config} label="Name" value={@agent.name} />
                 <.dm_react_field type="text" name="agent[label]" label="Label" />
                 <.dm_react_field type="text" name="agent[icon]" label="Icon" />
-                <.dm_select
-                  name="agent[kind]"
-                  label="Agent type"
-                  options={[{"standard", "Standard Agent"}, {"voice", "Voice Agent"}]}
-                  value={Atom.to_string(@agent.kind)}
-                />
-                <div :if={@agent.kind == :standard} class="form-group">
+                <.agent_kind_select kind={@agent.kind} />
+                <div class="form-group">
                   <label for="agent-provider-model-picker-provider" class="form-label">
                     <span>Default model</span>
                   </label>
@@ -638,7 +805,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
                     />
                   </div>
                 </div>
-                <div :if={@agent.kind == :standard} class="form-group">
+                <div class="form-group">
                   <label for="agent-backup-model-picker-provider" class="form-label">
                     <span>Backup model</span>
                   </label>
@@ -666,89 +833,6 @@ defmodule SynapsisWeb.AgentLive.Agents do
                     />
                   </div>
                 </div>
-                <div :if={@agent.kind == :voice} data-voice-settings class="md:col-span-2 space-y-4">
-                  <.dm_select
-                    name="agent[provider]"
-                    label="Backplane connection"
-                    options={voice_provider_options(@voice_providers, @agent.provider)}
-                    value={@agent.provider || ""}
-                  />
-                  <.dm_input
-                    name="agent[voice_model]"
-                    value={@agent.voice_model}
-                    label="Realtime model"
-                    placeholder="provider/model"
-                    list="agent-realtime-models"
-                    required
-                  />
-                  <datalist id="agent-realtime-models">
-                    <option :for={model <- @realtime_models} value={model.id}>{model.name}</option>
-                  </datalist>
-                  <div class="flex flex-wrap items-center gap-3">
-                    <.dm_btn
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      phx-click="refresh_realtime_models"
-                      disabled={@realtime_catalog_status == :loading}
-                    >
-                      Refresh Realtime models
-                    </.dm_btn>
-                    <p class="text-xs text-on-surface-variant" role="status">
-                      {realtime_catalog_message(@realtime_catalog_status, @realtime_models)}
-                    </p>
-                  </div>
-                  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <.dm_select
-                      name="agent[voice]"
-                      label="Voice"
-                      value={@agent.voice}
-                      options={Enum.map(AgentConfig.valid_voices(), &{&1, String.capitalize(&1)})}
-                    />
-                    <.dm_select
-                      name="agent[voice_turn_detection]"
-                      label="Turn detection"
-                      value={@agent.voice_turn_detection}
-                      options={[
-                        {"server_vad", "Voice activity"},
-                        {"semantic_vad", "Semantic"},
-                        {"manual", "Manual"}
-                      ]}
-                    />
-                    <.dm_select
-                      name="agent[audio_mode]"
-                      label="Audio endpoint"
-                      value={@agent.audio_mode}
-                      options={[{"browser", "This browser"}, {"host", "Synapsis host"}]}
-                    />
-                  </div>
-                  <p class="text-xs text-on-surface-variant">
-                    Host devices belong to the machine running Synapsis. Device availability is checked when a call starts.
-                  </p>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <.dm_input
-                      name="agent[audio_input_device]"
-                      value={@agent.audio_input_device}
-                      label="Preferred input device ID"
-                      placeholder="System default"
-                    />
-                    <.dm_input
-                      name="agent[audio_output_device]"
-                      value={@agent.audio_output_device}
-                      label="Preferred output device ID"
-                      placeholder="System default"
-                    />
-                  </div>
-                  <.dm_select
-                    name="agent[voice_delegate]"
-                    value={@agent.voice_delegate || ""}
-                    label="Default task Agent"
-                    options={voice_delegate_options(@agents, @agent.voice_delegate)}
-                  />
-                  <p class="text-xs text-on-surface-variant">
-                    Start a call from a session to activate audio.
-                  </p>
-                </div>
                 <.dm_textarea
                   name="agent[description]"
                   value={@agent.description}
@@ -770,6 +854,21 @@ defmodule SynapsisWeb.AgentLive.Agents do
                 </div>
               </div>
             </section>
+
+            <.voice_settings
+              :if={@agent.kind == :voice}
+              agent={@agent}
+              action={@action}
+              active_tab={@active_tab}
+              providers={@voice_providers}
+            />
+
+            <.voice_audio_settings
+              :if={@agent.kind == :voice}
+              agent={@agent}
+              active_tab={@active_tab}
+              devices={@voice_devices}
+            />
 
             <section class={tab_panel_class(@active_tab, "workspace")}>
               <div class="mb-5">
@@ -804,7 +903,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
               </div>
             </section>
 
-            <section class={tab_panel_class(@active_tab, "runtime")}>
+            <section :if={@agent.kind == :standard} class={tab_panel_class(@active_tab, "runtime")}>
               <div class="mb-5">
                 <h3 class="text-lg font-semibold">Runtime</h3>
                 <p class="text-sm text-on-surface-variant">
@@ -856,7 +955,11 @@ defmodule SynapsisWeb.AgentLive.Agents do
             <section class={tab_panel_class(@active_tab, "tools")}>
               <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between mb-5">
                 <div>
-                  <h3 class="text-lg font-semibold">Tools {length(@tool_names)}</h3>
+                  <h3 class="text-lg font-semibold">
+                    {if @agent.kind == :voice,
+                      do: "Tools & delegation",
+                      else: "Tools #{length(@tool_names)}"}
+                  </h3>
                   <p class="text-sm text-on-surface-variant">
                     Assign a named toolset made from built-in tools and MCP tools.
                   </p>
@@ -867,6 +970,13 @@ defmodule SynapsisWeb.AgentLive.Agents do
               </div>
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <.dm_select
+                  :if={@agent.kind == :voice}
+                  name="agent[voice_delegate]"
+                  value={@agent.voice_delegate || ""}
+                  label="Default task Agent"
+                  options={voice_delegate_options(@agents, @agent.voice_delegate)}
+                />
                 <.dm_select
                   name="agent[permission_mode]"
                   label="Permission mode"
@@ -1208,11 +1318,14 @@ defmodule SynapsisWeb.AgentLive.Agents do
               />
             </section>
 
-            <div class={
-              if @active_tab == "management",
-                do: "hidden",
-                else: "flex items-center justify-end gap-2"
-            }>
+            <div
+              :if={@agent.kind == :standard}
+              class={
+                if @active_tab == "management",
+                  do: "hidden",
+                  else: "flex items-center justify-end gap-2"
+              }
+            >
               <.dm_link navigate={~p"/agent/agents"}>
                 <.dm_btn type="button" variant="ghost">Cancel</.dm_btn>
               </.dm_link>
@@ -1238,7 +1351,10 @@ defmodule SynapsisWeb.AgentLive.Agents do
                   <div>
                     <h4 class="font-semibold">Configuration Wizard</h4>
                     <p class="text-sm text-on-surface-variant mt-1">
-                      Walk through identity, workspace, runtime, tools, skills, and prompt setup.
+                      {if @agent.kind == :voice,
+                        do: "Walk through voice setup, delegation, and shared Agent settings.",
+                        else:
+                          "Walk through identity, workspace, runtime, tools, skills, and prompt setup."}
                     </p>
                   </div>
                   <.dm_btn type="button" variant="primary" size="sm" phx-click="start_wizard">
@@ -1324,6 +1440,398 @@ defmodule SynapsisWeb.AgentLive.Agents do
     """
   end
 
+  attr :kind, :atom, required: true
+
+  defp agent_kind_select(assigns) do
+    ~H"""
+    <.dm_select
+      name="agent[kind]"
+      label="Agent type"
+      options={[{"standard", "Standard Agent"}, {"voice", "Voice Agent"}]}
+      value={Atom.to_string(@kind)}
+    />
+    """
+  end
+
+  attr :agent, :map, required: true
+  attr :action, :atom, required: true
+  attr :active_tab, :string, required: true
+  attr :providers, :list, required: true
+
+  defp voice_settings(assigns) do
+    ~H"""
+    <section class={tab_panel_class(@active_tab, "overview")} data-voice-settings>
+      <h3 class="text-lg font-semibold mb-5">Voice setup</h3>
+      <div class="max-w-sm mb-5">
+        <.agent_kind_select kind={@agent.kind} />
+      </div>
+
+      <fieldset class="min-w-0" data-voice-required>
+        <legend class="font-semibold mb-4">Required settings</legend>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div :if={@action == :new}>
+            <.dm_input
+              id={voice_field_id(:name)}
+              name="agent[name]"
+              value={@agent.name}
+              label="Name"
+              placeholder="voice-assistant"
+              helper="Use lowercase letters, digits, hyphens, or underscores."
+              required
+            />
+            <.native_field_error id={voice_field_id(:name)} />
+          </div>
+          <.readonly_field :if={@action == :config} label="Name" value={@agent.name} />
+          <div>
+            <.dm_select
+              id={voice_field_id(:provider)}
+              name="agent[voice_provider]"
+              label="Backplane connection"
+              options={voice_provider_options(@providers, @agent.provider)}
+              value={@agent.provider || ""}
+              aria-required="true"
+            />
+            <.native_field_error id={voice_field_id(:provider)} />
+          </div>
+          <div>
+            <.dm_input
+              id={voice_field_id(:voice_model)}
+              name="agent[voice_model]"
+              value={@agent.voice_model}
+              label="Realtime model"
+              placeholder="openai/gpt-realtime"
+              helper="Enter a full provider/model ID, such as openai/gpt-realtime."
+              list="agent-realtime-models"
+              required
+            />
+            <.native_field_error id={voice_field_id(:voice_model)} />
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="border-t border-outline-variant mt-6 pt-5">
+        <h4 class="font-semibold mb-4">Realtime conversation</h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <.dm_select
+            name="agent[voice]"
+            label="Voice"
+            value={@agent.voice}
+            options={Enum.map(AgentConfig.valid_voices(), &{&1, String.capitalize(&1)})}
+          />
+          <.dm_select
+            name="agent[voice_turn_detection]"
+            label="Turn detection"
+            value={@agent.voice_turn_detection}
+            options={[{"server_vad", "Server VAD"}, {"manual", "Manual (push to send)"}]}
+          />
+        </div>
+      </div>
+
+      <div class="border-t border-outline-variant mt-6 pt-5">
+        <h4 class="font-semibold mb-4">Profile</h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <.dm_react_field type="text" name="agent[label]" label="Label" />
+          <.dm_react_field type="text" name="agent[icon]" label="Icon" />
+          <.dm_textarea
+            name="agent[description]"
+            value={@agent.description}
+            rows={2}
+            label="Description"
+            resize="none"
+            class="md:col-span-2"
+          />
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-6 border-t border-outline-variant mt-6 pt-5">
+        <.dm_checkbox name="agent[enabled]" value="true" checked={@agent.enabled} label="Enabled" />
+        <.dm_checkbox
+          name="agent[read_only]"
+          value="true"
+          checked={@agent.read_only}
+          label="Read-only runtime"
+        />
+      </div>
+    </section>
+    """
+  end
+
+  attr :agent, :map, required: true
+  attr :active_tab, :string, required: true
+  attr :devices, :any, required: true
+
+  defp voice_audio_settings(assigns) do
+    ~H"""
+    <section
+      id="agent-voice-audio-settings"
+      class={tab_panel_class(@active_tab, "audio")}
+      data-voice-audio-settings
+    >
+      <div class="mb-5 max-w-sm">
+        <.dm_select
+          id="agent-voice-default-endpoint"
+          name="agent[audio_mode]"
+          label="Default call endpoint"
+          value={@agent.audio_mode}
+          options={[{"browser", "Web (this browser)"}, {"host", "Host (Synapsis server)"}]}
+        />
+      </div>
+
+      <div class="space-y-6">
+        <section
+          :for={{mode, title} <- [{"host", "Host audio"}, {"browser", "Web audio"}]}
+          id={"agent-voice-#{mode}-audio"}
+          aria-labelledby={"agent-voice-#{mode}-heading"}
+          data-voice-audio-profile={mode}
+          class="border-t border-outline-variant pt-4"
+        >
+          <div class="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <h3 id={"agent-voice-#{mode}-heading"} class="font-semibold">{title}</h3>
+            <.dm_btn
+              :if={mode == "host"}
+              type="button"
+              variant="ghost"
+              size="sm"
+              phx-click="refresh_voice_devices"
+            >
+              <.dm_mdi name="refresh" class="size-4" /> Refresh host devices
+            </.dm_btn>
+            <.dm_btn
+              :if={mode == "browser"}
+              type="button"
+              variant="ghost"
+              size="sm"
+              data-voice-discover-browser
+            >
+              <.dm_mdi name="refresh" class="size-4" /> Discover browser devices
+            </.dm_btn>
+          </div>
+          <p
+            :if={mode == "host"}
+            data-host-device-status
+            class="mb-3 text-sm text-on-surface-variant empty:hidden data-[state=error]:text-error"
+            role="status"
+          >
+            {if @devices == :unavailable, do: "Could not load host audio devices."}
+          </p>
+          <div
+            :if={mode == "browser"}
+            id="agent-browser-device-status"
+            phx-update="ignore"
+            role="status"
+          >
+            <p data-browser-device-status class="mb-3 text-sm text-on-surface-variant empty:hidden">
+            </p>
+          </div>
+          <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,21rem),1fr))] gap-4">
+            <.voice_device_settings
+              :for={
+                {kind, label, icon, direction, list} <- [
+                  {"microphone", "Microphone", "microphone-outline", :input, "inputs"},
+                  {"speaker", "Speaker", "volume-high", :output, "outputs"}
+                ]
+              }
+              mode={mode}
+              kind={kind}
+              label={label}
+              icon={icon}
+              list={list}
+              device={
+                AgentConfig.audio_fields(mode)[
+                  if(direction == :input, do: :input_device, else: :output_device)
+                ]
+              }
+              level={
+                AgentConfig.audio_fields(mode)[
+                  if(direction == :input, do: :input_volume, else: :output_volume)
+                ]
+              }
+              agent={@agent}
+              devices={
+                if(mode == "host" and is_map(@devices), do: Map.get(@devices, list, []), else: [])
+              }
+              discovered={mode == "host" and is_map(@devices)}
+            />
+          </div>
+        </section>
+      </div>
+      <p class="mt-4 text-sm text-on-surface-variant">
+        Saved settings apply when you start a call or switch its audio endpoint.
+      </p>
+    </section>
+    """
+  end
+
+  attr :mode, :string, required: true
+  attr :kind, :string, required: true
+  attr :label, :string, required: true
+  attr :icon, :string, required: true
+  attr :list, :string, required: true
+  attr :device, :atom, required: true
+  attr :level, :atom, required: true
+  attr :agent, :map, required: true
+  attr :devices, :list, required: true
+  attr :discovered, :boolean, required: true
+
+  defp voice_device_settings(assigns) do
+    assigns =
+      assign(assigns,
+        card_id: "agent-voice-#{assigns.mode}-#{assigns.kind}",
+        selected: Map.get(assigns.agent, assigns.device) || "",
+        volume: Map.get(assigns.agent, assigns.level)
+      )
+
+    ~H"""
+    <section
+      aria-labelledby={"#{@card_id}-heading"}
+      data-voice-device-card
+      class="min-w-0 rounded-lg border border-outline-variant bg-surface-container-low p-4"
+    >
+      <h4 id={"#{@card_id}-heading"} class="mb-4 flex items-center gap-2 font-semibold">
+        <.dm_mdi name={@icon} class="size-5 text-primary" /> {@label}
+      </h4>
+      <.dm_select
+        id={voice_field_id(@device)}
+        name={"agent[#{@device}]"}
+        value={@selected}
+        label="Device"
+        aria-label={"#{@label} device"}
+        select_class="w-full"
+        options={voice_device_options(@devices, @selected, @discovered)}
+        data-voice-device
+        data-voice-device-list={@list}
+      />
+      <.native_field_error id={voice_field_id(@device)} />
+
+      <div class="mt-4">
+        <div class="mb-2 flex items-center justify-between gap-2">
+          <label for={voice_field_id(@level)} class="form-label">Volume</label>
+          <span class="text-sm tabular-nums text-on-surface-variant" data-voice-volume-current>
+            {if(@volume in [nil, ""], do: "Default", else: "#{@volume}%")}
+          </span>
+        </div>
+        <input type="hidden" name={"agent[#{@level}]"} value={@volume} data-voice-volume-value />
+        <.dm_slider
+          id={voice_field_id(@level)}
+          name={nil}
+          value={if(@volume in [nil, ""], do: 100, else: @volume)}
+          max={AgentConfig.max_audio_volume(@mode)}
+          show_value={false}
+          slider_class="range range-primary range-sm w-full"
+          aria-label={"#{@label} volume"}
+          data-voice-volume-range
+        />
+        <.native_field_error id={voice_field_id(@level)} />
+      </div>
+      <div class="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <.dm_btn type="button" variant="secondary" size="sm" data-voice-test={@kind}>
+          Test {@kind}
+        </.dm_btn>
+        <.dm_btn
+          type="button"
+          variant="ghost"
+          size="sm"
+          data-voice-volume-reset
+          hidden={@volume in [nil, ""]}
+        >
+          Use default volume
+        </.dm_btn>
+      </div>
+      <div id={"#{@card_id}-preview"} phx-update="ignore">
+        <div role="status">
+          <p
+            data-voice-test-status
+            class="mt-3 text-sm text-on-surface-variant empty:hidden data-[state=error]:text-error"
+          >
+          </p>
+        </div>
+        <progress
+          :if={@kind == "microphone"}
+          data-voice-test-meter
+          class="progress progress-primary mt-1 h-2 w-full"
+          max="100"
+          value="0"
+          aria-label="Microphone peak level"
+          hidden
+        ></progress>
+      </div>
+    </section>
+    """
+  end
+
+  defp voice_device_options(devices, selected, discovered?) do
+    options = for %{"id" => id, "label" => label} <- devices, id != "", do: {id, label}
+
+    unavailable =
+      if selected != "" and not List.keymember?(options, selected, 0) do
+        [{selected, if(discovered?, do: "Saved device (unavailable)", else: "Saved device")}]
+      else
+        []
+      end
+
+    [{"", "System default"} | options ++ unavailable]
+  end
+
+  defp maybe_discover_host_devices(
+         %{assigns: %{active_config_tab: "audio", voice_devices: nil}} = socket
+       ),
+       do: discover_host_devices(socket)
+
+  defp maybe_discover_host_devices(socket), do: socket
+
+  defp discover_host_devices(socket) do
+    socket
+    |> assign(voice_devices: :loading)
+    |> start_async(:voice_devices, fn -> Synapsis.VoiceSession.devices(:host) end)
+    |> push_event("voice_host_devices", %{status: "loading"})
+  end
+
+  attr :id, :string, required: true
+
+  defp native_field_error(assigns) do
+    ~H"""
+    <p
+      id={"#{@id}-error"}
+      data-native-field-error={@id}
+      class="text-sm text-error mt-1"
+      aria-live="polite"
+      hidden
+    >
+    </p>
+    """
+  end
+
+  attr :models, :list, required: true
+  attr :status, :any, required: true
+  attr :provider, :string, required: true
+  attr :visible, :boolean, required: true
+
+  defp realtime_catalog(assigns) do
+    ~H"""
+    <%!-- Keep asynchronous results out of the React mount so a refresh preserves current input. --%>
+    <datalist id="agent-realtime-models">
+      <option :for={model <- @models} value={model.id}>{model.name}</option>
+    </datalist>
+    <div
+      :if={@visible}
+      class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3"
+    >
+      <.dm_btn
+        size="sm"
+        type="button"
+        variant="ghost"
+        phx-click="refresh_realtime_models"
+        disabled={@provider in [nil, ""] or @status == :loading}
+      >
+        Refresh Realtime models
+      </.dm_btn>
+      <span role="status" class="text-sm text-on-surface-variant">
+        {realtime_catalog_message(@status, @models)}
+      </span>
+    </div>
+    """
+  end
+
   attr :label, :string, required: true
   attr :value, :string, required: true
   attr :mono, :boolean, default: false
@@ -1367,6 +1875,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
       },
       selected_skill_ids: [],
       active_config_tab: "overview",
+      voice_field_validation: %{},
       wizard_mode: false
     )
   end
@@ -1382,6 +1891,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
           agent: agent,
           selected_skill_ids: AgentSkills.list_skill_ids(agent.id),
           active_config_tab: "overview",
+          voice_field_validation: %{},
           wizard_mode: false
         )
 
@@ -1403,31 +1913,33 @@ defmodule SynapsisWeb.AgentLive.Agents do
     values =
       agent
       |> Map.from_struct()
-      |> Map.take([
-        :name,
-        :label,
-        :icon,
-        :description,
-        :kind,
-        :provider,
-        :model,
-        :voice_model,
-        :voice,
-        :voice_turn_detection,
-        :audio_mode,
-        :audio_input_device,
-        :audio_output_device,
-        :voice_delegate,
-        :fallback_models,
-        :reasoning_effort,
-        :model_tier,
-        :max_tokens,
-        :enabled,
-        :read_only,
-        :system_prompt
-      ])
+      |> Map.take(
+        [
+          :name,
+          :label,
+          :icon,
+          :description,
+          :kind,
+          :provider,
+          :model,
+          :voice_model,
+          :voice,
+          :voice_turn_detection,
+          :audio_mode,
+          :voice_delegate,
+          :fallback_models,
+          :reasoning_effort,
+          :model_tier,
+          :max_tokens,
+          :enabled,
+          :read_only,
+          :system_prompt
+        ] ++ Keyword.keys(@audio_fields)
+      )
       |> Map.new(fn {key, value} -> {Atom.to_string(key), value} end)
       |> Map.put("kind", Atom.to_string(agent.kind))
+      |> Map.put("provider", if(agent.kind == :standard, do: agent.provider))
+      |> Map.put("voice_provider", if(agent.kind == :voice, do: agent.provider))
       |> Map.put("reasoning_effort", agent.reasoning_effort || "medium")
       |> Map.put("model_tier", agent.model_tier || "default")
       |> Map.put("max_tokens", agent.max_tokens || 8192)
@@ -1436,7 +1948,10 @@ defmodule SynapsisWeb.AgentLive.Agents do
       |> Map.put("permission_mode", permission_mode(agent))
       |> Map.put("toolset_ids", selected_toolset_ids(agent))
       |> Map.put("deferred_tool_names", deferred_tool_names(agent))
-      |> Map.put("provider_model_state", provider_model_state_value(agent))
+      |> Map.put(
+        "provider_model_state",
+        if(agent.kind == :standard, do: provider_model_state_value(agent))
+      )
       |> Map.put("fallback_model_state", fallback_model_state_value(agent))
 
     %{
@@ -1459,6 +1974,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
       browser_config_baseline: agent.config || %{},
       agents: AgentConfigs.list(),
       selected_skill_ids: AgentSkills.list_skill_ids(agent.id),
+      voice_field_validation: %{},
       form_revision: socket.assigns.form_revision + 1
     )
     |> reset_react_form(
@@ -1507,6 +2023,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
     attrs
     |> merge_agent_model_state()
     |> merge_fallback_model_state()
+    |> Map.delete("voice_provider")
     |> Map.delete("provider_model_state")
     |> Map.delete("fallback_model_state")
     |> Map.delete("web_allowed_hosts")
@@ -1523,22 +2040,31 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
   defp preview_agent(%AgentConfig{} = agent, attrs, providers) do
     attrs = attrs |> merge_fallback_model_state() |> normalize_toolset_attrs(agent)
-    provider = normalize_form_value(Map.get(attrs, "provider", agent.provider))
+    kind = preview_kind(Map.get(attrs, "kind"), agent.kind)
+    provider = attrs |> agent_form_provider(kind, agent.provider) |> normalize_form_value()
     models = models_for_provider(providers, provider)
     model = normalize_form_value(Map.get(attrs, "model", agent.model))
 
     model =
-      if preview_kind(Map.get(attrs, "kind"), agent.kind) == :voice or
-           model_supported?(model, models) do
+      if kind == :voice or model_supported?(model, models) do
         model
       else
         nil
       end
 
+    agent =
+      Enum.reduce(@audio_fields, agent, fn {field, _}, draft ->
+        Map.replace!(
+          draft,
+          field,
+          Map.get(attrs, Atom.to_string(field), Map.fetch!(draft, field))
+        )
+      end)
+
     %{
       agent
       | name: Map.get(attrs, "name", agent.name),
-        kind: preview_kind(Map.get(attrs, "kind"), agent.kind),
+        kind: kind,
         label: Map.get(attrs, "label", agent.label),
         icon: Map.get(attrs, "icon", agent.icon),
         description: Map.get(attrs, "description", agent.description),
@@ -1548,8 +2074,6 @@ defmodule SynapsisWeb.AgentLive.Agents do
         voice: Map.get(attrs, "voice", agent.voice),
         voice_turn_detection: Map.get(attrs, "voice_turn_detection", agent.voice_turn_detection),
         audio_mode: Map.get(attrs, "audio_mode", agent.audio_mode),
-        audio_input_device: Map.get(attrs, "audio_input_device", agent.audio_input_device),
-        audio_output_device: Map.get(attrs, "audio_output_device", agent.audio_output_device),
         voice_delegate: Map.get(attrs, "voice_delegate", agent.voice_delegate),
         fallback_models: Map.get(attrs, "fallback_models", agent.fallback_models),
         reasoning_effort: Map.get(attrs, "reasoning_effort", agent.reasoning_effort),
@@ -1570,6 +2094,12 @@ defmodule SynapsisWeb.AgentLive.Agents do
   defp preview_kind("voice", _), do: :voice
   defp preview_kind("standard", _), do: :standard
   defp preview_kind(_, current), do: current
+
+  defp agent_form_provider(%{"voice_provider" => provider}, :voice, _default), do: provider
+  defp agent_form_provider(attrs, _kind, default), do: Map.get(attrs, "provider", default)
+
+  defp merge_agent_model_state(%{"kind" => "voice", "voice_provider" => provider} = attrs),
+    do: Map.put(attrs, "provider", provider)
 
   defp merge_agent_model_state(%{"kind" => "voice"} = attrs), do: attrs
   defp merge_agent_model_state(attrs), do: merge_provider_model_state(attrs)
@@ -1727,14 +2257,15 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
   defp move_wizard(socket, offset) do
     active_tab = socket.assigns.active_config_tab
-    current_index = Enum.find_index(@wizard_steps, &(&1 == active_tab)) || 0
+    steps = wizard_steps(socket.assigns.agent.kind)
+    current_index = Enum.find_index(steps, &(&1 == active_tab)) || 0
     next_index = current_index + offset
-    bounded_index = max(0, min(next_index, length(@wizard_steps) - 1))
+    bounded_index = max(0, min(next_index, length(steps) - 1))
 
-    assign(socket, active_config_tab: Enum.at(@wizard_steps, bounded_index), wizard_mode: true)
+    assign(socket, active_config_tab: Enum.at(steps, bounded_index), wizard_mode: true)
   end
 
-  defp config_tabs(:new) do
+  defp config_tabs(:new, :standard) do
     [
       {"Overview", "overview", "view-dashboard-outline"},
       {"Workspace", "workspace", "folder-outline"},
@@ -1745,23 +2276,33 @@ defmodule SynapsisWeb.AgentLive.Agents do
     ]
   end
 
-  defp config_tabs(_action),
-    do: config_tabs(:new) ++ [{"Management", "management", "cog-outline"}]
-
-  defp wizard_step_index(active_tab) do
-    case Enum.find_index(@wizard_steps, &(&1 == active_tab)) do
-      nil -> 0
-      index -> index + 1
-    end
+  defp config_tabs(:new, :voice) do
+    [
+      {"Voice setup", "overview", "microphone-outline"},
+      {"Audio", "audio", "tune-variant"},
+      {"Tools & delegation", "tools", "tools"},
+      {"Prompt", "prompt", "text-box-outline"},
+      {"Workspace", "workspace", "folder-outline"},
+      {"Skills", "skills", "lightning-bolt"}
+    ]
   end
 
-  defp wizard_step_label("overview"), do: "Overview"
-  defp wizard_step_label("workspace"), do: "Workspace"
-  defp wizard_step_label("runtime"), do: "Runtime"
-  defp wizard_step_label("tools"), do: "Tools"
-  defp wizard_step_label("skills"), do: "Skills"
-  defp wizard_step_label("prompt"), do: "System Prompt"
-  defp wizard_step_label(_tab), do: "Configuration"
+  defp config_tabs(_action, kind),
+    do: config_tabs(:new, kind) ++ [{"Management", "management", "cog-outline"}]
+
+  defp wizard_steps(:standard), do: @wizard_steps
+  defp wizard_steps(:voice), do: @voice_wizard_steps
+
+  defp editor_title(:new, %AgentConfig{kind: :voice}), do: "New Voice Agent"
+  defp editor_title(:new, _agent), do: "New Agent"
+  defp editor_title(:config, agent), do: agent_label(agent)
+
+  defp editor_icon(%AgentConfig{kind: :voice, icon: icon}) when icon in [nil, "robot-outline"],
+    do: "microphone-outline"
+
+  defp editor_icon(agent), do: agent.icon || "robot-outline"
+
+  defp show_tool_notice?(agent, tab), do: agent.kind == :standard or tab == "tools"
 
   defp deletable_agent?(%AgentConfig{} = agent), do: !AgentConfigs.protected?(agent)
   defp deletable_agent?(_agent), do: false
@@ -1988,7 +2529,11 @@ defmodule SynapsisWeb.AgentLive.Agents do
   end
 
   defp voice_provider_options(providers, selected) do
-    names = if selected in [nil, ""], do: providers, else: Enum.uniq([selected | providers])
+    names =
+      if selected in [nil, ""] or selected in providers,
+        do: providers,
+        else: [selected | providers]
+
     [{"", "Select a connection"} | Enum.map(names, &{&1, &1})]
   end
 
@@ -2029,6 +2574,9 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
   defp realtime_catalog_message({:error, :named_endpoint_unsupported}, _),
     do: "Realtime requires a root Backplane connection."
+
+  defp realtime_catalog_message({:error, {:http_status, status}}, _),
+    do: "Backplane returned HTTP #{status}. You can enter a known Realtime model ID to save."
 
   defp realtime_catalog_message({:error, _}, _),
     do: "Unable to load the Realtime catalog. Check the connection."
@@ -2472,7 +3020,82 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
   defp fallback_tokens(_fallbacks), do: []
 
-  defp save_error(%Ecto.Changeset{}), do: "Failed to save agent"
+  defp voice_field_id(field), do: Keyword.fetch!(@voice_fields, field)
+
+  defp validate_voice_fields(socket, %AgentConfig{kind: :voice} = agent) do
+    attrs = Map.take(agent, [:kind, :audio_mode | Keyword.keys(@voice_fields)])
+    changeset = AgentConfig.changeset(%AgentConfig{}, attrs)
+    assign_voice_field_validation(socket, changeset, :validate)
+  end
+
+  defp validate_voice_fields(socket, _agent), do: assign(socket, voice_field_validation: %{})
+
+  defp show_voice_save_errors(socket, changeset) do
+    if Ecto.Changeset.get_field(changeset, :kind) == :voice do
+      socket = assign_voice_field_validation(socket, changeset, :save)
+
+      cond do
+        Enum.any?([:name, :provider, :voice_model], &Keyword.has_key?(changeset.errors, &1)) ->
+          assign(socket, active_config_tab: "overview")
+
+        Enum.any?(
+          Keyword.keys(@audio_fields),
+          &Keyword.has_key?(changeset.errors, &1)
+        ) ->
+          assign(socket, active_config_tab: "audio")
+
+        true ->
+          socket
+      end
+    else
+      socket
+    end
+  end
+
+  defp assign_voice_field_validation(socket, changeset, mode) do
+    errors = Keyword.take(changeset.errors, Keyword.keys(@voice_fields))
+    %{errors: messages} = ReactForm.validation_reply(%{changeset | errors: errors})
+    previous = socket.assigns.voice_field_validation
+
+    validation =
+      for {field, id} <- @voice_fields,
+          field != :name or socket.assigns.live_action == :new,
+          mode == :save or Map.has_key?(previous, id) or
+            Ecto.Changeset.get_field(changeset, field) not in [nil, ""],
+          into: %{} do
+        error =
+          case {field, errors[field]} do
+            {:provider, {_, [validation: :required]}} -> "Select a Backplane connection."
+            {:voice_model, {_, [validation: :required]}} -> "Enter a Realtime model."
+            _ -> List.first(Map.get(messages, field, []))
+          end
+
+        {id, error}
+      end
+
+    assign(socket, voice_field_validation: validation)
+  end
+
+  defp save_error(%Ecto.Changeset{errors: errors} = changeset) do
+    if Ecto.Changeset.get_field(changeset, :kind) == :voice do
+      cond do
+        errors[:name] ->
+          "Name #{elem(errors[:name], 0)}."
+
+        errors[:provider] ->
+          "Select a Backplane connection."
+
+        errors[:voice_model] ->
+          "Enter a Realtime model in provider/model format, such as openai/gpt-realtime."
+
+        true ->
+          "Failed to save agent"
+      end
+    else
+      "Failed to save agent"
+    end
+  end
+
   defp save_error({:deferred_tools, message}), do: message
   defp save_error(:unsupported_action), do: "Unsupported agent action"
   defp save_error(_reason), do: "Failed to save agent"

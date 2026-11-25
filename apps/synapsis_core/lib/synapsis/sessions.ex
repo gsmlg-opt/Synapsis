@@ -425,23 +425,30 @@ defmodule Synapsis.Sessions do
     messages =
       session_id
       |> Message.list_by_session()
-      |> Enum.with_index(fn
-        %Message{id: nil} = message, index ->
-          # Earlier forks and imports stored turns without IDs. Include the position
-          # and content so repeated prompts are distinct and stale references fail.
-          key = :erlang.term_to_binary({session_id, index, message}, [:deterministic])
-          id = Base.url_encode64(:crypto.hash(:sha256, key), padding: false)
-          %{message | id: "legacy-" <> id}
-
-        message, _index ->
-          message
-      end)
+      |> Enum.with_index(&ensure_message_id(&1, session_id, &2))
 
     case Keyword.get(opts, :limit) do
       nil -> messages
       limit -> Enum.take(messages, limit)
     end
   end
+
+  @doc "Read one durable message with the same identity as the full transcript."
+  def get_message_at(session_id, index) do
+    with {:ok, message} <- Message.get_by_index(session_id, index) do
+      {:ok, ensure_message_id(message, session_id, index)}
+    end
+  end
+
+  # Earlier forks and imports stored turns without IDs. Include the position
+  # and content so repeated prompts are distinct and stale references fail.
+  defp ensure_message_id(%Message{id: nil} = message, session_id, index) do
+    key = :erlang.term_to_binary({session_id, index, message}, [:deterministic])
+    id = Base.url_encode64(:crypto.hash(:sha256, key), padding: false)
+    %{message | id: "legacy-" <> id}
+  end
+
+  defp ensure_message_id(message, _session_id, _index), do: message
 
   @doc "Return the newest bounded messages in chronological order."
   @spec get_recent_messages(String.t(), keyword()) :: [Message.t()]

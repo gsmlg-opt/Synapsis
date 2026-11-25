@@ -6,15 +6,15 @@ defmodule Synapsis.Voice.Sync do
 
   def new, do: %{items: [], seen: MapSet.new(), pending: %{}, calls: MapSet.new()}
 
-  def stage(sync, messages, generation, confirmed) do
-    Enum.reduce(messages, {[], sync}, fn message, {events, sync} ->
-      case project(message, generation, sync, confirmed) do
+  def stage(sync, messages, generation, confirmed, image_payloads \\ %{}) do
+    Enum.reduce_while(messages, {[], sync}, fn message, {events, sync} ->
+      case project(message, generation, sync, confirmed, image_payloads) do
         {:existing, item} ->
-          {events, remember(sync, item)}
+          {:cont, {events, remember(sync, item)}}
 
         {:new, key, event} ->
           if MapSet.member?(sync.seen, key) do
-            {events, sync}
+            {:cont, {events, sync}}
           else
             sync = %{
               sync
@@ -23,14 +23,20 @@ defmodule Synapsis.Voice.Sync do
                 items: sync.items ++ [event.item.id]
             }
 
-            {[event | events], sync}
+            {:cont, {[event | events], sync}}
           end
 
         :skip ->
-          {events, sync}
+          {:cont, {events, sync}}
+
+        {:error, _} = error ->
+          {:halt, error}
       end
     end)
-    |> then(fn {events, sync} -> {Enum.reverse(events), sync} end)
+    |> case do
+      {:error, _} = error -> error
+      {events, sync} -> {Enum.reverse(events), sync}
+    end
   end
 
   def acknowledge(sync, id), do: %{sync | pending: Map.delete(sync.pending, id)}
@@ -56,7 +62,8 @@ defmodule Synapsis.Voice.Sync do
          },
          generation,
          _sync,
-         _confirmed
+         _confirmed,
+         _images
        ),
        do: {:existing, item}
 
@@ -67,7 +74,8 @@ defmodule Synapsis.Voice.Sync do
          },
          _,
          _,
-         confirmed
+         confirmed,
+         _images
        ) do
     key = previous <> ":" <> item
 
@@ -95,7 +103,8 @@ defmodule Synapsis.Voice.Sync do
          },
          generation,
          _,
-         confirmed
+         confirmed,
+         _images
        )
        when previous != generation do
     key = previous <> ":" <> item <> ":" <> Integer.to_string(index)
@@ -112,22 +121,24 @@ defmodule Synapsis.Voice.Sync do
     end
   end
 
-  defp project(%{role: :user, content: content} = message, _, _, _) do
-    key = get_in(message, [:host_feedback, "id"]) || message[:id]
+  defp project(%{role: :user, content: content} = message, _, sync, _, images) do
+    id = get_in(message, [:host_feedback, "id"]) || message[:id]
+    key = {:text, id}
 
-    text =
-      if is_binary(content),
-        do: content,
-        else: Enum.map_join(content, "\n", fn block -> block[:text] || "" end)
+    if is_binary(id) and not MapSet.member?(sync.seen, key) do
+      blocks = if is_binary(content), do: [%{type: :text, text: content}], else: content
 
-    if is_binary(key) and text != "" do
-      text_event({:text, key}, text)
+      case input_parts(blocks, images) do
+        {:ok, []} -> :skip
+        {:ok, parts} -> {:new, key, Protocol.input_item(item_id(key), parts)}
+        error -> error
+      end
     else
       :skip
     end
   end
 
-  defp project(%{role: :tool, tool_call_id: id, result: result} = message, _, sync, _) do
+  defp project(%{role: :tool, tool_call_id: id, result: result} = message, _, sync, _, _) do
     if MapSet.member?(sync.calls, id) do
       text =
         case ProviderMessages.tool_result_text(result, message[:name]) do
@@ -142,7 +153,27 @@ defmodule Synapsis.Voice.Sync do
     end
   end
 
-  defp project(_, _, _, _), do: :skip
+  defp project(_, _, _, _, _), do: :skip
+
+  defp input_parts(blocks, images) do
+    Enum.reduce_while(blocks, {:ok, []}, fn
+      %{type: :image, image_ref: ref} = image, {:ok, parts} ->
+        case Map.fetch(images, ref) do
+          {:ok, data} -> {:cont, {:ok, [Map.put(image, :data, data) | parts]}}
+          :error -> {:halt, {:error, :voice_attachment_unavailable}}
+        end
+
+      %{text: text}, {:ok, parts} when is_binary(text) and text != "" ->
+        {:cont, {:ok, [%{type: :text, text: text} | parts]}}
+
+      _, acc ->
+        {:cont, acc}
+    end)
+    |> case do
+      {:ok, parts} -> {:ok, Enum.reverse(parts)}
+      error -> error
+    end
+  end
 
   defp text_event(key, text), do: {:new, key, Protocol.text_item(item_id(key), text)}
 

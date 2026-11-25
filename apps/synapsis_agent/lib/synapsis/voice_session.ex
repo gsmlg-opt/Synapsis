@@ -1,17 +1,19 @@
 defmodule Synapsis.VoiceSession do
   @moduledoc """
-  Owns one logical voice call and its media lease. The SessionAdapter owns the
-  native Conversation, tool effects, and collaboration; the controller can
-  disconnect while that runtime continues to own its tasks.
+  Owns the live transcript, input queue and media lease for a logical voice
+  session. The SessionAdapter owns the native Conversation, tool effects and
+  collaboration, including tasks that continue after the controller disconnects.
   """
   use GenServer, restart: :temporary
+  require Logger
 
   alias Synapsis.Agent.{ContextBuilder, Resolver}
+  alias Synapsis.Agent.Runtime.ProviderMessages
   alias Synapsis.Agent.Runtime.SessionAdapter
   alias Synapsis.Agent.Tools.MCPSources
   alias Synapsis.Provider.Realtime.{Catalog, Connection, Protocol}
   alias Synapsis.Voice.{AudioEndpoint.Host, History, Sync}
-  alias Synapsis.{Providers, Sessions}
+  alias Synapsis.{AgentConfig, AgentConfigs, Part, Providers, Sessions}
 
   @registry Synapsis.Voice.Registry
   @supervisor Synapsis.Voice.Supervisor
@@ -21,6 +23,8 @@ defmodule Synapsis.VoiceSession do
   @max_waiting_frames 16
   @max_waiting_inputs 16
   @max_caption_bytes 32_000
+  @max_chat_event_bytes 2_000_000
+  @chat_image_types ~w(image/png image/jpeg image/webp)
 
   def start(session_id, options \\ []) do
     with {:ok, pid} <- find_or_start(session_id) do
@@ -29,12 +33,76 @@ defmodule Synapsis.VoiceSession do
   end
 
   def status(session), do: call(session, :status)
+
+  def chat_snapshot(session_id) do
+    case call(session_id, :chat_snapshot) do
+      {:ok, snapshot} ->
+        snapshot
+
+      {:error, :voice_timeout} = error ->
+        error
+
+      {:error, _} ->
+        %{
+          revision: 0,
+          phase: :offline,
+          busy: false,
+          queued: 0,
+          messages: Sessions.get_messages(session_id),
+          facts: History.recovery(session_id),
+          reply: nil
+        }
+    end
+  end
+
+  def request_chat_snapshot(session_id), do: cast(session_id, {:chat_snapshot, self()})
+
+  def chat_image(session_id, message_id, turn_index, part_index) do
+    case Sessions.get_message_at(session_id, turn_index) do
+      {:ok, %{id: ^message_id, parts: parts}} ->
+        Enum.at(parts, part_index)
+
+      _ ->
+        call(session_id, {:chat_image, message_id, turn_index, part_index})
+    end
+  end
+
+  def chat_topic(session_id), do: "voice-chat:" <> session_id
   def stop(session), do: call(session, :stop, 7_000)
   def stop_playback(session), do: call(session, :stop_playback, 7_000)
   def mute(session, value) when is_boolean(value), do: call(session, {:mute, value}, 7_000)
   def commit(session), do: call(session, :commit)
   def switch(session, options), do: call(session, {:switch, options}, 12_000)
   def cancel_task(session, agent, run), do: call(session, {:cancel_task, agent, run})
+
+  def submit(session, text, images) when is_binary(text) and is_list(images) do
+    text = String.trim(text)
+
+    cond do
+      text == "" and images == [] ->
+        {:error, :empty_voice_message}
+
+      not Enum.all?(
+        images,
+        &match?(%Synapsis.Part.Image{media_type: type} when type in @chat_image_types, &1)
+      ) ->
+        {:error, :unsupported_voice_image}
+
+      true ->
+        parts = if text == "", do: images, else: [%Synapsis.Part.Text{content: text} | images]
+
+        with {:ok, [%{content: blocks}]} <-
+               ProviderMessages.from_host([%{role: :user, parts: parts}]),
+             event = Protocol.input_item("item_" <> String.duplicate("x", 24), blocks),
+             true <- byte_size(JSON.encode!(event)) <= @max_chat_event_bytes do
+          {[], content, payloads} = ProviderMessages.reference_images([], blocks)
+          call(session, {:submit_chat, content, payloads})
+        else
+          false -> {:error, :voice_message_too_large}
+          _ -> {:error, :invalid_voice_message}
+        end
+    end
+  end
 
   def browser_ready(session, generation, info),
     do: call(session, {:browser_ready, generation, info})
@@ -83,6 +151,14 @@ defmodule Synapsis.VoiceSession do
   end
 
   defp call(session, request, timeout \\ 5_000)
+
+  defp call(pid, :chat_snapshot, timeout) when is_pid(pid) do
+    GenServer.call(pid, :chat_snapshot, timeout)
+  catch
+    :exit, {:timeout, _} ->
+      if Process.alive?(pid), do: {:error, :voice_timeout}, else: {:error, :voice_unavailable}
+  end
+
   defp call(pid, request, timeout) when is_pid(pid), do: GenServer.call(pid, request, timeout)
 
   defp call(id, request, timeout) do
@@ -110,6 +186,11 @@ defmodule Synapsis.VoiceSession do
          true <- Sessions.voice?(session) or {:error, :voice_session_required},
          {:ok, adapter} <-
            SessionAdapter.start_link(session_id: id, owner: self(), epoch: make_ref()) do
+      messages = Sessions.get_messages(id)
+
+      {canonical, [], image_payloads} =
+        ProviderMessages.reference_images(History.initial(messages), [])
+
       {:ok,
        %{
          session: session,
@@ -138,13 +219,17 @@ defmodule Synapsis.VoiceSession do
          flush: nil,
          truncation_writes: MapSet.new(),
          playback_order: 0,
-         caption: "",
+         chat_messages: messages,
+         chat_ids: MapSet.new(messages, & &1.id),
+         chat_reply: nil,
+         chat_snapshot: nil,
          status_timer: false,
          admitted_audio: MapSet.new(),
          inputs: :queue.new(),
          run_phase: :idle,
-         canonical: History.initial(id),
-         confirmed: %{},
+         canonical: canonical,
+         image_payloads: image_payloads,
+         confirmed: History.recovery(id),
          roster: %{agents: []},
          child_results: %{},
          projection: nil,
@@ -158,10 +243,31 @@ defmodule Synapsis.VoiceSession do
   @impl true
   def handle_call(:status, _, state), do: {:reply, {:ok, public(state)}, state}
 
+  def handle_call(:chat_snapshot, _, state),
+    do: {:reply, {:ok, current_chat_snapshot(state)}, state}
+
+  def handle_call({:chat_image, id, turn_index, part_index}, _, state) do
+    message =
+      case Enum.at(state.chat_messages, turn_index) do
+        %{id: ^id} = message -> message
+        _ -> Enum.find(state.chat_messages, &(&1.id == id))
+      end
+
+    image =
+      with %{parts: parts} <- message,
+           %Part.Image{} = image <- Enum.at(parts, part_index) do
+        image
+      else
+        _ -> nil
+      end
+
+    {:reply, image, state}
+  end
+
   def handle_call({:start, options}, {owner, _}, %{phase: phase} = state)
       when phase in [:offline, :error] do
     with {:ok, context, connection} <- prepare_context(state),
-         {:ok, options} <- endpoint_options(context.agent, options),
+         {:ok, options} <- saved_endpoint_options(state.session.agent, options),
          {:ok, socket} <- Connection.open(connection, context.agent.voice_model) do
       generation = Ecto.UUID.generate()
       Process.send_after(self(), {:setup_timeout, generation}, @setup_timeout)
@@ -173,7 +279,6 @@ defmodule Synapsis.VoiceSession do
             controller_ref: Process.monitor(owner),
             phase: :connecting,
             reason: nil,
-            caption: "",
             connection_generation: generation,
             generation: Ecto.UUID.generate(),
             context: context,
@@ -181,7 +286,6 @@ defmodule Synapsis.VoiceSession do
             socket: socket,
             socket_ref: Process.monitor(Connection.owner(socket)),
             sync: Sync.new(),
-            confirmed: History.recovery(state.session.id),
             admitted_audio: MapSet.new(),
             playback: %{},
             capture_bytes: 0,
@@ -200,6 +304,19 @@ defmodule Synapsis.VoiceSession do
 
   def handle_call({:start, _}, _, state), do: {:reply, {:error, :media_lease_in_use}, state}
 
+  def handle_call({:submit_chat, content, images}, _, %{phase: phase} = state)
+      when phase in [:listening, :responding] do
+    if :queue.len(state.inputs) < @max_waiting_inputs do
+      state = %{state | inputs: :queue.in({content, images}, state.inputs)}
+
+      {:reply, :ok, state |> offer_input() |> publish_chat()}
+    else
+      {:reply, {:error, :voice_input_queue_full}, state}
+    end
+  end
+
+  def handle_call({:submit_chat, _, _}, _, state), do: {:reply, {:error, :voice_offline}, state}
+
   def handle_call({:response, _ref, _request, _instructions}, _, %{phase: phase} = state)
       when phase not in [:listening, :responding],
       do: {:reply, :offline, state}
@@ -207,32 +324,21 @@ defmodule Synapsis.VoiceSession do
   def handle_call({:response, ref, request, instructions}, {owner, _}, %{attempt: nil} = state) do
     {tools, names} = Protocol.tools(request.tools)
 
-    {events, sync} =
-      Sync.stage(state.sync, request.messages, state.connection_generation, state.confirmed)
+    staged =
+      Sync.stage(
+        state.sync,
+        request.messages,
+        state.connection_generation,
+        state.confirmed,
+        state.image_payloads
+      )
 
-    identity = Map.take(request, [:run_id, :incarnation, :turn_id, :step_id, :attempt_id])
-    monitor = Process.monitor(owner)
+    case staged do
+      {:error, reason} ->
+        {:reply, {:error, reason}, disconnect(state, reason)}
 
-    attempt = %{
-      ref: ref,
-      owner: owner,
-      monitor: monitor,
-      identity: identity,
-      id: nil,
-      names: names,
-      tools: tools,
-      instructions: instructions,
-      dispatched: false,
-      interrupt: nil,
-      cancel_sent: false
-    }
-
-    state = %{state | sync: sync, attempt: attempt, phase: :responding, caption: ""}
-
-    if map_size(sync.pending) <= 128 and Enum.all?(events, &(wire(state, &1) == :ok)) do
-      {:reply, :ok, state |> dispatch_response() |> publish()}
-    else
-      {:reply, :ok, disconnect(state, :realtime_sync_failed)}
+      {events, sync} ->
+        stage_response(state, events, sync, {ref, owner, request, instructions, tools, names})
     end
   end
 
@@ -246,6 +352,41 @@ defmodule Synapsis.VoiceSession do
   end
 
   def handle_call(_, _, state), do: {:reply, {:error, :media_lease_required}, state}
+
+  defp stage_response(state, events, sync, {ref, owner, request, instructions, tools, names}) do
+    state = append_chat(state, request.messages)
+    identity = Map.take(request, [:run_id, :incarnation, :turn_id, :step_id, :attempt_id])
+    monitor = Process.monitor(owner)
+
+    attempt = %{
+      ref: ref,
+      owner: owner,
+      monitor: monitor,
+      identity: identity,
+      chat_id: "voice-" <> request.attempt_id,
+      id: nil,
+      names: names,
+      tools: tools,
+      instructions: instructions,
+      dispatched: false,
+      interrupt: nil,
+      cancel_sent: false
+    }
+
+    state = %{
+      state
+      | sync: sync,
+        attempt: attempt,
+        phase: :responding,
+        chat_reply: %{id: attempt.chat_id, text: ""}
+    }
+
+    if map_size(sync.pending) <= 128 and Enum.all?(events, &(wire(state, &1) == :ok)) do
+      {:reply, :ok, state |> dispatch_response() |> publish()}
+    else
+      {:reply, :ok, disconnect(state, :realtime_sync_failed)}
+    end
+  end
 
   defp control(:stop, state), do: {:reply, :ok, hangup(state, nil)}
   defp control(:stop_playback, state), do: {:reply, :ok, interrupt(state, "stop_playback")}
@@ -310,20 +451,19 @@ defmodule Synapsis.VoiceSession do
 
   defp control({:switch, options}, %{session_ready: true, phase: phase, flush: nil} = state)
        when phase in [:listening, :responding] do
-    case endpoint_options(state.context.agent, options) do
-      {:ok, options} ->
-        next = interrupt(%{state | phase: :switching}, "audio_endpoint_changed")
-        wire(next, Protocol.clear())
+    with {:ok, options} <- saved_endpoint_options(state.session.agent, options) do
+      next = interrupt(%{state | phase: :switching}, "audio_endpoint_changed")
+      wire(next, Protocol.clear())
 
-        next =
-          if next.flush do
-            put_in(next.flush.after, {:switch, options})
-          else
-            switch_endpoint(next, options)
-          end
+      next =
+        if next.flush do
+          put_in(next.flush.after, {:switch, options})
+        else
+          switch_endpoint(next, options)
+        end
 
-        {:reply, :ok, publish(next)}
-
+      {:reply, :ok, publish(next)}
+    else
       error ->
         {:reply, error, state}
     end
@@ -332,6 +472,11 @@ defmodule Synapsis.VoiceSession do
   defp control(_, state), do: {:reply, {:error, :invalid_voice_operation}, state}
 
   @impl true
+  def handle_cast({:chat_snapshot, caller}, state) do
+    send(caller, {:voice_chat, state.session.id, current_chat_snapshot(state)})
+    {:noreply, state}
+  end
+
   def handle_cast({:retire_response, ref}, %{attempt: %{ref: ref}} = state),
     do: {:noreply, disconnect(state, :realtime_attempt_retired)}
 
@@ -424,11 +569,24 @@ defmodule Synapsis.VoiceSession do
 
   def handle_info({:voice_turn_interrupted, messages}, state),
     do:
-      {:noreply, state |> checkpoint(messages) |> Map.put(:run_phase, :waiting) |> offer_input()}
+      {:noreply,
+       state
+       |> checkpoint(messages)
+       |> Map.put(:run_phase, :waiting)
+       |> offer_input()
+       |> publish_chat()}
 
-  # TODO(upstream): gsmlg-opt/backplane#184 — Preserve child mail through root detach and rebind.
+  def handle_info({:runtime_event, _, _, %{type: type, message: %{id: id} = message}}, state)
+      when type in [:prompt_consumed, :response_completed] and is_binary(id) do
+    {:noreply, state |> append_chat([message]) |> publish_chat()}
+  end
+
   def handle_info({:runtime_event, _, _, %{type: :run_completed}}, state),
     do: {:noreply, state |> Map.put(:run_phase, :idle) |> offer_input() |> publish()}
+
+  def handle_info({:runtime_event, _, _, %{type: type}}, %{phase: :error} = state)
+      when type in [:run_failed, :run_cancelled, :storage_failed],
+      do: {:noreply, %{state | run_phase: :failed}}
 
   def handle_info({:runtime_event, _, _, %{type: type}}, state)
       when type in [:run_failed, :run_cancelled, :storage_failed],
@@ -473,12 +631,6 @@ defmodule Synapsis.VoiceSession do
         {:noreply, next |> put_in([:child_results, run_id], result) |> publish() |> project()}
 
       :ok ->
-        Phoenix.PubSub.broadcast(
-          Synapsis.PubSub,
-          "session:" <> state.session.id,
-          {:voice_history, state.session.id}
-        )
-
         {:noreply, project(next)}
 
       _ ->
@@ -578,27 +730,30 @@ defmodule Synapsis.VoiceSession do
     end
   end
 
-  defp endpoint_options(agent, opts) when is_list(opts) do
-    mode = Keyword.get(opts, :mode, agent.audio_mode)
+  defp saved_endpoint_options(agent_name, opts) when is_list(opts) do
+    case AgentConfigs.get_by_name(agent_name) do
+      %AgentConfig{enabled: true, kind: :voice} = agent ->
+        mode = Keyword.get(opts, :mode, agent.audio_mode)
+        endpoint_options(AgentConfig.audio_profiles(agent), mode, opts)
 
-    input =
-      Keyword.get(opts, :input_device, if(mode == agent.audio_mode, do: agent.audio_input_device))
-
-    output =
-      Keyword.get(
-        opts,
-        :output_device,
-        if(mode == agent.audio_mode, do: agent.audio_output_device)
-      )
-
-    if mode in ["host", "browser"] and Enum.all?([input, output], &valid_device?/1) do
-      {:ok, %{mode: mode, input_device: input, output_device: output}}
-    else
-      {:error, :invalid_audio_endpoint}
+      _ ->
+        {:error, :agent_unavailable}
     end
   end
 
-  defp endpoint_options(_, _), do: {:error, :invalid_audio_endpoint}
+  defp saved_endpoint_options(_, _), do: {:error, :invalid_audio_endpoint}
+
+  defp endpoint_options(profiles, mode, opts) do
+    with {:ok, profile} <- Map.fetch(profiles, mode),
+         input = Keyword.get(opts, :input_device, profile.input_device),
+         output = Keyword.get(opts, :output_device, profile.output_device),
+         true <- valid_device?(input) and valid_device?(output) do
+      {:ok, %{profile | input_device: input, output_device: output} |> Map.put(:mode, mode)}
+    else
+      _ -> {:error, :invalid_audio_endpoint}
+    end
+  end
+
   defp valid_device?(nil), do: true
   defp valid_device?(id), do: is_binary(id) and byte_size(id) <= 512 and String.valid?(id)
 
@@ -612,7 +767,9 @@ defmodule Synapsis.VoiceSession do
                generation: state.generation,
                session_id: state.session.id,
                input_device: state.options.input_device,
-               output_device: state.options.output_device
+               output_device: state.options.output_device,
+               input_volume: state.options.input_volume,
+               output_volume: state.options.output_volume
              ) do
           {:ok, pid} -> publish(%{state | endpoint: {:host, pid}})
           {:error, reason} -> disconnect(state, reason)
@@ -662,8 +819,18 @@ defmodule Synapsis.VoiceSession do
        }),
        do: state
 
-  defp receive_realtime(state, %{"type" => "error"}),
-    do: disconnect(state, :realtime_protocol_error)
+  defp receive_realtime(state, %{"type" => "error"} = event) do
+    error = event["error"]
+    details = if is_map(error), do: error, else: %{}
+    code = safe_realtime_field(details["code"]) || "unknown"
+    parameter = safe_realtime_field(details["param"]) || "unknown"
+
+    Logger.warning("voice_realtime_event_rejected code=#{code} parameter=#{parameter}",
+      session_id: state.session.id
+    )
+
+    disconnect(state, :realtime_protocol_error)
+  end
 
   defp receive_realtime(state, %{"type" => type, "item" => %{"id" => id}})
        when type in [
@@ -691,11 +858,12 @@ defmodule Synapsis.VoiceSession do
 
         %{
           state
-          | inputs: :queue.in(input, state.inputs),
+          | inputs: :queue.in({input, %{}}, state.inputs),
             capture_bytes: 0,
             admitted_audio: MapSet.put(state.admitted_audio, item)
         }
         |> offer_input()
+        |> publish_chat()
       else
         hangup(state, :voice_input_queue_full)
       end
@@ -709,14 +877,7 @@ defmodule Synapsis.VoiceSession do
        })
        when is_binary(item) and is_binary(transcript) and
               byte_size(transcript) <= @max_caption_bytes do
-    state =
-      project_later(
-        state,
-        {:fact, :voice_transcript, state.connection_generation <> ":" <> item, transcript}
-      )
-
-    if state.controller, do: send(state.controller, {:voice_transcript, item, transcript})
-    state
+    record_fact(state, :voice_transcript, state.connection_generation <> ":" <> item, transcript)
   end
 
   defp receive_realtime(
@@ -759,9 +920,9 @@ defmodule Synapsis.VoiceSession do
        when is_binary(id) and
               type in ["response.output_audio_transcript.delta", "response.output_text.delta"] and
               is_binary(text) do
-    if byte_size(state.caption) + byte_size(text) <= @max_caption_bytes do
+    if byte_size(state.chat_reply.text) + byte_size(text) <= @max_caption_bytes do
       emit(attempt, %{type: :content_text_delta, delta: text})
-      schedule_status(%{state | caption: state.caption <> text})
+      state |> update_in([:chat_reply, :text], &(&1 <> text)) |> schedule_status()
     else
       disconnect(state, :realtime_caption_limit)
     end
@@ -804,6 +965,12 @@ defmodule Synapsis.VoiceSession do
 
   defp receive_realtime(state, _), do: state
 
+  defp safe_realtime_field(value) when is_binary(value) and byte_size(value) <= 128 do
+    if Regex.match?(~r/\A[a-zA-Z0-9_.\[\]-]+\z/, value), do: value
+  end
+
+  defp safe_realtime_field(_), do: nil
+
   defp dispatch_response(
          %{flush: nil, attempt: %{dispatched: false} = attempt, sync: %{pending: pending}} = state
        )
@@ -830,7 +997,7 @@ defmodule Synapsis.VoiceSession do
 
   defp offer_input(%{phase: :listening, run_phase: run} = state) when run in [:idle, :waiting] do
     case :queue.out(state.inputs) do
-      {{:value, input}, inputs} ->
+      {{:value, {input, images}}, inputs} ->
         if run == :waiting do
           SessionAdapter.voice_input(state.adapter, input)
         else
@@ -838,7 +1005,12 @@ defmodule Synapsis.VoiceSession do
           SessionAdapter.prompt(state.adapter, context, input)
         end
 
-        %{state | inputs: inputs, run_phase: :busy}
+        %{
+          state
+          | inputs: inputs,
+            run_phase: :busy,
+            image_payloads: Map.merge(state.image_payloads, images)
+        }
 
       {:empty, _} ->
         state
@@ -975,11 +1147,11 @@ defmodule Synapsis.VoiceSession do
     do: item.generated and is_integer(item.cursor) and item.cursor >= div(item.samples, 24)
 
   defp archive_playback(state, item_id, index, item, interrupted) do
-    project_later(
+    record_fact(
       state,
-      {:fact, :voice_playback,
-       state.connection_generation <> ":" <> item_id <> ":" <> Integer.to_string(index),
-       Map.merge(item, %{interrupted: interrupted, endpoint_generation: state.generation})}
+      :voice_playback,
+      state.connection_generation <> ":" <> item_id <> ":" <> Integer.to_string(index),
+      Map.merge(item, %{interrupted: interrupted, endpoint_generation: state.generation})
     )
   end
 
@@ -1109,6 +1281,7 @@ defmodule Synapsis.VoiceSession do
         reason: reason,
         endpoint: nil,
         endpoint_info: nil,
+        controller: nil,
         controller_ref: nil,
         socket_ref: nil,
         socket: nil,
@@ -1121,7 +1294,6 @@ defmodule Synapsis.VoiceSession do
         generation: nil
     }
     |> publish()
-    |> Map.put(:controller, nil)
   end
 
   defp associate_generation(%{message: %{content: blocks}} = terminal, generation)
@@ -1138,9 +1310,18 @@ defmodule Synapsis.VoiceSession do
   defp associate_generation(terminal, _), do: terminal
 
   defp finish_attempt(%{attempt: attempt} = state, terminal) do
+    {terminal, reply} =
+      case terminal do
+        %{type: :response_completed, message: %{content: [_ | _]}} ->
+          {put_in(terminal.message[:id], attempt.chat_id), state.chat_reply}
+
+        _ ->
+          {terminal, nil}
+      end
+
     emit(attempt, terminal)
     Process.demonitor(attempt.monitor, [:flush])
-    %{state | attempt: nil}
+    %{state | attempt: nil, chat_reply: reply}
   end
 
   defp emit(attempt, event), do: send(attempt.owner, {:voice_response, attempt.ref, event})
@@ -1176,8 +1357,30 @@ defmodule Synapsis.VoiceSession do
   defp mute_endpoint(_, _), do: :ok
 
   defp checkpoint(state, messages) do
-    state = %{state | canonical: messages}
-    project_later(state, {:history, messages})
+    %{state | canonical: messages}
+    |> append_chat(messages)
+    |> project_later({:history, messages})
+    |> publish_chat()
+  end
+
+  defp append_chat(state, canonical) do
+    messages = History.project(state.session.id, canonical, state.image_payloads, state.chat_ids)
+    ids = Enum.reduce(messages, state.chat_ids, &MapSet.put(&2, &1.id))
+
+    reply =
+      case state.chat_reply do
+        %{id: id} = reply -> if MapSet.member?(ids, id), do: nil, else: reply
+        nil -> nil
+      end
+
+    %{state | chat_messages: state.chat_messages ++ messages, chat_ids: ids, chat_reply: reply}
+  end
+
+  defp record_fact(state, type, key, data) do
+    state
+    |> put_in([:confirmed, type, key], data)
+    |> project_later({:fact, type, key, data})
+    |> publish_chat()
   end
 
   defp project_later(state, operation) do
@@ -1197,7 +1400,7 @@ defmodule Synapsis.VoiceSession do
           Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->
             case operation do
               {:history, messages} ->
-                History.append(id, messages)
+                History.append(id, messages, state.image_payloads)
 
               {:fact, type, key, data} ->
                 History.save_fact(id, type, key, data)
@@ -1218,6 +1421,7 @@ defmodule Synapsis.VoiceSession do
 
   defp public(state) do
     %{
+      session_id: state.session.id,
       phase: state.phase,
       reason: state.reason,
       endpoint: state.options,
@@ -1225,7 +1429,6 @@ defmodule Synapsis.VoiceSession do
       generation: state.generation,
       manual: state.context && state.context.agent.voice_turn_detection == "manual",
       muted: state.muted,
-      caption: state.caption,
       playback: playback_status(state.playback),
       host: to_string(:net_adm.localhost()),
       tasks:
@@ -1255,9 +1458,36 @@ defmodule Synapsis.VoiceSession do
     Phoenix.PubSub.broadcast(
       Synapsis.PubSub,
       topic(state.session.id),
-      {:voice_status, public(state)}
+      {:voice_status, state.controller, public(state)}
     )
 
-    state
+    publish_chat(state)
+  end
+
+  defp chat_view(state) do
+    %{
+      phase: state.phase,
+      busy: state.run_phase == :busy,
+      queued: :queue.len(state.inputs),
+      messages: state.chat_messages,
+      facts: state.confirmed,
+      reply: state.chat_reply
+    }
+  end
+
+  defp current_chat_snapshot(state),
+    do: state.chat_snapshot || Map.put(chat_view(state), :revision, 0)
+
+  defp publish_chat(state) do
+    view = chat_view(state)
+
+    if Map.delete(state.chat_snapshot || %{}, :revision) == view do
+      state
+    else
+      snapshot = Map.put(view, :revision, System.unique_integer([:positive, :monotonic]))
+      id = state.session.id
+      Phoenix.PubSub.broadcast(Synapsis.PubSub, chat_topic(id), {:voice_chat, id, snapshot})
+      %{state | chat_snapshot: snapshot}
+    end
   end
 end

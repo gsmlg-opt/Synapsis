@@ -54,7 +54,7 @@ function Part({ part }: { part: Record<string, any> }) {
   switch (part.type) {
     case 'text': return <Markdown className="chat-bubble-content" markdown={part.content || ''} />
     case 'reasoning': return <Chat.Work><Chat.WorkSummary>Thinking</Chat.WorkSummary><Chat.WorkBody><Markdown markdown={part.content || ''} /></Chat.WorkBody></Chat.Work>
-    case 'image': return <img src={`data:${part.media_type};base64,${part.data}`} alt="Attached image" loading="lazy" decoding="async" className="max-h-96 max-w-full rounded-lg object-contain" />
+    case 'image': return <img src={part.src ?? `data:${part.media_type};base64,${part.data}`} alt="Attached image" loading="lazy" decoding="async" className="max-h-96 max-w-full rounded-lg object-contain" />
     case 'delivered_image': return <figure className="min-w-0 max-w-full space-y-1">
       <img src={part.src} alt={part.filename || 'Assistant image'} loading="lazy" decoding="async" className="max-h-96 max-w-full rounded-lg object-contain" />
       <figcaption><a href={part.src} download={part.filename} className="text-sm underline">Download image</a></figcaption>
@@ -315,8 +315,10 @@ function Status({ runtime, metadata, admission, active, bridge, connected, synch
   const questions = metadata.userQuestions || []
   const waitingForUser = questions.length > 0
   const queue: QueueItem[] = metadata.queue || []
+  const voiceQueued = typeof metadata.voiceQueued === 'number' ? metadata.voiceQueued : 0
   return <>
     {queue.length > 0 && <Queue items={queue} canSteer={admission.canSteer === true} bridge={bridge} connected={connected} synchronizing={synchronizing} />}
+    {voiceQueued > 0 && <p role="status" className="synapsis-chat-status">{voiceQueued} {voiceQueued === 1 ? 'message' : 'messages'} queued</p>}
     {active && <Chat.Status role="status" className="synapsis-chat-status">
       <Chat.StatusItem className="items-center gap-2 whitespace-nowrap">
         {!waitingForUser && <Chat.Typing className="min-w-0" role="presentation" aria-hidden="true" />}
@@ -338,10 +340,14 @@ export function createSynapsisReactChat(factory: any) {
     const [steering, setSteering] = useState(false)
     const { submit, busy, notice } = useSynapsisChatSubmission(props)
     const attachmentsAllowed = metadata.attachmentsAllowed === true
+    const voiceCall = metadata.voiceCall === true
+    const types = voiceCall
+      ? ['image/png', 'image/jpeg', 'image/webp']
+      : ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
     function changeFiles(next: File[]) {
-      const types = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
       const error = next.length > 4 ? 'Attach at most 4 images' :
-        next.some(file => !types.includes(file.type)) ? 'Use PNG, JPEG, GIF or WebP images' :
+        next.some(file => !types.includes(file.type)) ? (voiceCall ? 'Use PNG, JPEG or WebP images' : 'Use PNG, JPEG, GIF or WebP images') :
+        voiceCall && next.reduce((size, file) => size + file.size, 0) > 1_300_000 ? 'Call images must total at most 1.3 MB' :
         next.some(file => file.size > 5 * 1024 * 1024) ? 'Each image must be at most 5 MiB' :
         next.reduce((size, file) => size + file.size, 0) > 10 * 1024 * 1024 ? 'Images must total at most 10 MiB' : ''
       setLocalNotice(error)
@@ -354,7 +360,7 @@ export function createSynapsisReactChat(factory: any) {
       onValueChange={setValue}
       attachments={files}
       onAttachmentsChange={attachmentsAllowed ? changeFiles : undefined}
-      accept="image/png,image/jpeg,image/gif,image/webp"
+      accept={types.join(',')}
       allowAttachmentOnly={attachmentsAllowed}
       disabled={!connected || synchronizing}
       canSubmit={canSubmit}
@@ -366,7 +372,7 @@ export function createSynapsisReactChat(factory: any) {
       sendLabel={admission.sendLabel || (active && attachmentsAllowed ? 'Queue' : 'Send')}
       stopLabel="Stop"
       attachLabel="Attach images"
-      textareaProps={{ name: 'content', 'aria-label': 'Message', placeholder: 'Write a message…', title: 'Send with Ctrl/Cmd+Enter', onPaste: event => {
+      textareaProps={{ name: 'content', 'aria-label': 'Message', placeholder: voiceCall && !admission.canSubmit ? 'Start a call to send a message…' : 'Write a message…', title: 'Send with Ctrl/Cmd+Enter', onPaste: event => {
         if (!attachmentsAllowed) return
         const pasted = Array.from(event.clipboardData.files).filter(file => file.type.startsWith('image/'))
         if (pasted.length) { event.preventDefault(); changeFiles([...files, ...pasted]) }

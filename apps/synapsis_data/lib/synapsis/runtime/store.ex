@@ -85,9 +85,30 @@ defmodule Synapsis.Runtime.Store do
     do: read(fact_prefix(session_id, kind) <> segment(identity))
 
   def list_facts(session_id, kind) do
-    with {:ok, pairs} <- adapter().prefix_scan(fact_prefix(session_id, kind), timeout: @timeout) do
+    with {:ok, pairs} <- scan_facts(fact_prefix(session_id, kind)) do
+      {:ok, Enum.map(pairs, &elem(&1, 1))}
+    end
+  end
+
+  @doc "Reads facts indexed by the identities supplied to put_fact/4."
+  def list_facts_by_identity(session_id, kind) do
+    prefix = fact_prefix(session_id, kind)
+    prefix_size = byte_size(prefix)
+
+    with {:ok, pairs} <- scan_facts(prefix) do
+      facts =
+        Map.new(pairs, fn {<<_::binary-size(prefix_size), encoded::binary>>, value} ->
+          {Base.url_decode64!(encoded, padding: false), value}
+        end)
+
+      {:ok, facts}
+    end
+  end
+
+  defp scan_facts(prefix) do
+    with {:ok, pairs} <- adapter().prefix_scan(prefix, timeout: @timeout) do
       # WORKAROUND(upstream): gsmlg-dev/concord#23 — prefix_scan skips decompression.
-      {:ok, Enum.map(pairs, fn {_key, value} -> Concord.Compression.decompress(value) end)}
+      {:ok, Enum.map(pairs, fn {key, value} -> {key, Concord.Compression.decompress(value)} end)}
     end
   end
 

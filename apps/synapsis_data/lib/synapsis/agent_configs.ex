@@ -171,7 +171,7 @@ defmodule Synapsis.AgentConfigs do
         current
         |> to_struct()
         |> AgentConfig.update_changeset(Map.drop(attrs, [:id, "id"]))
-        |> persist_update(agent_config.id)
+        |> persist_update(current)
       end
     end)
   end
@@ -256,7 +256,7 @@ defmodule Synapsis.AgentConfigs do
 
   defp persist(%Ecto.Changeset{} = changeset), do: {:error, changeset}
 
-  defp persist_update(%Ecto.Changeset{valid?: true} = changeset, id) do
+  defp persist_update(%Ecto.Changeset{valid?: true} = changeset, current) do
     changes =
       changeset.changes
       |> Map.delete(:id)
@@ -267,7 +267,13 @@ defmodule Synapsis.AgentConfigs do
         {key, value} -> {Atom.to_string(key), value}
       end)
 
-    with {:ok, merged} <- Store.merge_existing(@store_type, id, changes) do
+    normalized = AgentConfig.migrate_audio_attrs(current)
+    removed = Map.drop(current, Map.keys(normalized))
+    migrated = Map.drop(normalized, Map.keys(current))
+    migration = Map.merge(migrated, Map.new(removed, fn {key, _} -> {key, nil} end))
+
+    with {:ok, merged} <-
+           Store.merge_existing(@store_type, current["id"], Map.merge(migration, changes)) do
       {:ok, to_struct(merged)}
     end
   end
@@ -307,8 +313,14 @@ defmodule Synapsis.AgentConfigs do
       "voice" => r.voice,
       "voice_turn_detection" => r.voice_turn_detection,
       "audio_mode" => r.audio_mode,
-      "audio_input_device" => r.audio_input_device,
-      "audio_output_device" => r.audio_output_device,
+      "host_audio_input_device" => r.host_audio_input_device,
+      "host_audio_output_device" => r.host_audio_output_device,
+      "host_audio_input_volume" => r.host_audio_input_volume,
+      "host_audio_output_volume" => r.host_audio_output_volume,
+      "browser_audio_input_device" => r.browser_audio_input_device,
+      "browser_audio_output_device" => r.browser_audio_output_device,
+      "browser_audio_input_volume" => r.browser_audio_input_volume,
+      "browser_audio_output_volume" => r.browser_audio_output_volume,
       "voice_delegate" => r.voice_delegate,
       "system_prompt" => r.system_prompt,
       "tools" => r.tools || [],

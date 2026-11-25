@@ -17,9 +17,9 @@ defmodule SynapsisServer.VoiceChannel do
            ),
          {:ok, session} <- Sessions.get(id),
          true <- Sessions.voice?(session),
+         :ok <- Phoenix.PubSub.subscribe(Synapsis.PubSub, VoiceSession.topic(id)),
          {:ok, status} <- VoiceSession.status(id) do
-      :ok = Phoenix.PubSub.subscribe(Synapsis.PubSub, VoiceSession.topic(id))
-      {:ok, status, assign(socket, :voice_session, id)}
+      {:ok, Map.put(status, :owned, false), assign(socket, :voice_session, id)}
     else
       _ -> {:error, %{reason: "voice_session_unavailable"}}
     end
@@ -28,8 +28,12 @@ defmodule SynapsisServer.VoiceChannel do
   def join(_, _, _), do: {:error, %{reason: "voice_session_unavailable"}}
 
   @impl true
-  def handle_in("start", params, socket),
-    do: voice_reply(VoiceSession.start(id(socket), endpoint_options(params)), socket)
+  def handle_in("start", params, socket) do
+    case VoiceSession.start(id(socket), endpoint_options(params)) do
+      {:ok, status} -> voice_reply({:ok, Map.put(status, :owned, true)}, socket)
+      error -> voice_reply(error, socket)
+    end
+  end
 
   def handle_in("switch", params, socket),
     do: voice_reply(VoiceSession.switch(id(socket), endpoint_options(params)), socket)
@@ -92,8 +96,8 @@ defmodule SynapsisServer.VoiceChannel do
   def handle_in(_, _, socket), do: voice_reply({:error, :invalid_voice_operation}, socket)
 
   @impl true
-  def handle_info({:voice_status, status}, socket) do
-    push(socket, "status", status)
+  def handle_info({:voice_status, owner, status}, socket) do
+    push(socket, "status", Map.put(status, :owned, owner == self()))
     {:noreply, socket}
   end
 
@@ -109,11 +113,6 @@ defmodule SynapsisServer.VoiceChannel do
 
   def handle_info({:voice_flush, generation, token, release}, socket) do
     push(socket, "flush", %{generation: generation, token: token, release: release})
-    {:noreply, socket}
-  end
-
-  def handle_info({:voice_transcript, item, transcript}, socket) do
-    push(socket, "transcript", %{item_id: item, transcript: transcript})
     {:noreply, socket}
   end
 

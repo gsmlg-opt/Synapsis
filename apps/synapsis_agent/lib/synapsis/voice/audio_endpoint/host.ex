@@ -10,9 +10,49 @@ defmodule Synapsis.Voice.AudioEndpoint.Host do
 
   @operation_timeout 5_000
   @maximum_audio_bytes 96_000
+  @device_test_timeout 15_000
 
   def start_link(options), do: GenServer.start_link(__MODULE__, options)
   def devices, do: probe()
+  @doc "Tests one selected host device and restores any temporary volume change."
+  def test_device(kind, device_id, volume)
+      when kind in ["microphone", "speaker"] and
+             (is_nil(device_id) or
+                (is_binary(device_id) and byte_size(device_id) > 0 and
+                   byte_size(device_id) <= 1_024)) and
+             (is_nil(volume) or (is_integer(volume) and volume >= 0 and volume <= 150)) do
+    caller = self()
+    request = make_ref()
+
+    case Task.Supervisor.start_child(Synapsis.Tool.TaskSupervisor, fn ->
+           result = run_device_test(kind, device_id, volume)
+           send(caller, {request, result})
+         end) do
+      {:ok, pid} ->
+        monitor = Process.monitor(pid)
+
+        receive do
+          {^request, result} ->
+            Process.demonitor(monitor, [:flush])
+            result
+
+          {:DOWN, ^monitor, :process, ^pid, _reason} ->
+            {:error, :audio_test_failed}
+        after
+          @device_test_timeout + 1_000 ->
+            Process.demonitor(monitor, [:flush])
+            {:error, :audio_test_timeout}
+        end
+
+      {:error, _reason} ->
+        {:error, :audio_test_unavailable}
+    end
+  catch
+    :exit, _reason -> {:error, :audio_test_unavailable}
+  end
+
+  def test_device(_, _, _), do: {:error, :invalid_device_test}
+
   def status(pid), do: GenServer.call(pid, :status, @operation_timeout)
   def cursor(pid), do: GenServer.call(pid, {:command, "cursor", %{}}, @operation_timeout)
 
@@ -67,7 +107,9 @@ defmodule Synapsis.Voice.AudioEndpoint.Host do
       command = %{
         command: "start",
         input_device: Keyword.get(state.options, :input_device),
-        output_device: Keyword.get(state.options, :output_device)
+        output_device: Keyword.get(state.options, :output_device),
+        input_volume: Keyword.get(state.options, :input_volume),
+        output_volume: Keyword.get(state.options, :output_volume)
       }
 
       if write(port, command) do
@@ -218,23 +260,70 @@ defmodule Synapsis.Voice.AudioEndpoint.Host do
   defp notify(state, event),
     do: send(state.owner, {:audio_endpoint, state.generation, event})
 
-  defp probe do
+  defp run_device_test(kind, device_id, volume) do
+    # The supervised worker owns the lease until helper cleanup completes, even
+    # when the settings page or the process waiting for the result disappears.
+    case :global.register_name({__MODULE__, node()}, self()) do
+      :yes ->
+        try do
+          command = %{
+            command: "test_device",
+            id: 1,
+            kind: kind,
+            device_id: device_id,
+            volume: volume
+          }
+
+          case helper_request(command, @device_test_timeout, :audio_test_timeout) do
+            {:ok, %{"peak" => peak} = result}
+            when kind == "microphone" and is_integer(peak) and peak >= 0 and peak <= 100 ->
+              {:ok, result}
+
+            {:ok, result} when kind == "speaker" and result == %{} ->
+              {:ok, result}
+
+            {:ok, _result} ->
+              {:error, :invalid_device_test_result}
+
+            {:error, _reason} = error ->
+              error
+          end
+        after
+          :global.unregister_name({__MODULE__, node()})
+        end
+
+      :no ->
+        {:error, :host_audio_busy}
+    end
+  end
+
+  defp probe,
+    do: helper_request(%{command: "devices", id: 1}, @operation_timeout, :audio_probe_timeout)
+
+  defp helper_request(command, timeout, timeout_reason) do
     with {:ok, port} <- open_helper() do
       try do
-        write(port, %{command: "devices", id: 1})
+        if write(port, command) do
+          receive do
+            {^port, {:data, data}} ->
+              case Formata.JSON.decode(data) do
+                {:ok, %{"result" => result}} ->
+                  {:ok, result}
 
-        receive do
-          {^port, {:data, data}} ->
-            case Formata.JSON.decode(data) do
-              {:ok, %{"result" => result}} -> {:ok, result}
-              {:ok, %{"reason" => reason}} -> {:error, reason}
-              _ -> {:error, :invalid_helper_event}
-            end
+                {:ok, %{"reason" => reason}} when is_binary(reason) ->
+                  {:error, String.slice(reason, 0, 256)}
 
-          {^port, {:exit_status, status}} ->
-            {:error, {:helper_exit, status}}
-        after
-          @operation_timeout -> {:error, :audio_probe_timeout}
+                _ ->
+                  {:error, :invalid_helper_event}
+              end
+
+            {^port, {:exit_status, status}} ->
+              {:error, {:helper_exit, status}}
+          after
+            timeout -> {:error, timeout_reason}
+          end
+        else
+          {:error, :helper_backpressure}
         end
       after
         if Port.info(port), do: Port.close(port)

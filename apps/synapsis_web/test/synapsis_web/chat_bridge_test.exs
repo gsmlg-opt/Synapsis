@@ -63,6 +63,20 @@ defmodule SynapsisWeb.ChatBridgeTest do
     refute Map.has_key?(payload, :requests)
   end
 
+  test "an earlier transcript row is inserted in order before the live reply", %{
+    socket: socket,
+    snapshot: initial
+  } do
+    input = %{id: "input", role: "user", content: "Hello", status: "complete"}
+    next = %{initial | messages: [input | initial.messages]}
+    socket = ChatBridge.sync(socket, next)
+
+    assert [["chat:event", %{type: "chat.snapshot", messages: messages}]] =
+             socket.private.live_temp[:push_events]
+
+    assert messages == next.messages
+  end
+
   test "runtime updates publish even without messages and unchanged state stays silent", %{
     socket: socket,
     snapshot: initial

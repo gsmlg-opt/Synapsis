@@ -2,13 +2,13 @@ import { Socket } from 'phoenix'
 import { BrowserAudioEndpoint, type PlaybackCursor } from './audio-endpoint'
 
 type Device = { id: string; label: string }
-type Devices = { inputs: Device[]; outputs: Device[]; host?: string; output_selection?: boolean }
-type Endpoint = { mode: 'host' | 'browser'; input_device?: string; output_device?: string }
+type Devices = { inputs: Device[]; outputs: Device[]; output_selection?: boolean }
+type Endpoint = { mode: 'host' | 'browser'; input_device?: string; output_device?: string; input_volume?: number; output_volume?: number }
 type Status = {
   phase: string
+  owned?: boolean
   reason?: string
   generation?: string
-  caption?: string
   playback?: { played_ms: number | null }
   muted?: boolean
   manual?: boolean
@@ -18,6 +18,8 @@ type Status = {
     input_device?: string
     output_device?: string
     echo_cancellation?: boolean | string
+    inputs?: Device[]
+    outputs?: Device[]
   }
   tasks?: Array<{ agent_id: string; run_id: string; name: string; status: string; final?: unknown }>
 }
@@ -26,18 +28,24 @@ type BrowserOpen = Endpoint & { generation: string }
 
 function mount(root: HTMLElement) {
   const get = <T extends HTMLElement>(selector: string) => root.querySelector<T>(selector)!
-  const mode = get<HTMLSelectElement>('[name=mode]')
-  const input = get<HTMLSelectElement>('[name=input_device]')
-  const output = get<HTMLSelectElement>('[name=output_device]')
   const status = get('[data-voice-status]')
-  const caption = get('[data-voice-caption]')
-  const transcript = get('[data-voice-transcript]')
+  const failure = root.querySelector<HTMLElement>('[data-voice-error]')
   const playback = get('[data-voice-playback]')
   const tasks = get('[data-voice-tasks]')
   const mute = get<HTMLButtonElement>('[data-action=mute]')
   const commit = get<HTMLButtonElement>('[data-action=commit_audio]')
   const start = get<HTMLButtonElement>('[data-action=start]')
+  const hangup = get<HTMLButtonElement>('[data-action=stop]')
+  const stopPlayback = get<HTMLButtonElement>('[data-action=stop_playback]')
   const deviceIdentity = get('[data-voice-devices]')
+  const endpointPicker = root.querySelector<HTMLSelectElement>('[data-voice-endpoint]')
+  if (!failure) {
+    status.textContent = 'Voice controls have changed. Reload this page to start a call.'
+    start.disabled = true
+    return
+  }
+
+  const errorNotice = failure
   const socket = new Socket('/socket', { transport: window.WebSocket })
   const channel = socket.channel('voice:' + root.dataset.session, { token: root.dataset.token })
   let browser: BrowserAudioEndpoint | null = null
@@ -47,11 +55,60 @@ function mount(root: HTMLElement) {
   let pendingCursor: PlaybackCursor | null = null
   let owned = false
   let muted = false
-  let deviceRequest = 0
+  let browserDevices: Devices | undefined
   let previousTaskView = ''
+  let latestStatus: Status = { phase: 'offline' }
+  let connected = false
 
   function error(reason: string) {
-    status.textContent = reason.replace(/_/g, ' ')
+    const messages: Record<string, string> = {
+      voice_channel_disconnected: 'Connection lost. Reconnecting to the voice controls…',
+      voice_channel_unavailable: 'Voice controls are unavailable. Reload this session to reconnect.',
+      media_owner_lost: 'The connection controlling this call ended. Start a new call to continue.',
+      voice_runtime_failed: 'The voice runtime could not complete the reply.',
+      voice_runtime_admission_failed: 'The voice runtime could not accept this turn.',
+      voice_runtime_requires_recovery: 'This session needs runtime recovery. Open a new session to continue.',
+      realtime_protocol_error: 'The Realtime service rejected a voice request.',
+      realtime_response_failed: 'The Realtime service could not produce the reply.',
+      realtime_disconnected: 'The Realtime connection ended.',
+      realtime_policy_rejected: 'The Realtime gateway rejected the call. Check the selected Backplane connection.',
+      realtime_not_configured: 'Realtime is unavailable on the selected connection.',
+      realtime_unauthorized: 'The Realtime connection needs authentication.',
+      realtime_forbidden: 'The selected connection cannot access Realtime.',
+      realtime_model_rejected: 'The Realtime service rejected the selected model.',
+      realtime_setup_timeout: 'The Realtime service did not finish connecting in time.',
+      audio_endpoint_timeout: 'The audio device did not finish opening in time.',
+      audio_volume_unavailable: 'The selected audio device could not change its volume.',
+      input_device_unavailable: 'The selected microphone is unavailable. Select another microphone.',
+      output_device_unavailable: 'The selected speaker is unavailable. Select another speaker.',
+      host_audio_busy: 'The host audio devices are already in use by another call.',
+      host_audio_exited: 'The host audio device connection ended.',
+      media_lease_in_use: 'This call is controlled by another tab.',
+      voice_operation_timed_out: 'The voice operation timed out. Check the call state before retrying.',
+      NotAllowedError: 'Microphone access was denied. Allow microphone access in your browser.',
+      NotFoundError: 'No microphone is available on this browser device.'
+    }
+    errorNotice.textContent = messages[reason] || reason.replace(/_/g, ' ')
+    errorNotice.hidden = false
+  }
+
+  function endpointIdentity(view: Status, active: boolean) {
+    const endpoint = active ? view.endpoint : { mode: endpointPicker?.value || root.dataset.mode }
+    const host = view.host || root.dataset.host || 'the Synapsis host'
+    const name = endpoint?.mode === 'host' ? 'Host' : 'Web'
+    const identity = name === 'Host' ? host : 'this device'
+    if (!active || !view.endpoint_info) return name + ' audio on ' + identity + '.'
+    const info = view.endpoint_info
+    const label = (devices: Device[] | undefined, id?: string) =>
+      devices?.find((device) => device.id === id)?.label || id || 'System default'
+    const choices = name === 'Host' ? info : browserDevices
+    const devices = [
+      name + ' · ' + identity,
+      'Microphone: ' + label(choices?.inputs, info.input_device),
+      'Speaker: ' + label(choices?.outputs, info.output_device)
+    ]
+    if (info.echo_cancellation) devices.push('Echo cancellation enabled')
+    return devices.join(' · ')
   }
 
   function closeBrowser() {
@@ -64,9 +121,8 @@ function mount(root: HTMLElement) {
   function disconnected() {
     closeBrowser()
     owned = false
-    root.dataset.active = 'false'
-    start.disabled = true
-    error('voice_channel_disconnected')
+    connected = false
+    statusUpdated({ phase: 'offline', reason: 'voice_channel_disconnected' })
   }
 
   function control(event: string, payload: object = {}, success?: (data: any) => void) {
@@ -78,51 +134,55 @@ function mount(root: HTMLElement) {
   }
 
   function statusUpdated(view: Status) {
-    const phases: Record<string, string> = {
-      offline: 'Call ended',
-      connecting: 'Connecting audio',
-      listening: 'Listening',
-      responding: 'Responding',
-      switching: 'Switching audio devices',
-      ending: 'Ending call',
-      error: 'Call ended'
+    latestStatus = view
+    const ended = view.phase === 'offline' || view.phase === 'error'
+    owned = !ended && view.owned === true
+    if (!owned) closeBrowser()
+    const callActive = ['connecting', 'listening', 'responding', 'switching', 'ending'].includes(view.phase)
+    const active = owned && callActive
+    const ready = owned && ['listening', 'responding'].includes(view.phase)
+    if (endpointPicker) {
+      endpointPicker.disabled = callActive && !ready
+      if (active && view.endpoint) endpointPicker.value = view.endpoint.mode
     }
-    status.textContent = phases[view.phase] || 'Call ready'
-    if (view.reason) status.textContent += ' · ' + view.reason.replace(/_/g, ' ')
-    if (view.phase === 'offline' || view.phase === 'error') owned = false
-    const active =
-      owned && ['connecting', 'listening', 'responding', 'switching', 'ending'].includes(view.phase)
+    const phases: Record<string, string> = {
+      offline: 'Ready to call',
+      connecting: 'Connecting audio…',
+      listening: view.playback ? 'Speaking' : view.muted ? 'Microphone muted' : 'Listening',
+      responding: view.playback ? 'Speaking' : 'Preparing reply…',
+      switching: 'Switching audio devices…',
+      ending: 'Ending call…',
+      error: 'Call stopped'
+    }
+    if (callActive && !owned) {
+      status.textContent = 'Call controlled in another tab or process'
+    } else {
+      status.textContent = view.reason && ended ? 'Call stopped' : phases[view.phase] || 'Ready to call'
+    }
+    errorNotice.hidden = !view.reason
+    errorNotice.textContent = ''
+    if (view.reason) error(view.reason)
     root.dataset.active = String(active)
-    root.dataset.ready = String(owned && ['listening', 'responding'].includes(view.phase))
-    start.disabled = active
+    root.dataset.ready = String(ready)
+    start.disabled = !connected || callActive
+    start.hidden = active
+    hangup.hidden = !active
+    hangup.disabled = view.phase === 'ending'
+    mute.hidden = !ready
+    stopPlayback.hidden = !ready
+    stopPlayback.disabled = !view.playback && view.phase !== 'responding'
     muted = view.muted === true
-    mute.setAttribute('aria-pressed', String(view.muted === true))
-    mute.textContent = view.muted ? 'Unmute microphone' : 'Mute microphone'
-    commit.hidden = !view.manual
-    caption.textContent = view.caption || ''
-    playback.textContent = view.playback
+    mute.setAttribute('aria-pressed', String(muted))
+    mute.textContent = muted ? 'Unmute microphone' : 'Mute microphone'
+    commit.hidden = !ready || !view.manual
+    commit.disabled = muted
+    playback.textContent = active && view.playback
       ? typeof view.playback.played_ms === 'number'
         ? 'Playing audio · ' + (view.playback.played_ms / 1000).toFixed(1) + ' s played'
         : 'Playing audio · playback position unavailable'
       : ''
-    if (view.endpoint_info && view.endpoint) {
-      const info = view.endpoint_info
-      const identity =
-        view.endpoint.mode === 'host' ? view.host : navigator.platform || 'This device'
-      const echo = info.echo_cancellation
-        ? 'Echo cancellation active'
-        : 'Echo cancellation unavailable'
-      const name = view.endpoint.mode === 'host' ? 'Host' : 'Browser'
-      const devices = [
-        info.input_device
-          ? 'Microphone: ' + (input.selectedOptions[0]?.text || info.input_device)
-          : '',
-        info.output_device
-          ? 'Speaker: ' + (output.selectedOptions[0]?.text || info.output_device)
-          : ''
-      ].filter(Boolean)
-      deviceIdentity.textContent = [name, identity, ...devices, echo].join(' · ')
-    }
+    playback.hidden = !playback.textContent
+    deviceIdentity.textContent = endpointIdentity(view, active)
     renderTasks(view.tasks || [])
   }
 
@@ -131,6 +191,7 @@ function mount(root: HTMLElement) {
     if (serialized === previousTaskView) return
     previousTaskView = serialized
     tasks.replaceChildren()
+    tasks.hidden = entries.length === 0
     for (const task of entries) {
       const entry = document.createElement('li')
       const name = document.createElement('span')
@@ -157,41 +218,6 @@ function mount(root: HTMLElement) {
         entry.append(result)
       }
       tasks.append(entry)
-    }
-  }
-
-  function populate(select: HTMLSelectElement, list: Device[], preference?: string) {
-    const current = select.value || preference || ''
-    select.replaceChildren(new Option('System default', ''))
-    for (const device of list) {
-      if (device.id) select.add(new Option(device.label, device.id))
-    }
-    if (current && !Array.from(select.options).some((option) => option.value === current)) {
-      select.add(new Option('Saved device', current))
-    }
-    select.value = current
-  }
-
-  function showDevices(devices: Devices) {
-    const savedMode = mode.value === root.dataset.mode
-    populate(input, devices.inputs || [], savedMode ? root.dataset.input : undefined)
-    populate(output, devices.outputs || [], savedMode ? root.dataset.output : undefined)
-    output.disabled = mode.value === 'browser' && devices.output_selection !== true
-    if (output.disabled) output.value = ''
-  }
-
-  function refreshDevices() {
-    const selected = mode.value
-    const request = ++deviceRequest
-    const show = (devices: Devices) => {
-      if (mode.value === selected && deviceRequest === request) showDevices(devices)
-    }
-    if (selected === 'host') {
-      control('host_devices', {}, show)
-    } else {
-      void BrowserAudioEndpoint.devices()
-        .then(show)
-        .catch((reason) => error(reason.message))
     }
   }
 
@@ -241,7 +267,7 @@ function mount(root: HTMLElement) {
       },
       onState: (info) => {
         if (generation !== id) return
-        if (mode.value === 'browser' && info.devices) showDevices(info.devices as Devices)
+        if (info.devices) browserDevices = info.devices as Devices
         if (info.status === 'ready') {
           control(
             'browser_ready',
@@ -263,6 +289,8 @@ function mount(root: HTMLElement) {
       onError: (reason) => browserError(id, reason)
     })
     browser = next
+    next.setVolume('microphone', config.input_volume ?? 100)
+    next.setVolume('speaker', config.output_volume ?? 100)
     try {
       await next.start()
     } catch (reason) {
@@ -284,9 +312,6 @@ function mount(root: HTMLElement) {
     pendingCursor = null
     if (data.release) closeBrowser()
     channel.push('flushed', { generation: data.generation, token: data.token, position })
-  })
-  channel.on('transcript', (data) => {
-    transcript.textContent = data.transcript
   })
   channel.on('pcm', (frame: ArrayBuffer) => {
     if (!(frame instanceof ArrayBuffer) || frame.byteLength < 4) return
@@ -310,42 +335,49 @@ function mount(root: HTMLElement) {
   channel
     .join()
     .receive('ok', (view: Status) => {
+      connected = true
       statusUpdated(view)
-      refreshDevices()
     })
     .receive('error', (data) => error(data.reason || 'voice_channel_unavailable'))
     .receive('timeout', disconnected)
 
-  mode.onchange = () => {
-    input.replaceChildren(new Option('System default', ''))
-    output.replaceChildren(new Option('System default', ''))
-    refreshDevices()
+  if (endpointPicker) {
+    endpointPicker.onchange = () => {
+      if (!owned) {
+        deviceIdentity.textContent = endpointIdentity(latestStatus, false)
+        return
+      }
+
+      const mode = endpointPicker.value
+      if (mode === latestStatus.endpoint?.mode) return
+      endpointPicker.disabled = true
+      const switchFailed = (reason: string) => {
+        statusUpdated(latestStatus)
+        error(reason)
+      }
+      channel.push('switch', { mode }, 15_000)
+        .receive('error', data => switchFailed(data.reason || 'voice_operation_failed'))
+        .receive('timeout', () => switchFailed('voice_operation_timed_out'))
+    }
   }
 
   root.onclick = (event) => {
     const element = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-action]')
     const action = element?.dataset.action
     if (!action) return
-    const endpoint = { mode: mode.value, input_device: input.value, output_device: output.value }
     if (action === 'start') {
-      start.disabled = true
-      owned = true
+      statusUpdated({ ...latestStatus, phase: 'connecting', owned: true, reason: undefined })
       channel
-        .push('start', endpoint, 15_000)
+        .push('start', { mode: endpointPicker?.value || root.dataset.mode || 'browser' }, 15_000)
         .receive('ok', statusUpdated)
         .receive('error', (data) => {
           owned = false
-          start.disabled = false
-          error(data.reason)
+          statusUpdated({ phase: 'error', reason: data.reason || 'voice_operation_failed' })
         })
         .receive('timeout', () => {
           disconnected()
           socket.disconnect()
         })
-    } else if (action === 'devices') {
-      refreshDevices()
-    } else if (action === 'switch') {
-      control('switch', endpoint)
     } else if (action === 'mute') {
       const next = !muted
       control('mute', { muted: next }, () => {
@@ -364,7 +396,7 @@ function mount(root: HTMLElement) {
     closeBrowser()
     socket.disconnect()
     root.onclick = null
-    mode.onchange = null
+    if (endpointPicker) endpointPicker.onchange = null
   }
 }
 

@@ -5,6 +5,7 @@ import collections
 import ctypes
 import ctypes.util
 import json
+import math
 import os
 import queue
 import socket
@@ -18,6 +19,7 @@ import time
 RATE = 24000
 FRAME_BYTES = 960
 MAX_BUFFER_BYTES = RATE * 2 * 3
+MAX_PLAYBACK_FRAMES = RATE * 2 * 15 // FRAME_BYTES
 WRITE_LOCK = threading.Lock()
 
 
@@ -28,20 +30,27 @@ def emit(value):
         sys.stdout.buffer.flush()
 
 
-def command(*args):
-    result = subprocess.run(['pactl', *args], capture_output=True, timeout=4)
+def command(*args, timeout=4):
+    result = subprocess.run(['pactl', *args], capture_output=True, timeout=timeout)
     if result.returncode:
         raise RuntimeError('audio_service_unavailable: ' + result.stderr.decode(errors='replace')[:300])
     return result.stdout.decode()
 
 
 def devices():
+    return device_snapshot()[0]
+
+
+def device_snapshot():
     info = json.loads(command('-f', 'json', 'info'))
     inputs = json.loads(command('-f', 'json', 'list', 'sources'))
     outputs = json.loads(command('-f', 'json', 'list', 'sinks'))
     def project(item):
-        return {'id': item['name'], 'label': item.get('description', item['name'])}
-    return {
+        channels = [channel['value'] for channel in (item.get('volume') or {}).values()]
+        volume = round(max(channels) * 100 / 65536) if channels else None
+        return {'id': item['name'], 'label': item.get('description', item['name']),
+                'volume': volume}
+    available = {
         'host': socket.gethostname(),
         'inputs': [project(item) for item in inputs if '.monitor' not in item['name']],
         'outputs': [project(item) for item in outputs],
@@ -50,6 +59,124 @@ def devices():
         'echo_cancellation': 'module-echo-cancel',
         'sample_rate': RATE,
     }
+    originals = {
+        'microphone': {item['name']: channel_volumes(item) for item in inputs},
+        'speaker': {item['name']: channel_volumes(item) for item in outputs},
+    }
+    return available, originals
+
+
+def channel_volumes(device):
+    channel_map = device.get('channel_map') or ''
+    channels = channel_map.split(',') if isinstance(channel_map, str) else channel_map
+    levels = (device.get('volume') or {})
+    return [levels.get(channel, {}).get('value') for channel in channels]
+
+
+def valid_channel_volumes(values):
+    return bool(values) and all(type(value) is int and value >= 0 for value in values)
+
+
+def apply_saved_volumes(options, input_id, output_id, volumes, originals):
+    routes = [('input_volume', 'microphone', 'set-source-volume', input_id),
+              ('output_volume', 'speaker', 'set-sink-volume', output_id)]
+    settings = [(kind, operation, name, options.get(key)) for key, kind, operation, name in routes
+                if options.get(key) is not None]
+    if any(type(level) is not int or not 0 <= level <= 150 or
+           not valid_channel_volumes(originals[kind][name]) for kind, _, name, level in settings):
+        raise RuntimeError('audio_volume_unavailable')
+    applied = []
+    try:
+        for kind, operation, name, level in settings:
+            command('--', operation, name, f'{level}%')
+            applied.append((operation, name, originals[kind][name]))
+            volumes[kind] = level
+    except (RuntimeError, subprocess.TimeoutExpired) as error:
+        for operation, name, original in reversed(applied):
+            try:
+                command('--', operation, name, *[str(value) for value in original])
+            except (RuntimeError, subprocess.TimeoutExpired):
+                # The device may have vanished during setup.
+                continue
+        raise RuntimeError('audio_volume_unavailable') from error
+
+
+def test_device(options):
+    kind = options.get('kind')
+    device_id = options.get('device_id')
+    volume = options.get('volume')
+    if kind not in ('microphone', 'speaker') or (device_id is not None and
+            (not isinstance(device_id, str) or not 0 < len(device_id) <= 1024 or '\x00' in device_id)) or (
+            volume is not None and (type(volume) is not int or not 0 <= volume <= 150)):
+        raise RuntimeError('invalid_device_test')
+    direction = 'source' if kind == 'microphone' else 'sink'
+    if device_id is None:
+        info = json.loads(command('-f', 'json', 'info', timeout=1.5))
+        device_id = info.get('default_' + direction + '_name')
+    available = json.loads(command('-f', 'json', 'list', direction + 's', timeout=1.5))
+    device = next((item for item in available if item['name'] == device_id), None)
+    if device is None or (kind == 'microphone' and '.monitor' in device_id):
+        raise RuntimeError('device_unavailable')
+    if device.get('mute'):
+        raise RuntimeError('device_muted')
+    original = channel_volumes(device)
+    if volume is not None and not valid_channel_volumes(original):
+        raise RuntimeError('audio_volume_unavailable')
+    operation = 'set-' + direction + '-volume'
+    try:
+        if volume is not None:
+            command('--', operation, device_id, str(volume) + '%', timeout=1.5)
+        return run_test_io(kind, device_id)
+    finally:
+        if volume is not None:
+            try:
+                command('--', operation, device_id, *[str(value) for value in original], timeout=1.5)
+            except (RuntimeError, subprocess.TimeoutExpired) as error:
+                raise RuntimeError('audio_volume_restore_failed') from error
+
+
+def run_test_io(kind, device_id):
+    # A separate process bounds native library calls, including hung reads and
+    # stream teardown. This helper remains available to restore device volumes.
+    try:
+        result = subprocess.run([sys.executable, __file__, '--test-audio', kind, device_id],
+                                capture_output=True, text=True, timeout=4)
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError('device_test_timeout') from error
+    try:
+        value = json.loads(result.stdout)
+    except (ValueError, TypeError) as error:
+        raise RuntimeError('device_test_failed') from error
+    if result.returncode:
+        raise RuntimeError(str(value.get('error', 'device_test_failed'))[:256])
+    if kind == 'microphone':
+        if type(value.get('peak')) is not int or not 0 <= value['peak'] <= 100:
+            raise RuntimeError('invalid_device_test_result')
+        return {'peak': value['peak']}
+    return {}
+
+
+def test_audio(kind, device_id):
+    stream = Pulse(device_id, 2 if kind == 'microphone' else 1)
+    try:
+        if kind == 'microphone':
+            peak = 0
+            for _ in range(100):
+                data = stream.read()
+                peak = max(peak, max(abs(sample[0]) for sample in struct.iter_unpack('<h', data)))
+            return {'peak': min(100, round(peak * 100 / 32768))}
+        samples = int(RATE * 0.35)
+        pcm = bytearray()
+        for index in range(samples):
+            envelope = min(1, index / (RATE * 0.03), (samples - index - 1) / (RATE * 0.03))
+            value = round(32767 * 0.08 * envelope * math.sin(2 * math.pi * 440 * index / RATE))
+            pcm.extend(struct.pack('<h', value))
+        for offset in range(0, len(pcm), FRAME_BYTES):
+            stream.write(bytes(pcm[offset:offset + FRAME_BYTES]))
+        stream.drain()
+        return {}
+    finally:
+        stream.close()
 
 
 class PlaybackTracker:
@@ -150,18 +277,22 @@ class Endpoint:
     def __init__(self, options):
         self.closed = threading.Event()
         self.muted = False
-        self.playback = queue.Queue(maxsize=160)
+        self.playback = queue.Queue(maxsize=MAX_PLAYBACK_FRAMES)
         self.controls = queue.Queue(maxsize=16)
         self.tracker = PlaybackTracker()
         self.drained_total = 0
         self.module = None
-        available = devices()
+        available, originals = device_snapshot()
         input_id = options.get('input_device') or available['default_input']
         output_id = options.get('output_device') or available['default_output']
         if input_id not in [item['id'] for item in available['inputs']]:
             raise RuntimeError('input_device_unavailable')
         if output_id not in [item['id'] for item in available['outputs']]:
             raise RuntimeError('output_device_unavailable')
+        volumes = {
+            'microphone': next(device['volume'] for device in available['inputs'] if device['id'] == input_id),
+            'speaker': next(device['volume'] for device in available['outputs'] if device['id'] == output_id),
+        }
         # PulseAudio's echo-cancel module connects playback reference and input source.
         # PipeWire-Pulse implements this through its WebRTC echo-cancel implementation.
         name = 'synapsis_voice_' + str(os.getpid())
@@ -172,7 +303,11 @@ class Endpoint:
         try:
             self.output = Pulse(name + '_sink', 1)
             self.input = Pulse(name + '_source', 2)
+            apply_saved_volumes(options, input_id, output_id, volumes, originals)
         except Exception:
+            for stream in [getattr(self, 'input', None), getattr(self, 'output', None)]:
+                if stream:
+                    stream.close()
             command('unload-module', self.module)
             self.module = None
             raise
@@ -182,7 +317,7 @@ class Endpoint:
         threading.Thread(target=self.capture, daemon=True).start()
         threading.Thread(target=self.play, daemon=True).start()
         emit({'event': 'ready', 'info': dict(available, input_device=input_id,
-            output_device=output_id, echo_cancellation='webrtc_reference', platform='linux')})
+            output_device=output_id, volumes=volumes, echo_cancellation='webrtc_reference', platform='linux')})
 
     def watch_devices(self):
         try:
@@ -261,7 +396,7 @@ class Endpoint:
                 raise RuntimeError('invalid_audio')
             chunks = [(data[index:index + FRAME_BYTES], value['metadata'])
                       for index in range(0, len(data), FRAME_BYTES)]
-            if self.playback.qsize() + len(chunks) > 150:
+            if self.playback.qsize() + len(chunks) > MAX_PLAYBACK_FRAMES:
                 raise RuntimeError('playback_queue_overflow')
             for chunk in chunks:
                 self.playback.put_nowait(chunk)
@@ -309,6 +444,9 @@ def main():
         if first['command'] == 'devices':
             emit({'reply': first['id'], 'result': devices()})
             return
+        if first['command'] == 'test_device':
+            emit({'reply': first['id'], 'result': test_device(first)})
+            return
         if first['command'] != 'start':
             raise RuntimeError('start_required')
         endpoint = Endpoint(first)
@@ -318,11 +456,18 @@ def main():
                 break
             endpoint.handle(value)
     except Exception as error:
-        emit({'event': 'error', 'reason': str(error)})
+        emit({'event': 'error', 'reason': str(error)[:256]})
     finally:
         if endpoint:
             endpoint.close()
 
 
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) == 4 and sys.argv[1] == '--test-audio':
+        try:
+            print(json.dumps(test_audio(sys.argv[2], sys.argv[3])))
+        except Exception as error:
+            print(json.dumps({'error': str(error)[:256]}))
+            sys.exit(1)
+    else:
+        main()

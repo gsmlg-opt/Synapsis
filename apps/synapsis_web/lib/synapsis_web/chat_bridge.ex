@@ -52,7 +52,7 @@ defmodule SynapsisWeb.ChatBridge do
     previous_ids = Enum.map(chat.messages, & &1.id)
     next_ids = Enum.map(snapshot.messages, & &1.id)
     previous = Map.new(chat.messages, &{&1.id, &1})
-    removed_or_reordered? = Enum.filter(next_ids, &Map.has_key?(previous, &1)) != previous_ids
+    append_only? = List.starts_with?(next_ids, previous_ids)
     changed = Enum.filter(snapshot.messages, &(Map.get(previous, &1.id) != &1))
 
     application_changed? =
@@ -61,7 +61,7 @@ defmodule SynapsisWeb.ChatBridge do
     socket = assign(socket, :react_chat, Map.merge(chat, snapshot))
 
     cond do
-      removed_or_reordered? ->
+      not append_only? ->
         snapshot(socket)
 
       changed != [] ->

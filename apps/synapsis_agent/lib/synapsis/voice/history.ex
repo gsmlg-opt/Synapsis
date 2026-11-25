@@ -8,9 +8,9 @@ defmodule Synapsis.Voice.History do
   def audio_input(item, generation),
     do: [%{type: :committed_audio, item_id: item, connection_generation: generation}]
 
-  def initial(session_id) do
-    session_id
-    |> Synapsis.Sessions.get_recent_messages(limit: 100)
+  def initial(messages) do
+    messages
+    |> Enum.take(-100)
     |> Enum.flat_map(fn message ->
       case ProviderMessages.from_host([message]) do
         {:ok, [native]} -> [Map.put(native, :id, message.id || Ecto.UUID.generate())]
@@ -19,27 +19,13 @@ defmodule Synapsis.Voice.History do
     end)
   end
 
-  def append(session_id, canonical) do
+  def append(session_id, canonical, image_payloads \\ %{}) do
     with {:ok, offset} <- Store.count_turns(session_id),
          {:ok, meta} <- Store.get_meta(session_id),
          {:ok, previous} <- Store.list_turns(session_id) do
       ids = MapSet.new(previous, &(&1[:id] || &1["id"]))
 
-      turns =
-        canonical
-        |> Enum.with_index()
-        |> Enum.flat_map(fn {item, index} ->
-          id = item[:id] || synthesized_id(canonical, item, index)
-
-          if MapSet.member?(ids, id) do
-            []
-          else
-            case message(session_id, item, id) do
-              nil -> []
-              message -> [Message.encode(message)]
-            end
-          end
-        end)
+      turns = session_id |> project(canonical, image_payloads, ids) |> Enum.map(&Message.encode/1)
 
       if turns == [] do
         :ok
@@ -49,23 +35,32 @@ defmodule Synapsis.Voice.History do
     end
   end
 
+  def project(session_id, canonical, image_payloads, ids) do
+    canonical
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {item, index} ->
+      id = item[:id] || synthesized_id(canonical, item, index)
+
+      if MapSet.member?(ids, id) do
+        []
+      else
+        case message(session_id, item, id, image_payloads) do
+          nil -> []
+          message -> [message]
+        end
+      end
+    end)
+  end
+
   def save_fact(session_id, type, key, data),
     do: Synapsis.Runtime.Store.put_fact(session_id, type, key, data)
 
   def recovery(session_id) do
     Map.new([:voice_playback, :voice_transcript], fn source ->
       entries =
-        case Synapsis.Runtime.Store.list_facts(session_id, source) do
-          {:ok, pairs} ->
-            Map.new(pairs, fn {key, value} ->
-              identity =
-                key |> String.split("/") |> List.last() |> Base.url_decode64!(padding: false)
-
-              {identity, value}
-            end)
-
-          _ ->
-            %{}
+        case Synapsis.Runtime.Store.list_facts_by_identity(session_id, source) do
+          {:ok, facts} -> facts
+          _ -> %{}
         end
 
       {source, entries}
@@ -101,8 +96,8 @@ defmodule Synapsis.Voice.History do
     end
   end
 
-  defp message(session_id, item, id) do
-    case ProviderMessages.to_host([item]) do
+  defp message(session_id, item, id, image_payloads) do
+    case ProviderMessages.to_host([item], image_payloads) do
       {:ok, [%{role: role, parts: [_ | _] = parts}]} ->
         %Message{
           id: id,
