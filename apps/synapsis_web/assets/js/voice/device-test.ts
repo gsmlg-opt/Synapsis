@@ -29,7 +29,9 @@ export async function testBrowserAudio(
   let duration: ReturnType<typeof setTimeout> | undefined
   let samples: ReturnType<typeof setInterval> | undefined
   let rejectCancellation: (reason: Error) => void = () => {}
-  const cancelled = new Promise<never>((_, reject) => { rejectCancellation = reject })
+  const cancelled = new Promise<never>((_, reject) => {
+    rejectCancellation = reject
+  })
   const abort = () => cancel(new DOMException('Audio test cancelled', 'AbortError'))
   const deviceEnded = () => cancel(new Error('input_device_disconnected'))
   const setupTimeout = setTimeout(() => cancel(new Error('audio_test_timeout')), 10_000)
@@ -42,7 +44,7 @@ export async function testBrowserAudio(
     clearTimeout(duration)
     clearInterval(samples)
     signal?.removeEventListener('abort', abort)
-    stream?.getTracks().forEach(track => {
+    stream?.getTracks().forEach((track) => {
       track.removeEventListener('ended', deviceEnded)
       track.stop()
     })
@@ -70,22 +72,24 @@ export async function testBrowserAudio(
 
     if (kind === 'microphone') {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error('browser_audio_unavailable')
-      const permission = navigator.mediaDevices.getUserMedia({
-        audio: {
-          deviceId: deviceId ? { exact: deviceId } : undefined,
-          channelCount: { ideal: 1 },
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: false
-        }
-      }).then(opened => {
-        if (released) opened.getTracks().forEach(track => track.stop())
-        else {
-          stream = opened
-          opened.getAudioTracks().forEach(track => track.addEventListener('ended', deviceEnded))
-        }
-        return opened
-      })
+      const permission = navigator.mediaDevices
+        .getUserMedia({
+          audio: {
+            deviceId: deviceId ? { exact: deviceId } : undefined,
+            channelCount: { ideal: 1 },
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: false
+          }
+        })
+        .then((opened) => {
+          if (released) opened.getTracks().forEach((track) => track.stop())
+          else {
+            stream = opened
+            opened.getAudioTracks().forEach((track) => track.addEventListener('ended', deviceEnded))
+          }
+          return opened
+        })
       const opened = await Promise.race([permission, cancelled])
       source = context.createMediaStreamSource(opened)
       gain = context.createGain()
@@ -104,7 +108,9 @@ export async function testBrowserAudio(
       measure()
       samples = setInterval(measure, 40)
       await Promise.race([
-        new Promise<void>(resolve => { duration = setTimeout(resolve, 2_000) }),
+        new Promise<void>((resolve) => {
+          duration = setTimeout(resolve, 2_000)
+        }),
         cancelled
       ])
       measure()
@@ -130,7 +136,9 @@ export async function testBrowserAudio(
     oscillator.stop(now + 0.52)
     clearTimeout(setupTimeout)
     await Promise.race([
-      new Promise<void>(resolve => { duration = setTimeout(resolve, 550) }),
+      new Promise<void>((resolve) => {
+        duration = setTimeout(resolve, 550)
+      }),
       cancelled
     ])
     return {}

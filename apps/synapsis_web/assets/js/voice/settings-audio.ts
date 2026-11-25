@@ -4,7 +4,7 @@ import { BrowserAudioEndpoint } from './audio-endpoint'
 type Kind = 'microphone' | 'speaker'
 type Reply = { status: string; request?: string; peak?: number; reason?: string }
 type Devices = Record<'inputs' | 'outputs', Array<{ id: string; label: string }>>
-type HostDevices = { status: 'ready' } & Devices | { status: 'loading' | 'unavailable' }
+type HostDevices = ({ status: 'ready' } & Devices) | { status: 'loading' | 'unavailable' }
 type Hook = {
   el: HTMLElement
   handleEvent: <Payload>(event: string, callback: (reply: Payload) => void) => unknown
@@ -36,9 +36,10 @@ export const VoiceAudioTest = {
     const editor = this.el.closest<HTMLElement>('[data-agent-editor]')
     if (!editor) return
     const buttons = () => editor.querySelectorAll<HTMLButtonElement>('[data-voice-test]')
-    const cardFor = (mode: string, kind: Kind) => editor
-      .querySelector(`[data-voice-audio-profile=${mode}] [data-voice-test=${kind}]`)
-      ?.closest<HTMLElement>('[data-voice-device-card]')
+    const cardFor = (mode: string, kind: Kind) =>
+      editor
+        .querySelector(`[data-voice-audio-profile=${mode}] [data-voice-test=${kind}]`)
+        ?.closest<HTMLElement>('[data-voice-device-card]')
     let pending: { request: string; mode: string; kind: Kind } | null = null
     let controller: AbortController | null = null
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -51,13 +52,20 @@ export const VoiceAudioTest = {
       const selector = `[data-voice-audio-profile=${mode}] [data-voice-device-list]`
       for (const select of editor.querySelectorAll<HTMLSelectElement>(selector)) {
         const key = select.dataset.voiceDeviceList as keyof Devices
-        const selected = mode === 'browser' && key === 'outputs' && select.value === 'default'
-          ? '' : select.value
-        const choices = devices[key].filter(({ id }) => id && (mode !== 'browser' || id !== 'default'))
-        const defaultId = mode === 'browser' && key === 'inputs' && selected === 'default' ? selected : ''
-        const options = [new Option('System default', defaultId), ...choices.map(({ id, label }) => new Option(label, id))]
+        const selected =
+          mode === 'browser' && key === 'outputs' && select.value === 'default' ? '' : select.value
+        const choices = devices[key].filter(
+          ({ id }) => id && (mode !== 'browser' || id !== 'default')
+        )
+        const defaultId =
+          mode === 'browser' && key === 'inputs' && selected === 'default' ? selected : ''
+        const options = [
+          new Option('System default', defaultId),
+          ...choices.map(({ id, label }) => new Option(label, id))
+        ]
         if (selected && !options.some(({ value }) => value === selected)) {
-          const label = mode === 'host' || choices.length ? 'Saved device (unavailable)' : 'Saved device'
+          const label =
+            mode === 'host' || choices.length ? 'Saved device (unavailable)' : 'Saved device'
           options.push(new Option(label, selected))
         }
         select.replaceChildren(...options)
@@ -74,12 +82,16 @@ export const VoiceAudioTest = {
     }
 
     // The React form keeps its controls during LiveView patches.
-    this.handleEvent<HostDevices>('voice_host_devices', devices => {
+    this.handleEvent<HostDevices>('voice_host_devices', (devices) => {
       const status = editor.querySelector<HTMLElement>('[data-host-device-status]')
       if (status) {
         status.dataset.state = devices.status === 'unavailable' ? 'error' : ''
-        status.textContent = devices.status === 'loading' ? 'Discovering host devices…'
-          : devices.status === 'unavailable' ? 'Could not load host audio devices.' : ''
+        status.textContent =
+          devices.status === 'loading'
+            ? 'Discovering host devices…'
+            : devices.status === 'unavailable'
+              ? 'Could not load host audio devices.'
+              : ''
       }
       if (devices.status === 'ready') renderDevices('host', devices)
     })
@@ -91,18 +103,26 @@ export const VoiceAudioTest = {
       if (notice) notice.textContent = 'Discovering browser devices…'
       let stream: MediaStream | undefined
       try {
-        if (!navigator.mediaDevices?.getUserMedia) throw new Error('microphone_requires_https_or_localhost')
+        if (!navigator.mediaDevices?.getUserMedia)
+          throw new Error('microphone_requires_https_or_localhost')
         stream = await navigator.mediaDevices.getUserMedia({ audio: true })
         if (destroyed) return
         await refreshDevices()
         if (notice) notice.textContent = ''
       } catch (error) {
-        const reason = error instanceof DOMException ? error.name : error instanceof Error ? error.message : undefined
-        if (notice) notice.textContent = reason === 'NotAllowedError'
-          ? 'Allow microphone access to discover browser devices.'
-          : errorMessage(reason)
+        const reason =
+          error instanceof DOMException
+            ? error.name
+            : error instanceof Error
+              ? error.message
+              : undefined
+        if (notice)
+          notice.textContent =
+            reason === 'NotAllowedError'
+              ? 'Allow microphone access to discover browser devices.'
+              : errorMessage(reason)
       } finally {
-        stream?.getTracks().forEach(track => track.stop())
+        stream?.getTracks().forEach((track) => track.stop())
         discovering = false
       }
     }
@@ -123,7 +143,9 @@ export const VoiceAudioTest = {
       const range = event.target as HTMLInputElement
       if (range.matches('[data-voice-volume-range]')) updateVolume(range, false)
     }
-    const onDevicesChanged = () => { void refreshDevices().catch(() => {}) }
+    const onDevicesChanged = () => {
+      void refreshDevices().catch(() => {})
+    }
 
     const finish = (reply: Reply) => {
       if (pending === null || reply.request !== pending.request) return
@@ -132,7 +154,9 @@ export const VoiceAudioTest = {
       pending = null
       controller = null
       clearTimeout(timer)
-      buttons().forEach(button => { button.disabled = false })
+      buttons().forEach((button) => {
+        button.disabled = false
+      })
       if (!status) return
       if (reply.status === 'error') {
         status.dataset.state = 'error'
@@ -167,7 +191,8 @@ export const VoiceAudioTest = {
       if (!button.matches('[data-voice-test]') || pending !== null) return
       const kind = button.dataset.voiceTest as Kind
       const status = card.querySelector<HTMLElement>('[data-voice-test-status]')
-      const mode = card.closest<HTMLElement>('[data-voice-audio-profile]')?.dataset.voiceAudioProfile
+      const mode = card.closest<HTMLElement>('[data-voice-audio-profile]')?.dataset
+        .voiceAudioProfile
       if (!mode || !status) return
       const device = card.querySelector<HTMLSelectElement>('[data-voice-device]')?.value || null
       const setting = card.querySelector<HTMLInputElement>('[data-voice-volume-value]')?.value
@@ -175,7 +200,10 @@ export const VoiceAudioTest = {
       const host = mode === 'host'
       const bar = card.querySelector<HTMLProgressElement>('[data-voice-test-meter]')
       if (bar) bar.hidden = true
-      if (volume !== null && (!Number.isInteger(volume) || volume < 0 || volume > (host ? 150 : 200))) {
+      if (
+        volume !== null &&
+        (!Number.isInteger(volume) || volume < 0 || volume > (host ? 150 : 200))
+      ) {
         status.dataset.state = 'error'
         status.textContent = 'Enter a valid volume to test this device.'
         return
@@ -183,9 +211,12 @@ export const VoiceAudioTest = {
 
       const request = String(Date.now()) + '-' + String(Math.random()).slice(2)
       pending = { request, mode, kind }
-      buttons().forEach(control => { control.disabled = true })
+      buttons().forEach((control) => {
+        control.disabled = true
+      })
       delete status.dataset.state
-      status.textContent = kind === 'microphone' ? 'Speak now to test the microphone…' : 'Playing a test tone…'
+      status.textContent =
+        kind === 'microphone' ? 'Speak now to test the microphone…' : 'Playing a test tone…'
       timer = setTimeout(() => {
         controller?.abort()
         finish({ request, status: 'error' })
@@ -197,12 +228,19 @@ export const VoiceAudioTest = {
         })
       } else {
         controller = new AbortController()
-        void testBrowserAudio(kind, device, volume, controller.signal).then(result => {
-          finish({ ...result, request, status: 'ok' })
-        }).catch((error: unknown) => {
-          const reason = error instanceof DOMException ? error.name : error instanceof Error ? error.message : undefined
-          finish({ request, status: 'error', reason })
-        })
+        void testBrowserAudio(kind, device, volume, controller.signal)
+          .then((result) => {
+            finish({ ...result, request, status: 'ok' })
+          })
+          .catch((error: unknown) => {
+            const reason =
+              error instanceof DOMException
+                ? error.name
+                : error instanceof Error
+                  ? error.message
+                  : undefined
+            finish({ request, status: 'error', reason })
+          })
       }
     }
     editor.addEventListener('click', onClick)

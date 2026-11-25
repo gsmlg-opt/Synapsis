@@ -3,7 +3,13 @@ import { BrowserAudioEndpoint, type PlaybackCursor } from './audio-endpoint'
 
 type Device = { id: string; label: string }
 type Devices = { inputs: Device[]; outputs: Device[]; output_selection?: boolean }
-type Endpoint = { mode: 'host' | 'browser'; input_device?: string; output_device?: string; input_volume?: number; output_volume?: number }
+type Endpoint = {
+  mode: 'host' | 'browser'
+  input_device?: string
+  output_device?: string
+  input_volume?: number
+  output_volume?: number
+}
 type Status = {
   phase: string
   owned?: boolean
@@ -63,15 +69,18 @@ function mount(root: HTMLElement) {
   function error(reason: string) {
     const messages: Record<string, string> = {
       voice_channel_disconnected: 'Connection lost. Reconnecting to the voice controls…',
-      voice_channel_unavailable: 'Voice controls are unavailable. Reload this session to reconnect.',
+      voice_channel_unavailable:
+        'Voice controls are unavailable. Reload this session to reconnect.',
       media_owner_lost: 'The connection controlling this call ended. Start a new call to continue.',
       voice_runtime_failed: 'The voice runtime could not complete the reply.',
       voice_runtime_admission_failed: 'The voice runtime could not accept this turn.',
-      voice_runtime_requires_recovery: 'This session needs runtime recovery. Open a new session to continue.',
+      voice_runtime_requires_recovery:
+        'This session needs runtime recovery. Open a new session to continue.',
       realtime_protocol_error: 'The Realtime service rejected a voice request.',
       realtime_response_failed: 'The Realtime service could not produce the reply.',
       realtime_disconnected: 'The Realtime connection ended.',
-      realtime_policy_rejected: 'The Realtime gateway rejected the call. Check the selected Backplane connection.',
+      realtime_policy_rejected:
+        'The Realtime gateway rejected the call. Check the selected Backplane connection.',
       realtime_not_configured: 'Realtime is unavailable on the selected connection.',
       realtime_unauthorized: 'The Realtime connection needs authentication.',
       realtime_forbidden: 'The selected connection cannot access Realtime.',
@@ -79,12 +88,14 @@ function mount(root: HTMLElement) {
       realtime_setup_timeout: 'The Realtime service did not finish connecting in time.',
       audio_endpoint_timeout: 'The audio device did not finish opening in time.',
       audio_volume_unavailable: 'The selected audio device could not change its volume.',
-      input_device_unavailable: 'The selected microphone is unavailable. Select another microphone.',
+      input_device_unavailable:
+        'The selected microphone is unavailable. Select another microphone.',
       output_device_unavailable: 'The selected speaker is unavailable. Select another speaker.',
       host_audio_busy: 'The host audio devices are already in use by another call.',
       host_audio_exited: 'The host audio device connection ended.',
       media_lease_in_use: 'This call is controlled by another tab.',
-      voice_operation_timed_out: 'The voice operation timed out. Check the call state before retrying.',
+      voice_operation_timed_out:
+        'The voice operation timed out. Check the call state before retrying.',
       NotAllowedError: 'Microphone access was denied. Allow microphone access in your browser.',
       NotFoundError: 'No microphone is available on this browser device.'
     }
@@ -138,7 +149,9 @@ function mount(root: HTMLElement) {
     const ended = view.phase === 'offline' || view.phase === 'error'
     owned = !ended && view.owned === true
     if (!owned) closeBrowser()
-    const callActive = ['connecting', 'listening', 'responding', 'switching', 'ending'].includes(view.phase)
+    const callActive = ['connecting', 'listening', 'responding', 'switching', 'ending'].includes(
+      view.phase
+    )
     const active = owned && callActive
     const ready = owned && ['listening', 'responding'].includes(view.phase)
     if (endpointPicker) {
@@ -157,7 +170,8 @@ function mount(root: HTMLElement) {
     if (callActive && !owned) {
       status.textContent = 'Call controlled in another tab or process'
     } else {
-      status.textContent = view.reason && ended ? 'Call stopped' : phases[view.phase] || 'Ready to call'
+      status.textContent =
+        view.reason && ended ? 'Call stopped' : phases[view.phase] || 'Ready to call'
     }
     errorNotice.hidden = !view.reason
     errorNotice.textContent = ''
@@ -176,11 +190,12 @@ function mount(root: HTMLElement) {
     mute.textContent = muted ? 'Unmute microphone' : 'Mute microphone'
     commit.hidden = !ready || !view.manual
     commit.disabled = muted
-    playback.textContent = active && view.playback
-      ? typeof view.playback.played_ms === 'number'
-        ? 'Playing audio · ' + (view.playback.played_ms / 1000).toFixed(1) + ' s played'
-        : 'Playing audio · playback position unavailable'
-      : ''
+    playback.textContent =
+      active && view.playback
+        ? typeof view.playback.played_ms === 'number'
+          ? 'Playing audio · ' + (view.playback.played_ms / 1000).toFixed(1) + ' s played'
+          : 'Playing audio · playback position unavailable'
+        : ''
     playback.hidden = !playback.textContent
     deviceIdentity.textContent = endpointIdentity(view, active)
     renderTasks(view.tasks || [])
@@ -355,8 +370,9 @@ function mount(root: HTMLElement) {
         statusUpdated(latestStatus)
         error(reason)
       }
-      channel.push('switch', { mode }, 15_000)
-        .receive('error', data => switchFailed(data.reason || 'voice_operation_failed'))
+      channel
+        .push('switch', { mode }, 15_000)
+        .receive('error', (data) => switchFailed(data.reason || 'voice_operation_failed'))
         .receive('timeout', () => switchFailed('voice_operation_timed_out'))
     }
   }

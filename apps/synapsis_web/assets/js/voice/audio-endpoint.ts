@@ -192,7 +192,11 @@ export class BrowserAudioEndpoint {
       this.speakerGain.connect(context.destination)
       this.silent = context.createGain()
       this.silent.gain.value = 0
-      this.source.connect(this.microphoneGain).connect(this.capture).connect(this.silent).connect(context.destination)
+      this.source
+        .connect(this.microphoneGain)
+        .connect(this.capture)
+        .connect(this.silent)
+        .connect(context.destination)
       stream.getAudioTracks().forEach((track) => {
         track.addEventListener('ended', () => {
           if (!this.closed) this.fail('input_device_disconnected')
@@ -273,7 +277,14 @@ export class BrowserAudioEndpoint {
       previous?.item_id === identity.item_id &&
       previous?.content_index === identity.content_index
     const offsetSamples = sameItem ? previous.offsetSamples + previous.samples : 0
-    this.segments.push({ ...identity, start, end: start + duration, offsetSamples, samples, source })
+    this.segments.push({
+      ...identity,
+      start,
+      end: start + duration,
+      offsetSamples,
+      samples,
+      source
+    })
     source.onended = () => source.disconnect()
     source.start(start)
     this.nextStart = start + duration
@@ -288,14 +299,17 @@ export class BrowserAudioEndpoint {
     const heard = accurate ? timestamp!.contextTime! : 0
     while (this.segments.length > 1 && heard >= this.segments[1].start) this.segments.shift()
     const current = this.segments[0]
-    const elapsedSamples = heard >= current.end
-      ? current.samples
-      : Math.max(0, Math.floor((heard - current.start) * PCM_SAMPLE_RATE))
+    const elapsedSamples =
+      heard >= current.end
+        ? current.samples
+        : Math.max(0, Math.floor((heard - current.start) * PCM_SAMPLE_RATE))
     return {
       response_id: current.response_id,
       item_id: current.item_id,
       content_index: current.content_index,
-      audio_end_ms: accurate ? Math.floor((current.offsetSamples + elapsedSamples) * 1000 / PCM_SAMPLE_RATE) : null,
+      audio_end_ms: accurate
+        ? Math.floor(((current.offsetSamples + elapsedSamples) * 1000) / PCM_SAMPLE_RATE)
+        : null,
       accurate
     }
   }
