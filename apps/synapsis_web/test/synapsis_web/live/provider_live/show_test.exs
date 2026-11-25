@@ -679,14 +679,16 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       test_pid = self()
 
       Gaoxy.Test.stub(bypass, "POST", "/v1/responses", fn conn ->
-        send(test_pid, :local_provider_http_called)
+        conn =
+          conn
+          |> Plug.Conn.put_resp_content_type("text/event-stream")
+          |> Plug.Conn.send_resp(
+            200,
+            "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[]}}\n\n"
+          )
 
+        send(test_pid, :local_provider_http_called)
         conn
-        |> Plug.Conn.put_resp_content_type("text/event-stream")
-        |> Plug.Conn.send_resp(
-          200,
-          "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[]}}\n\n"
-        )
       end)
 
       provider =

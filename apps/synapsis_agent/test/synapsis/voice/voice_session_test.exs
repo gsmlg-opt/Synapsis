@@ -468,6 +468,13 @@ defmodule Synapsis.VoiceSessionTest do
 
     Gaoxy.Test.stub(ctx.fixture, "POST", "/v1/responses", fn conn ->
       {:ok, _body, conn} = Plug.Conn.read_body(conn)
+
+      conn =
+        conn
+        |> Gaoxy.HTTP.put_stream_timeout(6_000)
+        |> Plug.Conn.put_resp_content_type("text/event-stream")
+        |> Plug.Conn.send_chunked(200)
+
       send(test, {:cancel_fixture_child_started, self()})
 
       case AbortableHTTP.await(conn, :fixture_teardown, 5_000, test) do
