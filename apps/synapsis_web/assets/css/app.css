@@ -7,23 +7,18 @@
 @import "duskmoon_phoenix/react.css";
 @import "duskmoon_phoenix/elements.css";
 
-/* Custom font stack using CSS variables for consistent typography */
-:root {
-  --font-display: "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-body: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+/* Latin subset from @fontsource-variable/dm-sans 5.3.0 (SIL OFL 1.1). */
+@font-face {
+  font-family: "Synapsis DM Sans";
+  src: url("/fonts/dm-sans-latin-wght-normal.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+}
+
+@theme {
+  --font-sans: "Synapsis DM Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", "Fira Code", monospace;
-}
-
-body {
-  font-family: var(--font-body);
-}
-
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-display);
-}
-
-code, pre, kbd, samp {
-  font-family: var(--font-mono);
 }
 
 @layer components {
@@ -79,6 +74,15 @@ code, pre, kbd, samp {
 
   .synapsis-react-chat {
     --chat-thread-width: 52rem;
+  }
+
+  .synapsis-react-chat > [data-react-chat-loading]:not([hidden]) {
+    display: grid;
+    block-size: 100%;
+    place-content: center;
+    justify-items: center;
+    padding-inline: 0.75rem;
+    text-align: center;
   }
 
   .synapsis-react-chat > section {
