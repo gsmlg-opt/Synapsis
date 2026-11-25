@@ -122,7 +122,8 @@ defmodule Synapsis.Agent.Runtime.RealtimeContractTest do
     send(worker, {:events, [%{type: :response_activity}]})
     assert_receive {:agent_runtime, "voice", %{type: :response_activity}}
     assert_receive {:DOWN, ^monitor, :process, ^worker, _}, 310
-    assert_receive {:agent_runtime, "voice", %{type: :run_cancelled}}
+    # Cleanup is committed after the provider worker is down.
+    assert_receive {:agent_runtime, "voice", %{type: :run_cancelled}}, 1_000
   end
 
   defp done, do: %{type: :response_completed, message: %{role: :assistant, content: "done"}}
