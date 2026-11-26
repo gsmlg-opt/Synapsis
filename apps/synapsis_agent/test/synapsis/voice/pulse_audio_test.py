@@ -23,6 +23,54 @@ class CursorTest(unittest.TestCase):
         tracker.append(2400, dict(first, item_id='next'))
         self.assertEqual(tracker.cursor(6000)['audio_end_ms'], 50)
 
+    def test_playback_bridges_short_delivery_gaps_and_drains_after_idle(self):
+        endpoint = module.Endpoint.__new__(module.Endpoint)
+        endpoint.closed = Mock(wraps=module.threading.Event())
+        endpoint.controls = module.queue.Queue()
+        endpoint.playback = Mock()
+        endpoint.output = Mock()
+        endpoint.output.latency_samples.return_value = 240
+        endpoint.tracker = module.PlaybackTracker()
+        endpoint.drained_total = 0
+        clock = 1.0
+        frame = b'\0' * module.FRAME_BYTES
+        metadata = {'response_id': 'r', 'item_id': 'i', 'content_index': 0}
+        deliveries = iter([(1.10, frame), (1.12, None), (1.16, frame),
+                           (1.26, None), (1.30, None)])
+        drained_at = []
+        wrote_at = []
+
+        def advance(seconds):
+            nonlocal clock
+            clock += seconds
+            if drained_at:
+                endpoint.closed.set()
+
+        def deliver(**_):
+            nonlocal clock
+            item = next(deliveries, None)
+            if item is None:
+                endpoint.closed.set()
+                raise module.queue.Empty()
+            expected, data = item
+            clock = max(clock, expected)
+            if data is None:
+                raise module.queue.Empty()
+            return data, metadata
+
+        endpoint.playback.get.side_effect = deliver
+        endpoint.playback.empty.side_effect = lambda: bool(drained_at)
+        endpoint.closed.wait.side_effect = advance
+        endpoint.output.write.side_effect = lambda _: wrote_at.append(clock)
+        endpoint.output.drain.side_effect = lambda: drained_at.append(clock)
+        with patch.object(module.time, 'monotonic', side_effect=lambda: clock), \
+             patch.object(module, 'emit') as emit:
+            endpoint.play()
+        self.assertEqual(wrote_at, [1.10, 1.16])
+        self.assertEqual(drained_at, [1.30])
+        self.assertEqual(endpoint.drained_total, module.FRAME_BYTES)
+        self.assertEqual(emit.call_args.args[0]['cursor']['played_samples'], module.FRAME_BYTES)
+
     def test_saved_volumes_are_applied_to_the_selected_devices(self):
         volumes = {'microphone': 100, 'speaker': 40}
         originals = {'microphone': {'selected-mic': [65536]}, 'speaker': {'selected-speaker': [26214]}}

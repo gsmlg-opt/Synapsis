@@ -24,8 +24,18 @@ defmodule Synapsis.Provider.Realtime.Protocol do
 
   defp turn_detection("manual"), do: nil
 
-  defp turn_detection(mode) when mode in ["server_vad", "semantic_vad"],
-    do: %{type: mode, create_response: false, interrupt_response: false}
+  defp turn_detection("server_vad") do
+    %{
+      type: "server_vad",
+      # The upstream default can split ordinary pauses within a sentence.
+      silence_duration_ms: 700,
+      create_response: false,
+      interrupt_response: false
+    }
+  end
+
+  defp turn_detection("semantic_vad"),
+    do: %{type: "semantic_vad", create_response: false, interrupt_response: false}
 
   def response(attempt, instructions, tools, items) do
     %{

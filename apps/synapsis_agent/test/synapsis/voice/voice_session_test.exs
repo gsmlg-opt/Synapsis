@@ -285,6 +285,43 @@ defmodule Synapsis.VoiceSessionTest do
     assert Process.alive?(owner)
   end
 
+  test "a full microphone queue skips overflow and drains in order without hanging up", ctx do
+    %{socket: socket} = call(ctx.id)
+    committed(socket, "item_first")
+    response(socket, "resp-first", "item_first")
+
+    for index <- 1..16, do: committed(socket, "item_queued_#{index}")
+    committed(socket, "item_overflow")
+
+    event(socket, %{
+      "type" => "conversation.item.input_audio_transcription.completed",
+      "item_id" => "item_overflow",
+      "transcript" => "Discarded audio"
+    })
+
+    wait_for(fn ->
+      assert {:ok, %{phase: :responding, reason: :voice_input_queue_full}} =
+               VoiceSession.status(ctx.id)
+
+      assert %{queued: 16, facts: %{voice_transcript: transcripts}} =
+               VoiceSession.chat_snapshot(ctx.id)
+
+      assert transcripts == %{}
+    end)
+
+    refute_receive {:client_event, %{"type" => "response.cancel"}}, 60
+    done(socket, "resp-first", [assistant("item_answer", "First reply")])
+    response(socket, "resp-next", "item_queued_1")
+    assert {:ok, %{phase: :responding, reason: nil}} = VoiceSession.status(ctx.id)
+    assert %{queued: 15} = VoiceSession.chat_snapshot(ctx.id)
+    committed(socket, "item_after_overflow")
+
+    wait_for(fn ->
+      assert {:ok, %{phase: :responding, reason: nil}} = VoiceSession.status(ctx.id)
+      assert %{queued: 16} = VoiceSession.chat_snapshot(ctx.id)
+    end)
+  end
+
   test "active barge-in cancels only its response and ignores late output", ctx do
     %{socket: socket, generation: generation} = call(ctx.id)
     committed(socket, "item_first")
@@ -460,6 +497,52 @@ defmodule Synapsis.VoiceSessionTest do
 
     wait_for(fn ->
       assert {:ok, %{phase: :error, reason: :realtime_disconnected}} = VoiceSession.status(ctx.id)
+    end)
+  end
+
+  test "a lost Realtime reply can resume in the same session without replaying the turn", ctx do
+    %{socket: socket, generation: original} = call(ctx.id)
+    committed(socket, "item_lost")
+    first = response(socket, "reply-lost", "item_lost")
+
+    event(socket, %{
+      "type" => "conversation.item.input_audio_transcription.completed",
+      "item_id" => "item_lost",
+      "transcript" => "Prior question"
+    })
+
+    send(socket, :sever)
+
+    wait_for(fn ->
+      assert {:ok, %{phase: :error, reason: :realtime_disconnected}} = VoiceSession.status(ctx.id)
+      assert %{busy: false, reply: nil} = VoiceSession.chat_snapshot(ctx.id)
+      assert [%{role: "user"}] = Sessions.get_messages(ctx.id)
+    end)
+
+    %{socket: next_socket, generation: next} = call(ctx.id)
+    assert original != next
+    refute_receive {:client_event, %{"type" => "response.create"}}, 100
+
+    assert {:error, :invalid_voice_operation} =
+             VoiceSession.capture(ctx.id, original, 1, <<0, 0>>)
+
+    committed(next_socket, "item_new")
+
+    assert_receive {:client_event, %{"type" => "conversation.item.create", "item" => prior}},
+                   @wait
+
+    assert [%{"type" => "input_text", "text" => "[Prior microphone transcript] Prior question"}] =
+             prior["content"]
+
+    acknowledge_item(next_socket, prior["id"])
+    second = response(next_socket, "reply-new", "item_new")
+    assert first["metadata"]["attempt"] != second["metadata"]["attempt"]
+    refute %{"type" => "item_reference", "id" => "item_lost"} in second["input"]
+    done(next_socket, "reply-new", [assistant("answer-new", "Back online")])
+
+    wait_for(fn ->
+      assert [%{role: "user"}, %{role: "user"}, %{role: "assistant"}] =
+               Sessions.get_messages(ctx.id)
     end)
   end
 

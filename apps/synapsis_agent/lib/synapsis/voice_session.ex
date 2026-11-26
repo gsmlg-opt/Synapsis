@@ -850,10 +850,21 @@ defmodule Synapsis.VoiceSession do
          "item_id" => item
        })
        when phase in [:listening, :responding] and is_binary(item) do
-    if MapSet.member?(state.admitted_audio, item) do
-      state
-    else
-      if :queue.len(state.inputs) < @max_waiting_inputs do
+    cond do
+      MapSet.member?(state.admitted_audio, item) ->
+        state
+
+      :queue.len(state.inputs) >= @max_waiting_inputs ->
+        state = %{state | capture_bytes: 0}
+
+        if is_nil(state.reason) do
+          Logger.warning("voice_input_queue_full", session_id: state.session.id)
+          publish(%{state | reason: :voice_input_queue_full})
+        else
+          state
+        end
+
+      true ->
         input = History.audio_input(item, state.connection_generation)
 
         %{
@@ -864,9 +875,6 @@ defmodule Synapsis.VoiceSession do
         }
         |> offer_input()
         |> publish_chat()
-      else
-        hangup(state, :voice_input_queue_full)
-      end
     end
   end
 
@@ -877,7 +885,16 @@ defmodule Synapsis.VoiceSession do
        })
        when is_binary(item) and is_binary(transcript) and
               byte_size(transcript) <= @max_caption_bytes do
-    record_fact(state, :voice_transcript, state.connection_generation <> ":" <> item, transcript)
+    if MapSet.member?(state.admitted_audio, item) do
+      record_fact(
+        state,
+        :voice_transcript,
+        state.connection_generation <> ":" <> item,
+        transcript
+      )
+    else
+      state
+    end
   end
 
   defp receive_realtime(
@@ -1005,12 +1022,16 @@ defmodule Synapsis.VoiceSession do
           SessionAdapter.prompt(state.adapter, context, input)
         end
 
-        %{
+        next = %{
           state
           | inputs: inputs,
             run_phase: :busy,
             image_payloads: Map.merge(state.image_payloads, images)
         }
+
+        if next.reason == :voice_input_queue_full,
+          do: publish(%{next | reason: nil}),
+          else: next
 
       {:empty, _} ->
         state
@@ -1266,9 +1287,24 @@ defmodule Synapsis.VoiceSession do
       end)
 
     state =
-      if state.attempt,
-        do: finish_attempt(state, %{type: :response_failed, error: "Realtime connection ended"}),
-        else: state
+      case state do
+        %{attempt: nil} ->
+          state
+
+        %{run_phase: :failed} ->
+          finish_attempt(state, %{type: :response_failed, error: "Voice runtime failed"})
+
+        %{attempt: attempt} when reason not in [:voice_storage_failed, :runtime_unavailable] ->
+          # This attempt can no longer deliver a terminal reply. Retire it while
+          # preserving the Conversation and its previously admitted work.
+          finish_attempt(state, %{
+            type: :response_interrupted,
+            reason: attempt.interrupt || "media_unavailable"
+          })
+
+        _ ->
+          finish_attempt(state, %{type: :response_failed, error: "Voice runtime unavailable"})
+      end
 
     close_endpoint(state.endpoint)
     close_socket(state)

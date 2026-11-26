@@ -74,11 +74,14 @@ function mount(root: HTMLElement) {
       media_owner_lost: 'The connection controlling this call ended. Start a new call to continue.',
       voice_runtime_failed: 'The voice runtime could not complete the reply.',
       voice_runtime_admission_failed: 'The voice runtime could not accept this turn.',
+      voice_input_queue_full:
+        'A microphone segment was skipped while the queue was full. Speak again after it clears.',
       voice_runtime_requires_recovery:
         'This session needs runtime recovery. Open a new session to continue.',
       realtime_protocol_error: 'The Realtime service rejected a voice request.',
-      realtime_response_failed: 'The Realtime service could not produce the reply.',
-      realtime_disconnected: 'The Realtime connection ended.',
+      realtime_response_failed:
+        'The Realtime service could not produce the reply. Start a call to continue here.',
+      realtime_disconnected: 'The Realtime connection ended. Start a call to continue here.',
       realtime_policy_rejected:
         'The Realtime gateway rejected the call. Check the selected Backplane connection.',
       realtime_not_configured: 'Realtime is unavailable on the selected connection.',

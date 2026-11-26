@@ -20,6 +20,10 @@ RATE = 24000
 FRAME_BYTES = 960
 MAX_BUFFER_BYTES = RATE * 2 * 3
 MAX_PLAYBACK_FRAMES = RATE * 2 * 15 // FRAME_BYTES
+PLAYBACK_BUFFER_FRAMES = 6
+PLAYBACK_PREBUFFER_FRAMES = 3
+PLAYBACK_PREROLL_SECONDS = 0.10
+PLAYBACK_DRAIN_IDLE_SECONDS = 0.12
 WRITE_LOCK = threading.Lock()
 
 
@@ -234,7 +238,11 @@ class Pulse:
         self.lib.pa_simple_free.argtypes = [ctypes.c_void_p]
         error = ctypes.c_int()
         spec = SampleSpec(3, RATE, 1)  # PA_SAMPLE_S16LE
-        attr = BufferAttr(MAX_BUFFER_BYTES, FRAME_BYTES * 3, FRAME_BYTES, FRAME_BYTES, FRAME_BYTES)
+        if direction == 1:
+            attr = BufferAttr(MAX_BUFFER_BYTES, FRAME_BYTES * PLAYBACK_BUFFER_FRAMES,
+                              FRAME_BYTES * PLAYBACK_PREBUFFER_FRAMES, FRAME_BYTES, FRAME_BYTES)
+        else:
+            attr = BufferAttr(MAX_BUFFER_BYTES, FRAME_BYTES * 3, FRAME_BYTES, FRAME_BYTES, FRAME_BYTES)
         self.pointer = self.lib.pa_simple_new(None, b'Synapsis Voice', direction, device.encode(),
             b'Voice PCM', ctypes.byref(spec), None, ctypes.byref(attr), ctypes.byref(error))
         if not self.pointer:
@@ -352,6 +360,8 @@ class Endpoint:
 
     def play(self):
         last_cursor = 0
+        last_write = 0
+        preroll_until = None
         try:
             while not self.closed.is_set():
                 try:
@@ -366,19 +376,39 @@ class Endpoint:
                         self.output.flush()
                         self.tracker = PlaybackTracker()
                         self.drained_total = 0
+                        preroll_until = None
                     emit({'reply': control['id'], 'result': cursor})
                     continue
                 except queue.Empty:
                     pass
+                # Stage the first burst before handing PCM to the device. Keep
+                # polling controls so stop_playback can discard it before sound.
+                if self.drained_total == self.tracker.total:
+                    if self.playback.empty():
+                        self.closed.wait(0.02)
+                        continue
+                    now = time.monotonic()
+                    if preroll_until is None:
+                        preroll_until = now + PLAYBACK_PREROLL_SECONDS
+                    if now < preroll_until:
+                        self.closed.wait(min(0.02, preroll_until - now))
+                        continue
+                    preroll_until = None
+                drained = False
                 try:
                     data, metadata = self.playback.get(timeout=0.02)
                     self.output.write(data)
                     self.tracker.append(len(data) // 2, metadata)
+                    last_write = time.monotonic()
                 except queue.Empty:
-                    if self.drained_total != self.tracker.total:
+                    # The upstream stream can pause briefly between audio deltas.
+                    if (self.drained_total != self.tracker.total and
+                            time.monotonic() - last_write >= PLAYBACK_DRAIN_IDLE_SECONDS):
                         self.output.drain()
                         self.drained_total = self.tracker.total
-                if time.monotonic() - last_cursor >= 0.05 and self.tracker.total:
+                        drained = True
+                # Publish the exact end even if the periodic cursor was just sent.
+                if self.tracker.total and (drained or time.monotonic() - last_cursor >= 0.05):
                     emit({'event': 'cursor', 'cursor': self.position()})
                     last_cursor = time.monotonic()
         except Exception as error:

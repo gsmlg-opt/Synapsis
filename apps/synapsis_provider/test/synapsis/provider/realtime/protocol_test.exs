@@ -8,6 +8,22 @@ defmodule Synapsis.Provider.Realtime.ProtocolTest do
     assert update.session.audio.input.format == %{type: "audio/pcm", rate: 24_000}
     assert update.session.audio.input.turn_detection.create_response == false
     assert update.session.audio.input.turn_detection.interrupt_response == false
+    assert %{silence_duration_ms: 700} = update.session.audio.input.turn_detection
+  end
+
+  test "the server silence window does not apply to semantic or manual turn detection" do
+    agent = %{voice: "marin", voice_turn_detection: "semantic_vad"}
+
+    assert %{type: "semantic_vad"} =
+             Protocol.session_update(agent).session.audio.input.turn_detection
+
+    refute Map.has_key?(
+             Protocol.session_update(agent).session.audio.input.turn_detection,
+             :silence_duration_ms
+           )
+
+    manual = %{agent | voice_turn_detection: "manual"}
+    assert Protocol.session_update(manual).session.audio.input.turn_detection == nil
   end
 
   test "only a completed response returns calls, deduplicated by original call ID" do
