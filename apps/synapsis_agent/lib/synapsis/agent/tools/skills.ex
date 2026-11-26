@@ -96,16 +96,20 @@ defmodule Synapsis.Agent.Tools.Skills do
     {description, properties, required} =
       case name do
         @search ->
-          {"Search eligible assigned and Agent-private learned skill metadata and bounded instruction text when its paired reader is available. Returns metadata only; read the selected skill's whole instructions before applying it.",
+          {"Search assigned and Agent-private learned skills. Pass source_id to search an enabled Backplane source, including unassigned metadata. Results identify assignment requirements. Read complete instructions before applying a skill.",
            %{
              "query" => %{"type" => "string", "minLength" => 1, "maxLength" => 2048},
-             "limit" => %{"type" => "integer", "minimum" => 1, "maximum" => 20}
+             "limit" => %{"type" => "integer", "minimum" => 1, "maximum" => 20},
+             "source_id" => %{"type" => "string", "minLength" => 1, "maxLength" => 128},
+             "cursor" => %{"type" => "string", "minLength" => 1, "maxLength" => 4096}
            }, ["query"]}
 
         @read ->
-          {"Read a complete assigned or Agent-private learned skill as inert text using its exact source-qualified locator.",
-           %{"locator" => %{"type" => "string", "minLength" => 1, "maxLength" => 4096}},
-           ["locator"]}
+          {"Read an assigned or Agent-private learned skill by exact locator. For an assigned Backplane skill, pass resource to read a relative file from its verified bundle.",
+           %{
+             "locator" => %{"type" => "string", "minLength" => 1, "maxLength" => 4096},
+             "resource" => %{"type" => "string", "minLength" => 1, "maxLength" => 4096}
+           }, ["locator"]}
       end
 
     %{
@@ -177,26 +181,45 @@ defmodule Synapsis.Agent.Tools.Skills do
   defp input(%{tool_name: @search, arguments: %{"query" => query} = args}) do
     limit = Map.get(args, "limit", 5)
 
-    if Map.keys(args) -- ["query", "limit"] == [] and is_binary(query) and String.valid?(query) and
-         byte_size(query) in 1..2048 and is_integer(limit) and limit in 1..20,
+    if Map.keys(args) -- ["query", "limit", "source_id", "cursor"] == [] and is_binary(query) and
+         String.valid?(query) and
+         byte_size(query) in 1..2048 and is_integer(limit) and limit in 1..20 and
+         optional_string?(args, "source_id", 128) and optional_string?(args, "cursor", 4096) and
+         (not Map.has_key?(args, "cursor") or Map.has_key?(args, "source_id")),
        do: :ok,
        else: {:error, :invalid_input}
   end
 
   defp input(%{tool_name: @read, arguments: %{"locator" => locator} = args}) do
-    if Map.keys(args) == ["locator"] and is_binary(locator) and String.valid?(locator) and
-         byte_size(locator) in 1..4096,
+    resource = Map.get(args, "resource", "SKILL.md")
+
+    if Map.keys(args) -- ["locator", "resource"] == [] and is_binary(locator) and
+         String.valid?(locator) and
+         byte_size(locator) in 1..4096 and is_binary(resource) and String.valid?(resource) and
+         byte_size(resource) in 1..4096,
        do: :ok,
        else: {:error, :invalid_input}
   end
 
   defp input(_), do: {:error, :invalid_input}
 
+  defp optional_string?(args, key, maximum) do
+    case Map.fetch(args, key) do
+      :error -> true
+      {:ok, value} -> is_binary(value) and String.valid?(value) and byte_size(value) in 1..maximum
+    end
+  end
+
   defp read(context, %{tool_name: @search} = operation), do: search(context, operation)
 
   defp read(context, %{tool_name: @read, arguments: args} = operation) do
     with {:ok, opts} <- read_options(operation),
-         do: SkillReader.read(context.snapshot, args["locator"], opts)
+         do:
+           SkillReader.read(
+             context.snapshot,
+             args["locator"],
+             Keyword.put(opts, :resource, Map.get(args, "resource", "SKILL.md"))
+           )
   end
 
   @doc false
@@ -207,6 +230,30 @@ defmodule Synapsis.Agent.Tools.Skills do
   # Direct execute-only callers retain Core's own bounded read timeout. Native
   # effects always supply their original, nonrenewable effect deadline above.
   def read_options(%{backend_context: _}), do: {:ok, []}
+
+  defp search(context, %{arguments: %{"source_id" => source_id} = args} = operation) do
+    with {:ok, opts} <- read_options(operation),
+         module when is_atom(module) and not is_nil(module) <-
+           Application.get_env(:synapsis_core, :skill_discovery) do
+      timeout =
+        case opts[:deadline] do
+          nil -> 5_000
+          deadline -> max(1, deadline - System.monotonic_time(:millisecond))
+        end
+
+      module.search(
+        SkillReader.agent_id(context.snapshot),
+        context.snapshot,
+        source_id,
+        args["query"],
+        limit: Map.get(args, "limit", 5),
+        cursor: args["cursor"],
+        timeout: timeout
+      )
+    else
+      _ -> {:error, :unavailable}
+    end
+  end
 
   defp search(
          %{prepare_search: prepare} = context,
@@ -415,7 +462,12 @@ defmodule Synapsis.Agent.Tools.Skills do
   defp text(%{results: results, truncated: truncated}) do
     entries =
       Enum.map_join(results, "\n", fn hit ->
-        "#{hit.name}: #{hit.description}\nSource: #{hit.locator}"
+        status =
+          if Map.get(hit, :assignment_required),
+            do: "\nAgent assignment required before reading.",
+            else: ""
+
+        "#{hit.name}: #{hit.description}\nSource: #{hit.locator}" <> status
       end)
 
     entries <>
@@ -429,7 +481,14 @@ defmodule Synapsis.Agent.Tools.Skills do
   defp failure(reason) do
     class =
       cond do
-        reason in [:scope_mismatch, :stale_snapshot, :unsafe_path, :digest_mismatch] ->
+        reason in [
+          :scope_mismatch,
+          :stale_snapshot,
+          :unsafe_path,
+          :digest_mismatch,
+          :forbidden,
+          :unauthorized
+        ] ->
           :forbidden
 
         reason in [:invalid_context, :invalid_input] ->
@@ -444,7 +503,13 @@ defmodule Synapsis.Agent.Tools.Skills do
         reason in [:candidate_limit, :file_limit, :output_limit, :worker_limit] ->
           :budget_exceeded
 
-        reason == :unavailable ->
+        reason in [
+          :unavailable,
+          :source_unavailable,
+          :provider_unavailable,
+          :unsupported_capability,
+          :unsupported_protocol
+        ] ->
           :unsupported_capability
 
         true ->

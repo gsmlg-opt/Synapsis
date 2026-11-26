@@ -38,6 +38,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
        selected_skill_ids: [],
        agents: [],
        skills: [],
+       backplane_skill_sources: [],
        toolsets: [],
        providers: [],
        voice_providers: [],
@@ -239,6 +240,21 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
     attrs = Map.update!(attrs, "config", &Map.put(&1, "mcp_selection", policy))
 
+    attrs =
+      case Map.fetch(params, "backplane_skill_source_ids") do
+        {:ok, ids} ->
+          ids = ids |> List.wrap() |> Enum.reject(&(&1 == "")) |> Enum.uniq()
+
+          Map.update!(attrs, "config", fn config ->
+            if ids == [] and not Map.has_key?(config, "backplane_skill_source_ids"),
+              do: config,
+              else: Map.put(config, "backplane_skill_source_ids", ids)
+          end)
+
+        :error ->
+          attrs
+      end
+
     result =
       case socket.assigns.live_action do
         :new ->
@@ -406,6 +422,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
           agents={@agents}
           toolsets={@toolsets}
           skills={@skills}
+          backplane_skill_sources={@backplane_skill_sources}
           providers={@providers}
           voice_providers={@voice_providers}
           realtime_models={@realtime_models}
@@ -477,6 +494,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
   attr :action, :atom, required: true
   attr :toolsets, :list, required: true
   attr :skills, :list, required: true
+  attr :backplane_skill_sources, :list, required: true
   attr :providers, :list, required: true
   attr :voice_providers, :list, required: true
   attr :realtime_models, :list, required: true
@@ -530,6 +548,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
       assigns.wizard_mode,
       Enum.map(assigns.toolsets, & &1.id),
       Enum.map(assigns.skills, & &1.id),
+      Enum.map(assigns.backplane_skill_sources, &{&1.id, &1.enabled}),
       assigns.form_revision,
       kind,
       if(kind == :voice,
@@ -1268,6 +1287,34 @@ defmodule SynapsisWeb.AgentLive.Agents do
                 </.dm_link>
               </div>
 
+              <fieldset class="mb-5 space-y-3">
+                <legend class="font-medium mb-2">Backplane discovery sources</legend>
+                <p class="text-sm text-on-surface-variant">
+                  Load each source's always-returned summaries and search its catalog. Assign a skill below before reading it.
+                </p>
+                <input type="checkbox" name="backplane_skill_source_ids[]" value="" hidden checked />
+                <label
+                  :for={source <- @backplane_skill_sources}
+                  class="flex items-start gap-3 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    name="backplane_skill_source_ids[]"
+                    value={source.id}
+                    checked={
+                      source.id in ((@agent.config || %{})["backplane_skill_source_ids"] || [])
+                    }
+                  />
+                  <span>{source.name}<span :if={!source.enabled} class="ml-2 text-warning">Disabled</span></span>
+                </label>
+                <p :if={@backplane_skill_sources == []} class="text-sm text-on-surface-variant">
+                  Add a remote source in Settings → Skills.
+                </p>
+                <p class="text-xs text-on-surface-variant">
+                  Native agents use explicitly assigned local roots and their private workshop. An assigned root may point to ~/.agents/skills.
+                </p>
+              </fieldset>
+
               <input type="checkbox" name="skill_ids[]" value="" hidden checked />
               <div
                 :for={group <- skill_source_groups(@skills)}
@@ -1852,6 +1899,11 @@ defmodule SynapsisWeb.AgentLive.Agents do
       agents: AgentConfigs.list(),
       toolsets: Toolsets.list(),
       skills: Skills.list(),
+      backplane_skill_sources:
+        Enum.filter(
+          Synapsis.Backplane.Connection.list(),
+          &Synapsis.Backplane.Connection.surface_enabled?(&1, "skills")
+        ),
       providers: load_providers(),
       voice_providers: voice_providers(),
       mcp_sources: Synapsis.MCPConfigs.list()
@@ -1957,6 +2009,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
     %{
       "agent" => values,
       "skill_ids" => skill_ids,
+      "backplane_skill_source_ids" => (agent.config || %{})["backplane_skill_source_ids"] || [],
       "browser_settings" => BrowserSettings.form_values(agent.config || %{}),
       "mcp_selection" => mcp_form_policy((agent.config || %{})["mcp_selection"])
     }

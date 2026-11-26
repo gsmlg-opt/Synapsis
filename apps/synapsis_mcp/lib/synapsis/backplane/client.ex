@@ -7,6 +7,7 @@ defmodule Synapsis.Backplane.Client do
 
   @default_timeout 5_000
   @skill_limit 100
+  @catalog_limit 10_000
   @default_max_models_response_bytes 4 * 1_024 * 1_024
   @default_max_skills_response_bytes 2 * 1_024 * 1_024
   @default_max_skill_detail_response_bytes 2 * 1_024 * 1_024
@@ -127,20 +128,73 @@ defmodule Synapsis.Backplane.Client do
   end
 
   defp do_list_protocol_skills(connection, opts) do
-    max_skills = option(opts, :max_skills, @skill_limit)
+    max_skills = option(opts, :max_skills, @catalog_limit)
     max_pages = option(opts, :max_skill_pages, @default_max_skill_protocol_pages)
 
-    with true <- is_integer(max_skills) and max_skills > 0 and max_skills <= @skill_limit,
+    with true <- is_integer(max_skills) and max_skills > 0 and max_skills <= @catalog_limit,
          true <-
            is_integer(max_pages) and max_pages > 0 and
              max_pages <= @default_max_skill_protocol_pages,
+         :ok <- discovery_supported(opts),
          {:ok, client} <- skill_protocol_client(connection, opts) do
       source = Backplane.new!(client)
-      paginate_protocol_skills(source, nil, max_skills, max_pages, MapSet.new(), [])
+
+      paginate_protocol_skills(
+        source,
+        nil,
+        max_skills,
+        max_pages,
+        MapSet.new(),
+        [],
+        Keyword.take(opts, [:view])
+      )
     else
       false -> {:error, :invalid_skill_protocol_limit}
       {:error, reason} -> {:error, skill_protocol_error(reason)}
     end
+  end
+
+  @doc "Search metadata independently of complete source reconciliation."
+  def search_protocol_skills(%Connection{} = connection, query, opts \\ []) do
+    with {:ok, current} <- Connection.runtime(connection),
+         :ok <- discovery_supported(view: :search),
+         {:ok, client} <- skill_protocol_client(current, opts),
+         {:ok, page} <-
+           apply(Backplane, :search, [
+             Backplane.new!(client),
+             [q: query] ++ Keyword.take(opts, [:limit, :cursor])
+           ]) do
+      {:ok, %{data: Enum.map(page.data, &protocol_skill_map/1), next_cursor: page.next_cursor}}
+    else
+      {:error, reason} -> {:error, skill_protocol_error(reason)}
+    end
+  end
+
+  @doc "Create one remote skill once, using the source's current credential."
+  def create_protocol_skill(%Connection{} = connection, attributes, opts \\ []) do
+    # TODO(upstream): gsmlg-opt/backplane#193 — pin the published authoring SDK.
+    with {:ok, current} <- Connection.runtime(connection),
+         true <-
+           Code.ensure_loaded?(SkillProtocolClient) and
+             function_exported?(SkillProtocolClient, :create, 3),
+         {:ok, client} <- skill_protocol_client(current, Keyword.put(opts, :max_attempts, 1)),
+         {:ok, manifest} <- apply(SkillProtocolClient, :create, [client, attributes, []]) do
+      {:ok, manifest}
+    else
+      false -> {:error, {:skill_protocol, :unsupported_capability}}
+      {:error, reason} -> {:error, skill_protocol_error(reason)}
+    end
+  end
+
+  # TODO(upstream): gsmlg-opt/backplane#193 — pin the published discovery SDK.
+  # Old SDKs can ignore view and return the full catalog. Refuse before any I/O.
+  defp discovery_supported(opts) do
+    if is_nil(opts[:view]) or
+         (Code.ensure_loaded?(Elixir.Backplane.SkillProtocol.Wire) and
+            function_exported?(Elixir.Backplane.SkillProtocol.Wire, :decode_catalog, 3) and
+            Code.ensure_loaded?(Backplane) and function_exported?(Backplane, :search, 2)),
+       do: :ok,
+       else: {:error, {:skill_protocol, :unsupported_capability}}
   end
 
   def fetch_skill(%Connection{} = connection, slug, opts \\ []) when is_binary(slug) do
@@ -461,20 +515,20 @@ defmodule Synapsis.Backplane.Client do
       max_json_bytes:
         option(opts, :max_skills_response_bytes, @default_max_skills_response_bytes),
       max_artifact_bytes: option(opts, :max_archive_bytes, @default_max_archive_bytes),
-      max_attempts: 2,
+      max_attempts: option(opts, :max_attempts, 2),
       cancelled?: cancellation(opts)
     )
   end
 
-  defp paginate_protocol_skills(_source, _cursor, remaining, _pages, _seen, acc)
+  defp paginate_protocol_skills(_source, _cursor, remaining, _pages, _seen, acc, _opts)
        when remaining == 0,
        do: {:ok, Enum.reverse(acc), true}
 
-  defp paginate_protocol_skills(_source, _cursor, _remaining, 0, _seen, _acc),
-    do: {:error, :skill_protocol_page_limit_exceeded}
+  defp paginate_protocol_skills(_source, _cursor, _remaining, 0, _seen, acc, _opts),
+    do: {:ok, Enum.reverse(acc), true}
 
-  defp paginate_protocol_skills(source, cursor, remaining, pages, seen, acc) do
-    opts = [limit: min(remaining, @skill_limit), cursor: cursor]
+  defp paginate_protocol_skills(source, cursor, remaining, pages, seen, acc, discovery_opts) do
+    opts = [limit: min(remaining, @skill_limit), cursor: cursor] ++ discovery_opts
 
     case Backplane.catalog(source, opts) do
       {:ok, %{data: descriptors, next_cursor: next_cursor}} when is_list(descriptors) ->
@@ -492,7 +546,8 @@ defmodule Synapsis.Backplane.Client do
               remaining - length(descriptors),
               pages - 1,
               MapSet.put(seen, next_cursor),
-              next_acc
+              next_acc,
+              discovery_opts
             )
           end
         else
@@ -529,7 +584,8 @@ defmodule Synapsis.Backplane.Client do
       "revision" => descriptor.revision,
       "artifact_digest" => descriptor.artifact_digest,
       "publication_status" => to_string(descriptor.publication_status),
-      "enabled" => descriptor.publication_status == :ready,
+      "enabled" => descriptor.publication_status == "ready",
+      "disable_model_invocation" => Map.get(descriptor, :disable_model_invocation, false),
       "content_available" =>
         is_binary(descriptor.revision) and is_binary(descriptor.artifact_digest)
     }

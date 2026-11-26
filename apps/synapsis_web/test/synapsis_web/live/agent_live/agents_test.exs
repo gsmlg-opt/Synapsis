@@ -955,6 +955,45 @@ defmodule SynapsisWeb.AgentLive.AgentsTest do
       assert AgentSkills.list_skill_ids(agent.id) == [skill.id]
     end
 
+    test "Backplane discovery sources save and clear independently of skill assignments", %{
+      conn: conn
+    } do
+      {:ok, source} =
+        Synapsis.Backplane.Connection.create(%{
+          name: "agent-skill-discovery",
+          endpoint: "http://127.0.0.1:1",
+          sync_on_start: false,
+          connection_options: %{"enabled_surfaces" => ["skills"]}
+        })
+
+      on_exit(fn -> Synapsis.Backplane.Connection.delete(source) end)
+      {:ok, agent} = AgentConfigs.create(%{name: "source-policy-agent"})
+      {:ok, skill} = Skills.create(%{name: "assigned-source-style"})
+      {:ok, _} = AgentSkills.assign_skills(agent, [skill.id])
+      {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+
+      assert has_element?(
+               view,
+               "input[name='backplane_skill_source_ids[]'][value='#{source.id}']"
+             )
+
+      react_form_submit(view, "agent-config-form", %{
+        "backplane_skill_source_ids" => ["", source.id],
+        "skill_ids" => [skill.id]
+      })
+
+      assert AgentConfigs.get(agent.id).config["backplane_skill_source_ids"] == [source.id]
+      assert AgentSkills.list_skill_ids(agent.id) == [skill.id]
+
+      react_form_submit(view, "agent-config-form", %{
+        "backplane_skill_source_ids" => [""],
+        "skill_ids" => [skill.id]
+      })
+
+      assert AgentConfigs.get(agent.id).config["backplane_skill_source_ids"] == []
+      assert AgentSkills.list_skill_ids(agent.id) == [skill.id]
+    end
+
     test "the empty skill sentinel is never persisted as a skill ID", %{conn: conn} do
       {:ok, agent} = AgentConfigs.create(%{name: "sentinel-agent", label: "Sentinel"})
       {:ok, skill} = Skills.create(%{name: "sentinel-style", scope: "global"})

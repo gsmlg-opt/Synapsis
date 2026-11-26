@@ -17,6 +17,50 @@ defmodule Synapsis.Agent.ContextBuilderTest do
       refute prompt =~ "<workspace_memory>"
     end
 
+    test "new discovery projects assigned remote skills through always without duplicate or fallback entries" do
+      descriptor = fn name ->
+        %{
+          "id" => name,
+          "name" => name,
+          "description" => "Remote summary",
+          "revision" => "r1",
+          "artifact_digest" => "sha256:" <> String.duplicate("a", 64),
+          "enabled" => true
+        }
+      end
+
+      [a, b] =
+        Synapsis.SkillCatalog.remote_entries("source-one", [
+          descriptor.("always-a"),
+          descriptor.("only-search-b")
+        ])
+
+      [offline] =
+        Synapsis.SkillCatalog.remote_entries("source-offline", [descriptor.("offline-assigned")])
+
+      [legacy] =
+        Synapsis.SkillCatalog.remote_entries("legacy-source", [descriptor.("legacy-assigned")])
+
+      agent = %{
+        skill_catalog: [a, b, offline, legacy],
+        remote_skill_discovery: %{
+          sources: [%{id: "source-one", name: "selected", entries: [a], partial: false}],
+          errors: %{"source-offline" => :source_unavailable}
+        },
+        resolved_tools: [%{name: "synapsis::skills_read", description: "Read a skill"}]
+      }
+
+      prompt =
+        ContextBuilder.build_system_prompt(:coding, agent_config: agent, memory_context: false)
+
+      assert length(String.split(prompt, "- always-a:")) == 2
+      refute prompt =~ "only-search-b"
+      refute prompt =~ "offline-assigned"
+      assert prompt =~ "legacy-assigned"
+      assert prompt =~ "<available_skills>"
+      assert agent.skill_catalog == [a, b, offline, legacy]
+    end
+
     test "returns a non-empty string" do
       prompt = ContextBuilder.build_system_prompt(:coding)
       assert is_binary(prompt)

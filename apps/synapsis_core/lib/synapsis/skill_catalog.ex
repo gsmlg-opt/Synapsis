@@ -54,6 +54,24 @@ defmodule Synapsis.SkillCatalog do
     |> Enum.sort_by(&sort_key/1)
   end
 
+  @doc "Build metadata entries without importing or assigning discovered Skills."
+  def remote_entries(source_id, descriptors) do
+    Enum.map(descriptors, fn descriptor ->
+      entry_from_skill(%{
+        id: descriptor["id"],
+        name: descriptor["name"],
+        description: descriptor["description"],
+        enabled: descriptor["enabled"],
+        config_overrides: %{
+          "source" => "backplane",
+          "backplane_source_id" => source_id,
+          "external_id" => descriptor["id"],
+          "source_metadata" => descriptor
+        }
+      })
+    end)
+  end
+
   @doc "Construct a private learned entry from trusted workshop content facts."
   def from_workshop(
         %Synapsis.SkillWorkshop.Scope{} = scope,
@@ -175,9 +193,10 @@ defmodule Synapsis.SkillCatalog do
     implicit = map_value(config, "allow_implicit_invocation")
     source_metadata = map_value(config, "source_metadata") || %{}
     source_implicit = map_value(source_metadata, "allow_implicit_invocation")
+    manual_only = map_value(source_metadata, "disable_model_invocation") == true
     disabled_by_document = document && document.metadata["disable-model-invocation"] == true
 
-    configured != false and implicit != false and source_implicit != false and
+    configured != false and implicit != false and source_implicit != false and not manual_only and
       disabled_by_document != true
   end
 
@@ -404,6 +423,7 @@ defmodule Synapsis.SkillCatalog do
 
   defp atom_key("external_revision"), do: :external_revision
   defp atom_key("revision"), do: :revision
+  defp atom_key("disable_model_invocation"), do: :disable_model_invocation
   defp atom_key("source_metadata"), do: :source_metadata
   defp atom_key("artifact_digest"), do: :artifact_digest
   defp atom_key("source"), do: :source

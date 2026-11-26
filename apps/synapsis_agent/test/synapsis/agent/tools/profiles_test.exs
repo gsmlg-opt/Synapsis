@@ -139,6 +139,52 @@ defmodule Synapsis.Agent.Tools.ProfilesTest do
     assert snapshot.scope.catalog_revision == ctx.identity.catalog_revision
   end
 
+  test "Backplane creation follows explicit tool selection and existing write policy", ctx do
+    name = "synapsis::skills_create"
+
+    {:ok, agent} =
+      Synapsis.AgentConfigs.create(%{name: "create-policy-#{System.unique_integer([:positive])}"})
+
+    on_exit(fn -> Synapsis.Config.Store.delete(:agent, agent.id) end)
+
+    context =
+      put_in(ctx.context, [:agent], %{
+        id: agent.id,
+        name: agent.name,
+        tools: [name],
+        tool_contract_version: 1
+      })
+
+    ceiling = %{ctx.ceiling | grants: [name], tool_revisions: %{name => 1}}
+
+    invocation = %{
+      ctx.invocation
+      | tool_name: name,
+        tool_revision: 1,
+        arguments: %{
+          "source_id" => Ecto.UUID.generate(),
+          "slug" => "new-skill",
+          "name" => "New skill",
+          "description" => "A procedure",
+          "content" => "Steps"
+        }
+    }
+
+    for {decision, expected} <- [{:deny, {:deny, :policy_denied}}, {:allow, :allow}] do
+      :ok =
+        Store.put_value(ctx.identity.session_id, "permission", %{ctx.raw | allow_write: decision})
+
+      assert {:ok, %{snapshot: snapshot}} = Profiles.build(context, ctx.identity, [], ceiling)
+      assert snapshot.permission_levels[name] == :write
+      assert {:ok, sidecars} = Profiles.prepare_context(invocation, snapshot)
+
+      assert Policy.prepare_tool(invocation, Map.put(sidecars, :input_kind, :function)) ==
+               expected
+    end
+
+    assert {:ok, []} = Profiles.selection(put_in(context, [:agent, :tools], []))
+  end
+
   test "projecting a pinned catalog keeps its inter-process copy proportional to the registry",
        ctx do
     descriptors =

@@ -68,6 +68,7 @@ defmodule Synapsis.Agent.Tools.DisplayCatalog do
     {"synapsis::memory_save", :memory, "Save semantic memory."},
     {"synapsis::memory_update", :memory, "Update semantic memory."},
     {"synapsis::skills_search", :workflow, "Search automatically available skills."},
+    {"synapsis::skills_create", :workflow, "Create a skill on a configured Backplane source."},
     {"synapsis::skills_read", :workflow, "Read an automatically available skill."},
     {"synapsis::skill", :workflow, "Read an explicitly selected skill."},
     {"synapsis::skill_workshop", :workflow,

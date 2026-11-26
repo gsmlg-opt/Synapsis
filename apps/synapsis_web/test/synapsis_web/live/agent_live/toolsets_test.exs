@@ -42,6 +42,37 @@ defmodule SynapsisWeb.AgentLive.ToolsetsTest do
     :ok
   end
 
+  test "Backplane creation is selectable through Toolsets and Agent Tools", %{conn: conn} do
+    name = "synapsis::skills_create"
+    {:ok, view, _} = live(conn, ~p"/agent/tools/new")
+    assert has_element?(view, "input[name='tool_names[]'][value='#{name}']")
+
+    react_form_submit(view, "toolset-form", %{
+      "toolset" => %{"name" => "backplane-authors"},
+      "tool_names" => [name]
+    })
+
+    toolset = toolset_by_name("backplane-authors")
+    assert toolset.tool_names == [name]
+
+    {:ok, agent} =
+      Synapsis.AgentConfigs.create(%{
+        name: "existing-author-selection",
+        tools: [],
+        tool_contract_version: 1
+      })
+
+    refute name in Synapsis.Agent.Resolver.resolve(agent.name).tools
+    {:ok, agent_view, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
+
+    react_form_submit(agent_view, "agent-config-form", %{
+      "agent" => %{"toolset_ids" => [toolset.id]}
+    })
+
+    assert toolset.id in Synapsis.AgentConfigs.get(agent.id).toolset_ids
+    assert name in Synapsis.Agent.Resolver.resolve(agent.name).tools
+  end
+
   defp toolset_by_name(name), do: Enum.find(Toolsets.list(), &(&1.name == name))
 
   defp saved_retired_toolset(version, names) do

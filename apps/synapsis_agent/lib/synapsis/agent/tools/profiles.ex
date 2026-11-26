@@ -45,6 +45,7 @@ defmodule Synapsis.Agent.Tools.Profiles do
     SessionSummary,
     Skills,
     SkillBodyCache,
+    SkillCreate,
     SkillWorkshop,
     ToolInspection,
     WorkspaceMemory
@@ -62,6 +63,7 @@ defmodule Synapsis.Agent.Tools.Profiles do
   @session_state SessionState.names()
   @summary SessionSummary.names()
   @skills ~w(synapsis::skills_search synapsis::skills_read)
+  @skill_create SkillCreate.names()
   @explicit_skill ExplicitSkill.names()
   @skill_workshop SkillWorkshop.names()
   @session_directory SessionDirectory.names()
@@ -109,6 +111,7 @@ defmodule Synapsis.Agent.Tools.Profiles do
       @host_memory ++
       @semantic ++
       @skills ++
+      @skill_create ++
       @explicit_skill ++
       @skill_workshop ++
       @questions ++
@@ -239,6 +242,7 @@ defmodule Synapsis.Agent.Tools.Profiles do
             @session_state ++
             @summary ++
             @skills ++
+            @skill_create ++
             @explicit_skill ++
             @skill_workshop ++
             @session_status ++
@@ -525,6 +529,7 @@ defmodule Synapsis.Agent.Tools.Profiles do
               @session_state ++
               @summary ++
               @skills ++
+              @skill_create ++
               @explicit_skill ++
               @skill_workshop ++
               @session_status ++
@@ -605,7 +610,8 @@ defmodule Synapsis.Agent.Tools.Profiles do
          {:ok, host_memory} <-
            host_memory_descriptors(Map.put(scope, :session_id, identity.session_id), names),
          {:ok, inspection} <- inspection_descriptors(context, identity, names),
-         {:ok, skills, snapshot, skill_cache} <- skill_descriptors(context, scope, names) do
+         {:ok, skills, snapshot, skill_cache} <- skill_descriptors(context, scope, names),
+         {:ok, skill_create} <- skill_create_descriptors(context, scope, names) do
       {:ok,
        Enum.filter(
          files ++
@@ -622,10 +628,16 @@ defmodule Synapsis.Agent.Tools.Profiles do
            automation_configuration ++
            automation_mutation ++
            automation_wake ++
-           memory ++ host_memory ++ skills ++ inspection,
+           memory ++ host_memory ++ skills ++ skill_create ++ inspection,
          &(&1.tool_name in names)
        ), snapshot, skill_cache}
     end
+  end
+
+  defp skill_create_descriptors(context, scope, names) do
+    if Enum.any?(names, &(&1 in @skill_create)),
+      do: SkillCreate.descriptors(Map.put(scope, :agent_id, context.agent[:id])),
+      else: {:ok, []}
   end
 
   defp inspection_descriptors(context, identity, names) do
@@ -1216,6 +1228,8 @@ defmodule Synapsis.Agent.Tools.Profiles do
 
   defp permission_level(name) when name in @questions or name in @session_state, do: :none
   defp permission_level(name) when name in @explicit_skill, do: :none
+
+  defp permission_level(name) when name in @skill_create, do: SkillCreate.permission_level(name)
 
   defp permission_level(name) when name in @skill_workshop,
     do: SkillWorkshop.permission_level(name)

@@ -67,8 +67,14 @@ defmodule Synapsis.Agent.Tools.SkillsTest do
       assert descriptor.safety == %{read_only: true, retry_safe: true, parallel_safe: true}
     end
 
-    assert Enum.sort(Map.keys(search.schema["properties"])) == ["limit", "query"]
-    assert Map.keys(read.schema["properties"]) == ["locator"]
+    assert Enum.sort(Map.keys(search.schema["properties"])) == [
+             "cursor",
+             "limit",
+             "query",
+             "source_id"
+           ]
+
+    assert Enum.sort(Map.keys(read.schema["properties"])) == ["locator", "resource"]
     assert {:ok, _} = InputSchema.validate(read.schema, %{"locator" => ctx.locator})
 
     assert {:error, %Error{}} =

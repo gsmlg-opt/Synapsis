@@ -211,7 +211,8 @@ defmodule Synapsis.Agent.Resolver do
        |> Map.delete(:skill_discovery_error)
        |> Map.put(:skill_snapshot, snapshot)
        |> Map.put(:skill_catalog, SkillDiscovery.entries(snapshot))
-       |> Map.put(:skill_loader, Application.get_env(:synapsis_core, :skill_loader))}
+       |> Map.put(:skill_loader, Application.get_env(:synapsis_core, :skill_loader))
+       |> Map.put(:remote_skill_discovery, remote_skills(id, snapshot))}
     end
   end
 
@@ -220,6 +221,13 @@ defmodule Synapsis.Agent.Resolver do
      agent
      |> Map.put(:skill_catalog, SkillCatalog.snapshot(agent[:skills] || []))
      |> Map.put(:skill_loader, Application.get_env(:synapsis_core, :skill_loader))}
+  end
+
+  defp remote_skills(agent_id, snapshot) do
+    case Application.get_env(:synapsis_core, :skill_discovery) do
+      module when is_atom(module) and not is_nil(module) -> module.always(agent_id, snapshot)
+      _ -> %{sources: [], errors: %{}}
+    end
   end
 
   defp project_agent_config(config, agent_name) do

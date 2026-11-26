@@ -1,7 +1,7 @@
 defmodule Synapsis.Backplane.SkillLoader do
   @moduledoc "Loads one exact Backplane Skill revision through Skill Protocol v1."
 
-  alias Backplane.SkillProtocol.{Client, Source.Backplane, TemporaryStorage}
+  alias Backplane.SkillProtocol.{Client, Resource, Source.Backplane, TemporaryStorage}
   alias Synapsis.Backplane.Connection
   alias Synapsis.SkillCatalog.Entry
 
@@ -9,7 +9,8 @@ defmodule Synapsis.Backplane.SkillLoader do
   @max_json_bytes 4 * 1_024 * 1_024
   @max_artifact_bytes 16 * 1_024 * 1_024
 
-  @spec load(Entry.t(), map()) :: {:ok, binary()} | {:error, term()}
+  @spec load(Entry.t(), map()) ::
+          {:ok, binary() | %{content: binary(), document: binary()}} | {:error, term()}
   def load(
         %Entry{
           authority: :backplane,
@@ -38,6 +39,11 @@ defmodule Synapsis.Backplane.SkillLoader do
 
   def load(_entry, _context), do: {:error, "Invalid Backplane Skill source"}
 
+  @doc "Read one inventoried relative resource from the same exact verified bundle."
+  def load_resource(%Entry{authority: :backplane} = entry, relative, context) do
+    load(entry, Map.put(context, :resource, relative))
+  end
+
   defp client(connection, context) do
     Client.new(
       endpoint: connection.endpoint,
@@ -64,7 +70,15 @@ defmodule Synapsis.Backplane.SkillLoader do
              ),
            :ok <- verify_snapshot_digest(entry, prepared),
            true <- is_binary(prepared.document.raw) do
-        {:ok, prepared.document.raw}
+        case Map.fetch(context, :resource) do
+          :error ->
+            {:ok, prepared.document.raw}
+
+          {:ok, resource} ->
+            with {:ok, content} <-
+                   Resource.read(prepared, resource, max_bytes: 2 * 1_024 * 1_024),
+                 do: {:ok, %{content: content, document: prepared.document.raw}}
+        end
       else
         false -> {:error, "Prepared Skill document is invalid"}
         {:error, reason} -> {:error, reason}

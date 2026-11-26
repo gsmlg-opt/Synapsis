@@ -11,7 +11,8 @@ defmodule Synapsis.Backplane.SkillLoaderTest do
 
     skill_root = Path.join(root, "review")
     archive = Path.join(root, "review.tar.gz")
-    File.mkdir_p!(skill_root)
+    File.mkdir_p!(Path.join(skill_root, "references"))
+    File.write!(Path.join(skill_root, "references/checklist.md"), "joint-checklist-v1\n")
 
     File.write!(Path.join(skill_root, "SKILL.md"), """
     ---
@@ -58,6 +59,38 @@ defmodule Synapsis.Backplane.SkillLoaderTest do
 
     assert {:ok, stored} = Connection.get(connection.id)
     assert stored.id == source_id
+  end
+
+  test "reads inventoried resources from the exact bundle and cleans prepared files", %{
+    bundle: bundle,
+    artifact: artifact
+  } do
+    bypass = Gaoxy.Test.open()
+    source_id = Ecto.UUID.generate()
+    _connection = connection!(source_id, bypass)
+    manifest = %{bundle.manifest | ref: %{bundle.manifest.ref | source_id: source_id}}
+    before = Path.wildcard(Path.join(System.tmp_dir!(), "synapsis-skill-*"))
+
+    Gaoxy.Test.expect(bypass, "GET", "/skill-protocol/v1/resolve", fn conn ->
+      assert URI.decode_query(conn.query_string)["revision"] == "release/7"
+      json(conn, Wire.manifest_map(manifest))
+    end)
+
+    Gaoxy.Test.expect(bypass, "GET", "/skill-protocol/v1/artifact", fn conn ->
+      Plug.Conn.send_resp(conn, 200, artifact)
+    end)
+
+    selected = entry(source_id, manifest.artifact_digest)
+
+    assert {:ok, %{content: "joint-checklist-v1\n", document: document}} =
+             SkillLoader.load_resource(selected, "references/checklist.md", %{
+               session_id: "resource"
+             })
+
+    assert document =~ "Full remote body"
+    assert {:error, _} = SkillLoader.load_resource(selected, "../outside", %{})
+    assert {:error, _} = SkillLoader.load_resource(selected, "references/missing.md", %{})
+    assert Path.wildcard(Path.join(System.tmp_dir!(), "synapsis-skill-*")) == before
   end
 
   test "fails closed when the artifact does not match the exact manifest", %{bundle: bundle} do

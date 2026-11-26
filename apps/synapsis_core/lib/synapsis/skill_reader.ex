@@ -393,27 +393,63 @@ defmodule Synapsis.SkillReader do
   end
 
   defp read_selected(snapshot, binding, trigger, opts) do
-    with :ok <- options(opts, [:deadline]) do
+    with :ok <- options(opts, [:deadline, :resource]) do
       bounded(opts, fn context ->
         context = source_context(snapshot, context)
 
         with :ok <- current(snapshot),
-             {:ok, content} <- native_load(binding.entry, context),
-             :ok <- instruction_size(binding.entry, content),
-             {:ok, content} <- native_validate(binding.entry, content, trigger),
-             :ok <- local_digest(binding.entry, content),
+             {:ok, content} <-
+               read_content(binding.entry, context, trigger, Keyword.get(opts, :resource)),
              :ok <- current(snapshot) do
           output(
             Map.merge(public(binding), %{
               content: content,
               document_digest: digest(content),
-              citation: binding.entry.locator
+              citation: binding.entry.locator,
+              resource: Keyword.get(opts, :resource, "SKILL.md"),
+              location_note: resource_guidance(binding.entry)
             })
           )
         end
       end)
     end
   end
+
+  defp read_content(entry, context, trigger, resource) when resource in [nil, "SKILL.md"] do
+    with {:ok, content} <- native_load(entry, context),
+         :ok <- instruction_size(entry, content),
+         {:ok, content} <- native_validate(entry, content, trigger),
+         :ok <- local_digest(entry, content),
+         do: {:ok, content}
+  end
+
+  defp read_content(%Entry{authority: :backplane} = entry, context, trigger, resource) do
+    with true <- safe_resource?(resource),
+         loader when is_function(loader, 3) <-
+           Application.get_env(:synapsis_core, :skill_resource_loader),
+         {:ok, %{content: content, document: document}} <- loader.(entry, resource, context),
+         {:ok, _} <- native_validate(entry, document, trigger),
+         true <- is_binary(content) and String.valid?(content),
+         :ok <- instruction_size(entry, content) do
+      {:ok, content}
+    else
+      _ -> {:error, :unavailable}
+    end
+  end
+
+  defp read_content(_, _, _, _), do: {:error, :invalid_input}
+
+  defp safe_resource?(resource) do
+    is_binary(resource) and String.valid?(resource) and byte_size(resource) in 1..4096 and
+      Path.type(resource) == :relative and not String.contains?(resource, ["\\", "\0"]) and
+      Enum.all?(String.split(resource, "/"), &(&1 not in ["", ".", ".."]))
+  end
+
+  defp resource_guidance(%Entry{authority: :backplane}),
+    do:
+      "Read bundled files with synapsis::skills_read using this same locator and the relative resource path."
+
+  defp resource_guidance(_), do: nil
 
   defp source_context(%{schema: 2, learned: %{scope: scope}} = snapshot, context) do
     Map.merge(context, %{agent_id: agent_id(snapshot), workshop_scope: scope})

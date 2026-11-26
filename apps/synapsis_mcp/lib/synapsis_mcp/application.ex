@@ -6,6 +6,14 @@ defmodule SynapsisMcp.Application do
   def start(_type, _args) do
     Application.put_env(:synapsis_core, :skill_loader, &Synapsis.Backplane.SkillLoader.load/2)
 
+    Application.put_env(
+      :synapsis_core,
+      :skill_resource_loader,
+      &Synapsis.Backplane.SkillLoader.load_resource/3
+    )
+
+    Application.put_env(:synapsis_core, :skill_discovery, Synapsis.Backplane.SkillDiscovery)
+
     Application.put_env(:synapsis_core, :mcp_refresh, {Synapsis.MCP, :refresh_all, []})
 
     Application.put_env(:synapsis_provider, :provider_cleanup, &Synapsis.MCP.cleanup_provider/1)

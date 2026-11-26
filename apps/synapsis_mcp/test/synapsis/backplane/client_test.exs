@@ -1204,7 +1204,30 @@ defmodule Synapsis.Backplane.ClientTest do
              {"deploy", "rev-2", digest_b}
            ]
 
+    assert Enum.all?(skills, & &1["enabled"])
     refute Enum.any?(skills, &Map.has_key?(&1, "content"))
+  end
+
+  test "traverses more than one full Skill Protocol page by default" do
+    bypass = Gaoxy.Test.open()
+    {:ok, connection} = Connection.new(%{name: "many-skills", endpoint: Gaoxy.Test.url(bypass)})
+    digest = "sha256:" <> String.duplicate("a", 64)
+
+    Gaoxy.Test.expect(bypass, "GET", "/skill-protocol/v1/catalog", fn conn ->
+      params = URI.decode_query(conn.query_string)
+      assert params["limit"] == "100"
+      {ids, cursor} = if params["cursor"], do: {[101], nil}, else: {Enum.to_list(1..100), "next"}
+
+      json(conn, %{
+        "protocol_version" => "1",
+        "data" => Enum.map(ids, &protocol_descriptor("skill-#{&1}", "rev-1", digest)),
+        "next_cursor" => cursor
+      })
+    end)
+
+    assert {:ok, skills, false} = Client.list_protocol_skills(connection)
+    assert length(skills) == 101
+    assert Enum.all?(skills, & &1["enabled"])
   end
 
   defp connection!(bypass, opts \\ []) do

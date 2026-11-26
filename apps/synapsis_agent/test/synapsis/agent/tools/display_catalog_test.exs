@@ -13,7 +13,7 @@ defmodule Synapsis.Agent.Tools.DisplayCatalogTest do
     synapsis::memory_save synapsis::memory_source_search synapsis::memory_update
     synapsis::process synapsis::read synapsis::session_status synapsis::session_summarize
     synapsis::sessions_history synapsis::sessions_list synapsis::skill
-    synapsis::skill_workshop synapsis::skills_read synapsis::skills_search
+    synapsis::skill_workshop synapsis::skills_read synapsis::skills_search synapsis::skills_create
     synapsis::tavily_search synapsis::todo_read synapsis::todo_write synapsis::tool_describe
     synapsis::web_search synapsis::workspace_memory_get synapsis::workspace_memory_search
     synapsis::write view_image wait wait_agent web::fetch write_stdin

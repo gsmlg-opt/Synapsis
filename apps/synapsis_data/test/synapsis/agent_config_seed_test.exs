@@ -33,6 +33,7 @@ defmodule Synapsis.AgentConfigSeedTest do
     assert main["is_default"] == true
     assert "web::fetch" in main["tools"]
     assert "synapsis::web_search" in main["tools"]
+    assert "synapsis::skills_create" in main["tools"]
     assert is_binary(main["id"])
 
     assert :ok = AgentConfigs.seed_defaults()
