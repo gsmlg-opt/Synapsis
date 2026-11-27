@@ -12,6 +12,22 @@ defmodule Synapsis.Session.NativeBrowserDefaultAriaFunctionalTest do
   @name "synapsis::browser"
   @ids ~w(default-start default-open default-ready default-capture default-repeat default-act default-proof)
 
+  test "missing browser configuration fails before recording a native run", %{tmp_dir: root} do
+    harness = browser_harness(root)
+
+    assert {:ok, _} =
+             Synapsis.AgentConfigs.update(harness.agent_config, %{
+               config: harness.agent_config.config
+             })
+
+    SessionHarness.subscribe!(harness.session.id)
+    SessionHarness.ensure_running!(harness.session.id)
+    assert :ok = Worker.send_message(harness.session.id, "Start the conversation")
+    assert_receive {:run_event, %{type: "session.failed", payload: payload}}, 5_000
+    assert payload["message"] =~ "Browser requires"
+    assert {:ok, %{entries: []}} = Synapsis.Agent.Runtime.RunInventory.load(harness.session.id)
+  end
+
   test "default page-wide refs drive real native actions, provider history, Concord and ordinary Worker replay",
        %{tmp_dir: root} do
     harness = browser_harness(root)
@@ -463,8 +479,14 @@ defmodule Synapsis.Session.NativeBrowserDefaultAriaFunctionalTest do
     assert {:os_pid, helper} = Port.info(port, :os_pid)
 
     children =
-      "/proc/#{helper}/task/#{helper}/children"
-      |> File.read!()
+      case :os.type() do
+        {:unix, :darwin} ->
+          {output, 0} = System.cmd("pgrep", ["-P", Integer.to_string(helper)])
+          output
+
+        _ ->
+          File.read!("/proc/#{helper}/task/#{helper}/children")
+      end
       |> String.split()
       |> Enum.map(&String.to_integer/1)
 
@@ -478,7 +500,7 @@ defmodule Synapsis.Session.NativeBrowserDefaultAriaFunctionalTest do
   end
 
   defp await_owned_exit(pids, deadline) do
-    alive = Enum.filter(pids, &File.exists?("/proc/#{&1}"))
+    alive = Enum.filter(pids, &Synapsis.Agent.TestSupport.RunnerProcess.os_process_present?/1)
 
     if alive != [] do
       assert System.monotonic_time(:millisecond) < deadline,

@@ -1001,7 +1001,16 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
          job(state, :prepare, fn ->
            result =
              safe(fn ->
-               with :ok <- GoalLifecycle.retain(fact),
+               locator =
+                 RunInventory.root(
+                   state.session_id,
+                   state.store,
+                   state.run_id,
+                   state.context.mode_provenance
+                 )
+
+               with :ok <- RunInventory.retain(locator),
+                    :ok <- GoalLifecycle.retain(fact),
                     {:ok, root} <-
                       Conversation.start_link(
                         Keyword.merge(runtime.options,
@@ -1388,10 +1397,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
   end
 
   defp prepare(host, state, context, run_id, content) do
-    locator = RunInventory.root(state.session_id, state.store, run_id, context.mode_provenance)
-
-    with :ok <- RunInventory.retain(locator),
-         {:ok, history} <- canonical_history(context),
+    with {:ok, history} <- canonical_history(context),
          {history, content, image_payloads} = ProviderMessages.reference_images(history, content),
          {:ok, selection} <- Profiles.selection(context),
          {:ok, plan} <- Discovery.plan(context.agent, selection),
