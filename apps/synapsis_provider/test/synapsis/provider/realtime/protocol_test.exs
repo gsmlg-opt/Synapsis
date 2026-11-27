@@ -82,6 +82,23 @@ defmodule Synapsis.Provider.Realtime.ProtocolTest do
             }} = Protocol.finish_without_calls(response)
   end
 
+  test "a mixed native catalog only advertises callable Realtime functions" do
+    grammar = %{
+      type: "custom",
+      name: "apply_patch",
+      description: "Apply a freeform patch",
+      format: %{"type" => "grammar", "syntax" => "lark", "definition" => "start: patch"}
+    }
+
+    schema = %{"type" => "object", "properties" => %{}}
+    function = %{name: "edit", description: "Edit a file", parameters: schema}
+
+    assert {[%{type: "function", name: "edit", parameters: ^schema}], %{"edit" => "edit"}} =
+             Protocol.tools([grammar, function])
+
+    assert {[], %{}} = Protocol.tools([%{grammar | type: :custom}])
+  end
+
   test "Realtime tools keep the object properties and omit unsupported root constraints" do
     properties = %{
       "content" => %{"type" => ["string", "null"]},

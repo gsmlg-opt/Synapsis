@@ -53,12 +53,10 @@ defmodule Synapsis.Provider.MessageMapper do
     end
   end
 
-  # Only Responses carries freeform (custom grammar) tools. Other codecs reject
-  # the whole request, so those tools are not advertised there; the model keeps
-  # its JSON function tools (for example synapsis::edit instead of apply_patch).
-  defp protocol_tools(tools, :openai_responses), do: tools
+  @doc "Selects native tool declarations supported by the target provider protocol."
+  def protocol_tools(tools, :openai_responses), do: tools
 
-  defp protocol_tools(tools, _protocol),
+  def protocol_tools(tools, _protocol),
     do: Enum.reject(tools, &(Map.get(&1, :type) in [:custom, "custom"]))
 
   defp project_history(input, protocol, model, opts) do

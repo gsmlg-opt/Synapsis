@@ -51,6 +51,7 @@ defmodule Synapsis.Provider.Realtime.Protocol do
   end
 
   def tools(tools) do
+    tools = Synapsis.Provider.MessageMapper.protocol_tools(tools, :openai_realtime)
     wire_names = Synapsis.Provider.ToolName.wire_names(Enum.map(tools, & &1.name), &wire_name/1)
 
     Enum.map_reduce(tools, %{}, fn tool, names ->
