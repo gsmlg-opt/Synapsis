@@ -1,4 +1,7 @@
 defmodule Synapsis.Session.NativeCatalogRevisionFunctionalTest do
+  import Synapsis.Agent.TestSupport.RunnerProcess,
+    only: [assert_os_reaped: 1, os_process_present?: 1]
+
   use ExUnit.Case, async: false
   @moduletag :functional
 
@@ -100,13 +103,13 @@ defmodule Synapsis.Session.NativeCatalogRevisionFunctionalTest do
       kind: :continuation
     }
 
-    assert {:ok, deno} =
+    assert {:ok, runner} =
              ResourceRegistry.fetch(runtime.binding.resource_registry, handle, handle.owner_id)
 
-    assert Process.alive?(deno)
-    assert {:ok, os_identity} = NativeCodeMode.Worker.os_identity(deno)
-    assert File.exists?("/proc/#{os_identity.pid}")
-    monitor = Process.monitor(deno)
+    assert Process.alive?(runner)
+    assert {:ok, os_identity} = NativeCodeMode.Worker.os_identity(runner)
+    assert os_process_present?(os_identity.pid)
+    monitor = Process.monitor(runner)
     send(handler, {:deliver, yielded["cell_id"]})
 
     {following, handler} = request(ctx, runtime, 3, 2)
@@ -119,7 +122,7 @@ defmodule Synapsis.Session.NativeCatalogRevisionFunctionalTest do
     assert clock =~ "current_time"
     send(handler, :deliver)
     assert_receive {:run_event, %{type: "session.completed"}}, 10_000
-    assert_receive {:DOWN, ^monitor, :process, ^deno, _}, 5_000
+    assert_receive {:DOWN, ^monitor, :process, ^runner, _}, 5_000
     assert_os_reaped(os_identity.pid)
     assert %{phase: :idle} = Session.status(runtime.binding.session)
 
@@ -628,19 +631,6 @@ defmodule Synapsis.Session.NativeCatalogRevisionFunctionalTest do
 
       true ->
         flunk("native shell did not create its start marker")
-    end
-  end
-
-  defp assert_os_reaped(pid) do
-    path = "/proc/#{pid}"
-    await_os_reaped(path, System.monotonic_time(:millisecond) + 2_000)
-    assert File.exists?(path) == false
-  end
-
-  defp await_os_reaped(path, deadline) do
-    if File.exists?(path) and System.monotonic_time(:millisecond) < deadline do
-      Process.sleep(10)
-      await_os_reaped(path, deadline)
     end
   end
 

@@ -12,7 +12,6 @@ in
 
   packages = with pkgs-stable; [
     git
-    deno
     figlet
     lolcat
     watchman

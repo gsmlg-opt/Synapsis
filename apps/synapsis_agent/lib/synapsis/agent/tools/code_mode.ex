@@ -25,8 +25,7 @@ defmodule Synapsis.Agent.Tools.CodeMode do
         unavailable("selected tools exceed the parent authority ceiling")
 
       true ->
-        with {:ok, deno} <- deno(),
-             :ok <- lifecycle(context),
+        with :ok <- lifecycle(context),
              native_authority = %{
                authority
                | grants: selected,
@@ -35,7 +34,7 @@ defmodule Synapsis.Agent.Tools.CodeMode do
              {:ok, bundle} <-
                Codex.profile(
                  :code_mode,
-                 Map.put(context, :deno_path, deno),
+                 context,
                  native_authority,
                  tools: selected
                ) do
@@ -84,13 +83,6 @@ defmodule Synapsis.Agent.Tools.CodeMode do
   end
 
   defp arguments(_, _), do: {:error, :invalid_arguments}
-
-  defp deno do
-    case System.find_executable("deno") do
-      nil -> unavailable("Deno is missing from PATH; enter the managed devenv shell")
-      path -> {:ok, path}
-    end
-  end
 
   defp lifecycle(context) do
     case CodeMode.lifecycle_capability(context) do

@@ -1,4 +1,7 @@
 defmodule Synapsis.Session.NativeDynamicDiscoveryFunctionalTest do
+  import Synapsis.Agent.TestSupport.RunnerProcess,
+    only: [assert_os_reaped: 1, os_process_present?: 1]
+
   use ExUnit.Case, async: false
   @moduletag :functional
   alias Backplane.AgentRuntime.Conversation
@@ -67,22 +70,22 @@ defmodule Synapsis.Session.NativeDynamicDiscoveryFunctionalTest do
             kind: :continuation
           }
 
-          assert {:ok, deno} =
+          assert {:ok, runner} =
                    ResourceRegistry.fetch(
                      runtime.binding.resource_registry,
                      handle,
                      handle.owner_id
                    )
 
-          assert Process.alive?(deno)
-          assert {:ok, os} = NativeCodeMode.Worker.os_identity(deno)
-          assert File.exists?("/proc/#{os.pid}")
-          monitor = Process.monitor(deno)
+          assert Process.alive?(runner)
+          assert {:ok, os} = NativeCodeMode.Worker.os_identity(runner)
+          assert os_process_present?(os.pid)
+          monitor = Process.monitor(runner)
           send(handler, {:deliver, yielded["cell_id"]})
           {following, handler} = request(3, runtime, 2)
           assert wire_result(following, runtime, "code-resume")["status"] == "completed"
           send(handler, :deliver)
-          assert_receive {:DOWN, ^monitor, :process, ^deno, _}, 5_000
+          assert_receive {:DOWN, ^monitor, :process, ^runner, _}, 5_000
           assert_os_reaped(os.pid)
           4
         else
@@ -687,19 +690,6 @@ defmodule Synapsis.Session.NativeDynamicDiscoveryFunctionalTest do
                    &1["type"] in ~w(custom_tool_call function_call))
              ) <
                Enum.find_index(request["input"], &(&1 == expected))
-    end
-  end
-
-  defp assert_os_reaped(pid) do
-    path = "/proc/#{pid}"
-    await_os_reaped(path, System.monotonic_time(:millisecond) + 2_000)
-    assert File.exists?(path) == false
-  end
-
-  defp await_os_reaped(path, deadline) do
-    if File.exists?(path) and System.monotonic_time(:millisecond) < deadline do
-      Process.sleep(10)
-      await_os_reaped(path, deadline)
     end
   end
 

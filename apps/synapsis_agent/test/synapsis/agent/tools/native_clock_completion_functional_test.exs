@@ -1,4 +1,5 @@
 defmodule Synapsis.Agent.Tools.NativeClockCompletionFunctionalTest do
+  import Synapsis.Agent.TestSupport.RunnerProcess, only: [os_process_present?: 1]
   use ExUnit.Case, async: false
   @moduletag :functional
 
@@ -112,9 +113,10 @@ defmodule Synapsis.Agent.Tools.NativeClockCompletionFunctionalTest do
     assert_lifecycle(lifecycle)
   end
 
-  test "Headless delivers the nested clock reply only after real ACK and closes Deno normally", %{
-    tmp_dir: root
-  } do
+  test "Headless delivers the nested clock reply only after real ACK and closes QuickBEAM normally",
+       %{
+         tmp_dir: root
+       } do
     fixture = setup_runtime(root, ~w(exec wait clock::sleep))
     assert {:ok, occurrence} = Headless.start_link(fixture.options)
 
@@ -154,9 +156,9 @@ defmodule Synapsis.Agent.Tools.NativeClockCompletionFunctionalTest do
     assert Map.get(record, :provider_attempts, %{}) == %{}
     refute_receive {:clock_provider, _, _}, 0
     assert_normal_close(fixture, aggregate)
-    assert %{deno: {deno, monitor, os_pid}} = lifecycle
-    assert_receive {:DOWN, ^monitor, :process, ^deno, :normal}, 5_000
-    refute File.exists?("/proc/#{os_pid}")
+    assert %{runner: {runner, monitor, os_pid}} = lifecycle
+    assert_receive {:DOWN, ^monitor, :process, ^runner, :normal}, 5_000
+    refute os_process_present?(os_pid)
     assert_lifecycle(lifecycle)
   end
 
@@ -277,14 +279,14 @@ defmodule Synapsis.Agent.Tools.NativeClockCompletionFunctionalTest do
     refute Enum.any?(children_before, &clock_worker?/1)
     assert {:ok, resources_before} = owner_status(binding)
 
-    deno =
+    runner =
       case children_before do
         [] ->
           nil
 
         [{_, pid, _, [CodeMode.Worker]}] ->
           assert {:ok, identity} = CodeMode.Worker.os_identity(pid)
-          assert File.exists?("/proc/#{identity.pid}")
+          assert os_process_present?(identity.pid)
           {pid, Process.monitor(pid), identity.pid}
       end
 
@@ -320,7 +322,7 @@ defmodule Synapsis.Agent.Tools.NativeClockCompletionFunctionalTest do
     lifecycle =
       Map.put(lifecycle, :resources_after_ack, await_release(binding, lifecycle, deadline()))
 
-    {operation, Map.put(lifecycle, :deno, deno), result}
+    {operation, Map.put(lifecycle, :runner, runner), result}
   end
 
   # A missing old-version waiter is recorded without interrupting the ordinary

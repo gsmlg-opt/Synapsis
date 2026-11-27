@@ -1,4 +1,5 @@
 defmodule Synapsis.Agent.Tools.MCPEventScopeFunctionalTest do
+  import Synapsis.Agent.TestSupport.RunnerProcess, only: [os_process_present?: 1]
   use ExUnit.Case, async: false
   @moduletag :functional
 
@@ -206,7 +207,7 @@ defmodule Synapsis.Agent.Tools.MCPEventScopeFunctionalTest do
     assert saved.run == status.run
   end
 
-  test "provider-free Headless nests the actual Events helper and closes its Deno worker normally" do
+  test "provider-free Headless nests the actual Events helper and closes its QuickBEAM worker normally" do
     source = start_source()
     selection = ~w(exec wait mcp_events)
 
@@ -224,7 +225,6 @@ defmodule Synapsis.Agent.Tools.MCPEventScopeFunctionalTest do
                :code_mode_only,
                %{
                  session_binding: binding,
-                 deno_path: System.find_executable("deno"),
                  code_mode_contracts: [event_contract],
                  timeout: 10_000
                },
@@ -260,7 +260,7 @@ defmodule Synapsis.Agent.Tools.MCPEventScopeFunctionalTest do
     assert [{_, worker, _, _}] = DynamicSupervisor.which_children(workers)
     assert {:ok, os_identity} = CodeMode.Worker.os_identity(worker)
     assert Process.alive?(worker)
-    assert File.exists?("/proc/#{os_identity.pid}")
+    assert os_process_present?(os_identity.pid)
     monitor = Process.monitor(worker)
     release_ack(intent, :tool_invoked)
     owner = assert_request_started(source, intent.operation, @first_cursor)
@@ -292,7 +292,7 @@ defmodule Synapsis.Agent.Tools.MCPEventScopeFunctionalTest do
              Map.put(first_page(), :is_error, false)
 
     assert_receive {:DOWN, ^monitor, :process, ^worker, :normal}, 5_000
-    refute File.exists?("/proc/#{os_identity.pid}")
+    refute os_process_present?(os_identity.pid)
     assert_normal_close(session)
     assert_shared_client(source)
     assert {:ok, ^saved} = Store.load(store, authority.run_id)

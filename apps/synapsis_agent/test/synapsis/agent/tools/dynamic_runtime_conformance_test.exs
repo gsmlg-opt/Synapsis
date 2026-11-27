@@ -8,7 +8,7 @@ defmodule Synapsis.Agent.Tools.DynamicRuntimeConformanceTest do
   # Publication cases retain their recorded 1.10.36 evidence; they were not rerun
   # against 1.10.37. Only the MCP canonical-name round-trip is verified on 1.10.37.
   # Ephemeral Session/Conversation fixtures do not prove production wiring,
-  # MCP transport, Code Mode/Deno, or durable session recovery.
+  # MCP transport, Code Mode/QuickBEAM, or durable session recovery.
   @candidate "host::candidate"
   @outer "host::outer"
 

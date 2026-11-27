@@ -148,7 +148,7 @@ defmodule Synapsis.BackplaneContractCapture do
         web_run_adapter: __MODULE__,
         image_adapter: __MODULE__,
         # Declaration-only binding: no executable is launched or claimed to be installed.
-        deno_path: "/offline/not-executed/deno"
+        code_mode_runner: "/offline/not-executed/backplane-code-mode-runner"
       }
 
       %{

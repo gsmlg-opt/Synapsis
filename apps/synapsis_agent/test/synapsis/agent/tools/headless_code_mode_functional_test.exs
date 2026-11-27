@@ -1,4 +1,5 @@
 defmodule Synapsis.Agent.Tools.HeadlessCodeModeFunctionalTest do
+  import Synapsis.Agent.TestSupport.RunnerProcess, only: [os_process_present?: 1]
   use ExUnit.Case, async: false
   @moduletag :functional
 
@@ -116,7 +117,6 @@ defmodule Synapsis.Agent.Tools.HeadlessCodeModeFunctionalTest do
                :code_mode_only,
                %{
                  session_binding: binding,
-                 deno_path: System.find_executable("deno"),
                  code_mode_contracts: clock ++ [effect],
                  timeout: 10_000
                },
@@ -171,7 +171,7 @@ defmodule Synapsis.Agent.Tools.HeadlessCodeModeFunctionalTest do
     assert [{_, worker, _, _}] = DynamicSupervisor.which_children(workers)
     assert Process.alive?(worker)
     assert {:ok, os_identity} = CodeMode.Worker.os_identity(worker)
-    assert File.exists?("/proc/#{os_identity.pid}")
+    assert os_process_present?(os_identity.pid)
     monitor = Process.monitor(worker)
     send(effect_worker, :release_headless_effect)
 
@@ -214,7 +214,7 @@ defmodule Synapsis.Agent.Tools.HeadlessCodeModeFunctionalTest do
     refute_receive {:headless_effect_ready, _, _}, 0
     refute_receive {:headless_store_ack, :provider_started, _}, 0
     assert_receive {:DOWN, ^monitor, :process, ^worker, :normal}, 5_000
-    refute File.exists?("/proc/#{os_identity.pid}")
+    refute os_process_present?(os_identity.pid)
     assert {:ok, %{status: :confirmed}} = Session.close(session)
     assert %{phase: :closed, cleanup: {:ok, %{status: :confirmed}}} = Session.status(session)
     assert {:ok, ^aggregate} = Store.load(store, run_id)

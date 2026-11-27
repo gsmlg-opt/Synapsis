@@ -68,8 +68,12 @@ mix deps.get
 mix npm.install
 
 # Start server (http://localhost:4657)
-mix phx.server
+mix synapsis.run
 ```
+
+`mix synapsis.run` prepares Backplane's QuickBEAM Code Mode runner on first
+startup, including the process helper on macOS. To use a separately built
+runner, set `BACKPLANE_CODE_MODE_RUNNER` to its absolute executable path.
 
 On Linux, `mix compile` builds Backplane's first-party PTY helper with the
 packaged `mix backplane.pty.build` task. A C11 compiler and Linux headers are
@@ -132,6 +136,10 @@ cd apps/synapsis_cli && mix escript.build
 ```
 
 ## Development
+
+Before running Code Mode functional tests, build the QuickBEAM runner once
+with `MIX_ENV=test mix backplane.code_mode.build`, or point
+`BACKPLANE_CODE_MODE_RUNNER` at an existing build from the same dependencies.
 
 ```bash
 mix test                              # all tests

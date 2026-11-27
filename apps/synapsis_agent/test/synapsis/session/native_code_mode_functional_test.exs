@@ -1,4 +1,7 @@
 defmodule Synapsis.Session.NativeCodeModeFunctionalTest do
+  import Synapsis.Agent.TestSupport.RunnerProcess,
+    only: [assert_os_reaped: 1, os_process_present?: 1]
+
   use ExUnit.Case, async: false
   @moduletag :functional
 
@@ -47,7 +50,7 @@ defmodule Synapsis.Session.NativeCodeModeFunctionalTest do
     assert {:ok, expected} =
              Codex.profile(
                :code_mode,
-               Map.put(context, :deno_path, System.find_executable("deno")),
+               context,
                authority,
                tools: ~w(exec wait)
              )
@@ -74,7 +77,7 @@ defmodule Synapsis.Session.NativeCodeModeFunctionalTest do
     assert {:ok, %{status: :confirmed}} = Session.close(session)
   end
 
-  test "Worker resumes actual Deno nested tools and replays ordered media without repeating effects",
+  test "Worker resumes QuickBEAM nested tools and replays ordered media without repeating effects",
        %{tmp_dir: root} do
     harness = setup_harness(root, @selection)
     owner = self()
@@ -157,15 +160,15 @@ defmodule Synapsis.Session.NativeCodeModeFunctionalTest do
 
     assert worker == cell.worker
     assert Process.alive?(cell.worker)
-    assert File.exists?("/proc/#{cell.os_identity.pid}")
-    deno_monitor = Process.monitor(cell.worker)
+    assert os_process_present?(cell.os_identity.pid)
+    runner_monitor = Process.monitor(cell.worker)
 
     # Hold the next model response until both the BEAM worker and OS identity
     # have been observed live; resuming may complete and clean them immediately.
     send(handler, :resume_code_mode)
     assert_receive {:code_request, 2, following}, 10_000
     assert_receive {:run_event, %{type: "session.completed"}}, 10_000
-    assert_receive {:DOWN, ^deno_monitor, :process, ^worker, _}, 5_000
+    assert_receive {:DOWN, ^runner_monitor, :process, ^worker, _}, 5_000
     assert_os_reaped(cell.os_identity.pid)
 
     parts = tool_parts(harness.session.id)
@@ -293,8 +296,8 @@ defmodule Synapsis.Session.NativeCodeModeFunctionalTest do
     assert_receive {:owner_request, 1, following}, 10_000
     assert_receive {:owner_yielded, handler, cell}, 5_000
     assert Process.alive?(cell.worker)
-    assert File.exists?("/proc/#{cell.os_identity.pid}")
-    deno_monitor = Process.monitor(cell.worker)
+    assert os_process_present?(cell.os_identity.pid)
+    runner_monitor = Process.monitor(cell.worker)
     send(handler, :complete_owner_turn)
     assert_receive {:run_event, %{type: "session.completed"}}, 10_000
     assert %{phase: :idle} = Session.status(runtime.binding.session)
@@ -309,7 +312,7 @@ defmodule Synapsis.Session.NativeCodeModeFunctionalTest do
     assert retained == cell.worker
     assert NativeCodeMode.Worker.ready_for_detach(retained)
     assert Process.alive?(retained)
-    assert File.exists?("/proc/#{cell.os_identity.pid}")
+    assert os_process_present?(cell.os_identity.pid)
     assert [%ToolUse{} = use, %ToolResult{} = result] = tool_parts(harness.session.id)
     assert result.projection["result"]["status"] == "yielded"
     assert result.projection["result"]["cell_id"] == cell.handle.resource_id
@@ -322,7 +325,7 @@ defmodule Synapsis.Session.NativeCodeModeFunctionalTest do
              Session.close(runtime.binding.session)
 
     assert owner_id == runtime.binding.owner_id
-    assert_receive {:DOWN, ^deno_monitor, :process, ^retained, _}, 5_000
+    assert_receive {:DOWN, ^runner_monitor, :process, ^retained, _}, 5_000
     assert_os_reaped(cell.os_identity.pid)
 
     assert %{phase: :closed, cleanup: {:ok, %{status: :confirmed}}} =
@@ -405,20 +408,6 @@ defmodule Synapsis.Session.NativeCodeModeFunctionalTest do
     [resource] = for {_, entry} <- resources, entry.handle.kind == :continuation, do: entry
     assert {:ok, os_identity} = NativeCodeMode.Worker.os_identity(resource.value)
     %{handle: resource.handle, worker: resource.value, os_identity: os_identity}
-  end
-
-  defp assert_os_reaped(pid) do
-    path = "/proc/#{pid}"
-    deadline = System.monotonic_time(:millisecond) + 2_000
-    await_os_reaped(path, deadline)
-    refute File.exists?(path)
-  end
-
-  defp await_os_reaped(path, deadline) do
-    if File.exists?(path) and System.monotonic_time(:millisecond) < deadline do
-      Process.sleep(10)
-      await_os_reaped(path, deadline)
-    end
   end
 
   defp tool_parts(id) do

@@ -152,8 +152,7 @@ defmodule Synapsis.Agent.Runtime.ToolResultContractFunctionalTest do
     refute_received {:contract_reader_executed, _}
   end
 
-  test "real Deno receives the selected nested result and normal completion retains its contract" do
-    assert is_binary(System.find_executable("deno")), "run this file inside devenv shell"
+  test "real QuickBEAM receives the selected nested result and normal completion retains its contract" do
     assert CodeMode.lifecycle_capability(%{}) == :verified
 
     run_id = unique_run("nested")

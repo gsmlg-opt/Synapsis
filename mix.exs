@@ -43,8 +43,28 @@ defmodule Synapsis.MixProject do
   defp aliases do
     [
       compile: [&compile_with_native_pty/1],
-      "synapsis.run": ["phx.server"]
+      "synapsis.run": ["compile", &prepare_code_mode/1, "phx.server"]
     ]
+  end
+
+  defp prepare_code_mode(_) do
+    if :os.type() == {:unix, :darwin} and
+         not File.regular?(
+           Application.app_dir(
+             :backplane_agent_runtime,
+             "priv/bin/backplane-local-command-session"
+           )
+         ),
+       do: Mix.Task.run("backplane.command.build")
+
+    runner =
+      Path.join(
+        Mix.Project.build_path(),
+        "backplane_code_mode_runner/bin/backplane-code-mode-runner"
+      )
+
+    unless System.get_env("BACKPLANE_CODE_MODE_RUNNER") || File.regular?(runner),
+      do: Mix.Task.run("backplane.code_mode.build", ["--no-compile"])
   end
 
   defp compile_with_native_pty(args) do
