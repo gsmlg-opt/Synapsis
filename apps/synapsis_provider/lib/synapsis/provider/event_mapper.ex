@@ -7,73 +7,79 @@ defmodule Synapsis.Provider.EventMapper do
   @doc "Maps a canonical event and restores request-local tool-name aliases."
   def map_event(event, aliases) when is_map(aliases) do
     event
-    |> map_event()
+    |> map_wire_event()
     |> restore_tool_aliases(aliases)
   end
 
-  def map_event(%StreamEvent{resolved_model: model} = event)
-      when is_binary(model) and model != "" do
-    mapped = map_event(%{event | resolved_model: nil})
+  def map_event(event), do: map_event(event, %{})
+
+  defp map_wire_event(%StreamEvent{resolved_model: model} = event)
+       when is_binary(model) and model != "" do
+    mapped = map_wire_event(%{event | resolved_model: nil})
     events = if mapped == :ignore, do: [], else: [mapped]
     {:events, [{:resolved_model, model} | events]}
   end
 
-  def map_event(%StreamEvent{type: :text_delta, text: text}), do: {:text_delta, text}
-  def map_event(%StreamEvent{type: :reasoning_delta, text: text}), do: {:reasoning_delta, text}
+  defp map_wire_event(%StreamEvent{type: :text_delta, text: text}), do: {:text_delta, text}
 
-  def map_event(%StreamEvent{type: :tool_call_start} = event) do
-    {:tool_call_delta, event.index, event.call_id, decode_name(event.name), ""}
+  defp map_wire_event(%StreamEvent{type: :reasoning_delta, text: text}),
+    do: {:reasoning_delta, text}
+
+  defp map_wire_event(%StreamEvent{type: :tool_call_start} = event) do
+    {:tool_call_delta, event.index, event.call_id, event.name, ""}
   end
 
-  def map_event(%StreamEvent{type: :tool_call_delta} = event) do
-    {:tool_call_delta, event.index, event.call_id, decode_name(event.name),
-     event.arguments_delta || ""}
+  defp map_wire_event(%StreamEvent{type: :tool_call_delta} = event) do
+    {:tool_call_delta, event.index, event.call_id, event.name, event.arguments_delta || ""}
   end
 
-  def map_event(
-        %StreamEvent{
-          type: :tool_call_done,
-          content: %ContentBlock{type: :tool_call, tool_call: %ToolCall{} = call}
-        } = event
-      ),
-      do: completed_call(event, call)
+  defp map_wire_event(
+         %StreamEvent{
+           type: :tool_call_done,
+           content: %ContentBlock{type: :tool_call, tool_call: %ToolCall{} = call}
+         } = event
+       ),
+       do: completed_call(event, call)
 
-  def map_event(%StreamEvent{type: :tool_call_done, content: %ToolCall{} = call} = event),
+  defp map_wire_event(%StreamEvent{type: :tool_call_done, content: %ToolCall{} = call} = event),
     do: completed_call(event, call)
 
-  def map_event(%StreamEvent{type: :tool_call_done, content: content} = event)
-      when is_map(content) and not is_struct(content) do
-    {:tool_call_done, event.index, event.call_id, decode_name(event.name), event.content}
+  defp map_wire_event(%StreamEvent{type: :tool_call_done, content: content} = event)
+       when is_map(content) and not is_struct(content) do
+    {:tool_call_done, event.index, event.call_id, event.name, event.content}
   end
 
-  def map_event(%StreamEvent{type: :tool_call_done}),
+  defp map_wire_event(%StreamEvent{type: :tool_call_done}),
     do: Error.invalid("Malformed provider tool completion")
 
-  def map_event(%StreamEvent{type: :provider_state, provider_state: state}) do
+  defp map_wire_event(%StreamEvent{type: :provider_state, provider_state: state}) do
     {:provider_state, provider_state_map(state)}
   end
 
-  def map_event(%StreamEvent{type: :content, content: %ContentBlock{type: :text, text: text}}),
-    do: {:text_delta, text}
+  defp map_wire_event(%StreamEvent{
+         type: :content,
+         content: %ContentBlock{type: :text, text: text}
+       }),
+       do: {:text_delta, text}
 
-  def map_event(%StreamEvent{type: :content, content: %ContentBlock{type: type}}) do
+  defp map_wire_event(%StreamEvent{type: :content, content: %ContentBlock{type: type}}) do
     {:error,
      Backplane.AiProtocol.Error.incompatible!("Unsupported provider output content: #{type}")}
   end
 
-  def map_event(%StreamEvent{type: :content}),
+  defp map_wire_event(%StreamEvent{type: :content}),
     do: {:error, Backplane.AiProtocol.Error.incompatible!("Unsupported provider output content")}
 
-  def map_event(%StreamEvent{type: :usage, usage: usage}), do: {:usage, usage}
-  def map_event(%StreamEvent{type: :terminal}), do: :ignore
-  def map_event(%StreamEvent{type: :error, error: error}), do: {:error, error}
-  def map_event(_event), do: :ignore
+  defp map_wire_event(%StreamEvent{type: :usage, usage: usage}), do: {:usage, usage}
+  defp map_wire_event(%StreamEvent{type: :terminal}), do: :ignore
+  defp map_wire_event(%StreamEvent{type: :error, error: error}), do: {:error, error}
+  defp map_wire_event(_event), do: :ignore
 
   defp completed_call(event, call) do
     with {:ok, call} <- ToolCall.new(call),
          true <- event.call_id in [nil, call.id] and event.name in [nil, call.name],
          {:ok, arguments} <- completed_arguments(call.raw_arguments) do
-      {:tool_call_done, event.index, call.id, decode_name(call.name), arguments}
+      {:tool_call_done, event.index, call.id, call.name, arguments}
     else
       false -> Error.invalid("Provider tool completion identity conflicts with its event")
       {:error, _} = error -> error
@@ -89,9 +95,6 @@ defmodule Synapsis.Provider.EventMapper do
       _ -> Error.invalid("Provider function arguments must be a JSON object")
     end
   end
-
-  defp decode_name(nil), do: nil
-  defp decode_name(name), do: ToolName.decode(name)
 
   defp provider_state_map(%ProviderState{} = state) do
     %{

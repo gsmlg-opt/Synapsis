@@ -3,6 +3,26 @@ defmodule Synapsis.Provider.ToolNameTest do
 
   alias Synapsis.Provider.ToolName
 
+  test "skill names have readable wire names distinct from matching literal tools" do
+    for suffix <- ~w(skill skill_workshop skills_create skills_read skills_search) do
+      native = "synapsis::" <> suffix
+      literal = "synapsis__" <> suffix
+      assert ToolName.encode(native) == literal
+      assert ToolName.decode(literal) == native
+      assert ToolName.decode("syn_" <> Base.url_encode64(native, padding: false)) == native
+      refute ToolName.encode(literal) == literal
+
+      event = %Backplane.AiProtocol.StreamEvent{
+        type: :tool_call_start,
+        index: 0,
+        name: ToolName.encode(literal)
+      }
+
+      assert {:tool_call_delta, 0, nil, ^literal, ""} =
+               Synapsis.Provider.EventMapper.map_event(event, %{})
+    end
+  end
+
   test "long unsafe names receive bounded deterministic collision-resistant aliases" do
     name = "mcp:agent-note:" <> String.duplicate("nested-namespace:", 8) <> "list_notes"
     other_name = name <> "_other"

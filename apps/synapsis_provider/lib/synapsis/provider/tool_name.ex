@@ -6,8 +6,11 @@ defmodule Synapsis.Provider.ToolName do
   @prefix "syn_"
   @hash_prefix "synh_"
   @aliases_key :__synapsis_tool_name_aliases__
+  @skill_tools ~w(skill skill_workshop skills_create skills_read skills_search)
   @max_length 64
   @openai_safe ~r/^[A-Za-z0-9_-]+$/
+
+  def encode("synapsis::" <> skill) when skill in @skill_tools, do: "synapsis__" <> skill
 
   def encode(name) when is_binary(name) do
     if passthrough?(name) do
@@ -24,6 +27,8 @@ defmodule Synapsis.Provider.ToolName do
   end
 
   def encode(name), do: encode(to_string(name))
+
+  def decode("synapsis__" <> skill) when skill in @skill_tools, do: "synapsis::" <> skill
 
   def decode(@prefix <> encoded = name) do
     case Base.url_decode64(encoded, padding: false) do
@@ -76,6 +81,8 @@ defmodule Synapsis.Provider.ToolName do
   end
 
   def openai_safe?(_name), do: false
+
+  defp passthrough?("synapsis__" <> skill) when skill in @skill_tools, do: false
 
   defp passthrough?(name) do
     openai_safe?(name) and not String.starts_with?(name, [@prefix, @hash_prefix])
