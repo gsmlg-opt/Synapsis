@@ -1206,6 +1206,7 @@ defmodule Synapsis.Backplane.ClientTest do
 
     assert Enum.all?(skills, & &1["enabled"])
     refute Enum.any?(skills, &Map.has_key?(&1, "content"))
+    refute Enum.any?(skills, &Map.has_key?(&1, "disable_model_invocation"))
   end
 
   test "traverses more than one full Skill Protocol page by default" do

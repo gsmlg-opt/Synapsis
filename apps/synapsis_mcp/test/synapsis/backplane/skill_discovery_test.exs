@@ -33,8 +33,7 @@ defmodule Synapsis.Backplane.SkillDiscoveryTest do
     %{bypass: bypass, source: source, agent: agent, snapshot: snapshot}
   end
 
-  if Code.ensure_loaded?(Backplane.SkillProtocol.Wire) and
-       function_exported?(Backplane.SkillProtocol.Wire, :decode_catalog, 3) do
+  describe "cloud skill discovery" do
     test "always metadata is independent of imports and marks assignment requirements", ctx do
       original = Skills.list()
 
@@ -293,17 +292,5 @@ defmodule Synapsis.Backplane.SkillDiscoveryTest do
     end
 
     defp json(conn, value), do: Plug.Conn.send_resp(conn, 200, Formata.JSON.encode!(value))
-  else
-    test "the locked SDK refuses opt-in discovery before any HTTP request", ctx do
-      assert {:error, {:skill_protocol, :unsupported_capability}} =
-               Synapsis.Backplane.Client.list_protocol_skills(ctx.source, view: :always)
-
-      assert {:error, {:skill_protocol, :unsupported_capability}} =
-               Synapsis.Backplane.Client.search_protocol_skills(ctx.source, "query")
-
-      assert %{sources: [], errors: errors} = SkillDiscovery.always(ctx.agent.id, ctx.snapshot)
-      assert errors[ctx.source.id] == :unsupported_capability
-      assert Skills.list_skill_ids(ctx.agent.id) == []
-    end
   end
 end

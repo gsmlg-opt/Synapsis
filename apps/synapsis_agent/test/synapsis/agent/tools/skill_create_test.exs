@@ -82,8 +82,7 @@ defmodule Synapsis.Agent.Tools.SkillCreateTest do
     assert Skills.list_skill_ids(ctx.agent.id) == []
   end
 
-  if Code.ensure_loaded?(Backplane.SkillProtocol.Client) and
-       function_exported?(Backplane.SkillProtocol.Client, :create, 3) do
+  describe "cloud skill creation" do
     test "POST JSON uses the current credential and returns only the exact receipt", ctx do
       {:ok, provider} =
         Synapsis.Providers.create(%{
@@ -191,14 +190,6 @@ defmodule Synapsis.Agent.Tools.SkillCreateTest do
 
       {:ok, bundle} = Bundle.pack(root, Path.join(ctx.tmp_dir, "bundle.tar.gz"), ref: ref)
       bundle.manifest
-    end
-  else
-    test "the locked SDK diagnoses missing authoring support before HTTP", ctx do
-      assert {:error,
-              %Error{class: :unsupported_capability, details: %{code: "unsupported_capability"}}} =
-               SkillCreate.execute(operation(ctx, ctx.attrs))
-
-      assert Skills.list_skill_ids(ctx.agent.id) == []
     end
   end
 

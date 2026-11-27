@@ -975,7 +975,7 @@ defmodule Synapsis.Backplane.Sync do
     Enum.reduce_while(prepared, {:ok, []}, fn {external_id, current, attrs}, {:ok, imported} ->
       result =
         if current,
-          do: skill_store.update(current, attrs),
+          do: update_changed_skill(skill_store, current, attrs),
           else: skill_store.create(attrs)
 
       case result do
@@ -983,6 +983,13 @@ defmodule Synapsis.Backplane.Sync do
         {:error, reason} -> {:halt, {:error, {:skill_import_failed, external_id, reason}}}
       end
     end)
+  end
+
+  # Updating even one skill rewrites skills.toml under the config write lock.
+  defp update_changed_skill(store, skill, attrs) do
+    if Map.take(skill, Map.keys(attrs)) === attrs,
+      do: {:ok, skill},
+      else: store.update(skill, attrs)
   end
 
   defp mark_disappeared_skills(skill_store, existing, capabilities) do
@@ -993,7 +1000,7 @@ defmodule Synapsis.Backplane.Sync do
     |> Enum.reduce_while({:ok, []}, fn {_external_id, skill}, {:ok, stale} ->
       config = mark_disappeared(skill.config_overrides)
 
-      case skill_store.update(skill, %{config_overrides: config}) do
+      case update_changed_skill(skill_store, skill, %{config_overrides: config}) do
         {:ok, updated} -> {:cont, {:ok, [updated | stale]}}
         {:error, reason} -> {:halt, {:error, {:skill_disappearance_failed, reason}}}
       end

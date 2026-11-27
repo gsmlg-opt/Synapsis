@@ -278,7 +278,9 @@ defmodule Synapsis.Backplane.SyncTest do
       )
 
     assert {:ok, first} = run_sync(connection, initial)
-    assert {:ok, repeated} = run_sync(connection, initial)
+    FailingSkillStore.configure([{1, :unexpected_write}])
+    assert {:ok, repeated} = run_sync(connection, initial, skill_store: FailingSkillStore)
+    assert repeated.status == "ready"
     assert repeated.artifacts == first.artifacts
     assert {:ok, [provider]} = Providers.list()
     assert [skill] = Skills.list()

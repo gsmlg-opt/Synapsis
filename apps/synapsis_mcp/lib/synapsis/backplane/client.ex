@@ -135,7 +135,6 @@ defmodule Synapsis.Backplane.Client do
          true <-
            is_integer(max_pages) and max_pages > 0 and
              max_pages <= @default_max_skill_protocol_pages,
-         :ok <- discovery_supported(opts),
          {:ok, client} <- skill_protocol_client(connection, opts) do
       source = Backplane.new!(client)
 
@@ -157,13 +156,12 @@ defmodule Synapsis.Backplane.Client do
   @doc "Search metadata independently of complete source reconciliation."
   def search_protocol_skills(%Connection{} = connection, query, opts \\ []) do
     with {:ok, current} <- Connection.runtime(connection),
-         :ok <- discovery_supported(view: :search),
          {:ok, client} <- skill_protocol_client(current, opts),
          {:ok, page} <-
-           apply(Backplane, :search, [
+           Backplane.search(
              Backplane.new!(client),
              [q: query] ++ Keyword.take(opts, [:limit, :cursor])
-           ]) do
+           ) do
       {:ok, %{data: Enum.map(page.data, &protocol_skill_map/1), next_cursor: page.next_cursor}}
     else
       {:error, reason} -> {:error, skill_protocol_error(reason)}
@@ -172,29 +170,13 @@ defmodule Synapsis.Backplane.Client do
 
   @doc "Create one remote skill once, using the source's current credential."
   def create_protocol_skill(%Connection{} = connection, attributes, opts \\ []) do
-    # TODO(upstream): gsmlg-opt/backplane#193 — pin the published authoring SDK.
     with {:ok, current} <- Connection.runtime(connection),
-         true <-
-           Code.ensure_loaded?(SkillProtocolClient) and
-             function_exported?(SkillProtocolClient, :create, 3),
          {:ok, client} <- skill_protocol_client(current, Keyword.put(opts, :max_attempts, 1)),
-         {:ok, manifest} <- apply(SkillProtocolClient, :create, [client, attributes, []]) do
+         {:ok, manifest} <- SkillProtocolClient.create(client, attributes) do
       {:ok, manifest}
     else
-      false -> {:error, {:skill_protocol, :unsupported_capability}}
       {:error, reason} -> {:error, skill_protocol_error(reason)}
     end
-  end
-
-  # TODO(upstream): gsmlg-opt/backplane#193 — pin the published discovery SDK.
-  # Old SDKs can ignore view and return the full catalog. Refuse before any I/O.
-  defp discovery_supported(opts) do
-    if is_nil(opts[:view]) or
-         (Code.ensure_loaded?(Elixir.Backplane.SkillProtocol.Wire) and
-            function_exported?(Elixir.Backplane.SkillProtocol.Wire, :decode_catalog, 3) and
-            Code.ensure_loaded?(Backplane) and function_exported?(Backplane, :search, 2)),
-       do: :ok,
-       else: {:error, {:skill_protocol, :unsupported_capability}}
   end
 
   def fetch_skill(%Connection{} = connection, slug, opts \\ []) when is_binary(slug) do
@@ -585,10 +567,11 @@ defmodule Synapsis.Backplane.Client do
       "artifact_digest" => descriptor.artifact_digest,
       "publication_status" => to_string(descriptor.publication_status),
       "enabled" => descriptor.publication_status == "ready",
-      "disable_model_invocation" => Map.get(descriptor, :disable_model_invocation, false),
+      "disable_model_invocation" => descriptor.disable_model_invocation,
       "content_available" =>
         is_binary(descriptor.revision) and is_binary(descriptor.artifact_digest)
     }
+    |> Map.reject(fn {_key, value} -> is_nil(value) end)
   end
 
   defp skill_protocol_error(%{code: code}) when is_atom(code), do: {:skill_protocol, code}
