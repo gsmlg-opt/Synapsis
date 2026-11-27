@@ -24,8 +24,11 @@ MAX_BUFFER_BYTES = RATE * 2 * 3
 MAX_PLAYBACK_FRAMES = RATE * 2 * 45 // FRAME_BYTES
 PLAYBACK_BUFFER_FRAMES = 6
 PLAYBACK_PREBUFFER_FRAMES = 3
-PLAYBACK_PREROLL_SECONDS = 0.10
-PLAYBACK_DRAIN_IDLE_SECONDS = 0.12
+# Start a full burst immediately. A small first delta needs enough lead for
+# later 24 kHz packets arriving at irregular intervals.
+PLAYBACK_PREROLL_SECONDS = 0.36
+PLAYBACK_PREROLL_FRAMES = math.ceil(PLAYBACK_PREROLL_SECONDS * RATE * 2 / FRAME_BYTES)
+PLAYBACK_DRAIN_IDLE_SECONDS = 0.50
 WRITE_LOCK = threading.Lock()
 
 
@@ -392,7 +395,7 @@ class Endpoint:
                     now = time.monotonic()
                     if preroll_until is None:
                         preroll_until = now + PLAYBACK_PREROLL_SECONDS
-                    if now < preroll_until:
+                    if self.playback.qsize() < PLAYBACK_PREROLL_FRAMES and now < preroll_until:
                         self.closed.wait(min(0.02, preroll_until - now))
                         continue
                     preroll_until = None

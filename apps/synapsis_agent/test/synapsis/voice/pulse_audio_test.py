@@ -32,53 +32,52 @@ class CursorTest(unittest.TestCase):
             endpoint.handle(command)
         self.assertEqual(endpoint.playback.qsize(), module.RATE * 2 * 30 // module.FRAME_BYTES)
 
-    def test_playback_bridges_short_delivery_gaps_and_drains_after_idle(self):
+    def test_playback_absorbs_bursty_audio_without_gaps_or_intermediate_drains(self):
         endpoint = module.Endpoint.__new__(module.Endpoint)
-        endpoint.closed = Mock(wraps=module.threading.Event())
+        endpoint.closed = module.threading.Event()
         endpoint.controls = module.queue.Queue()
-        endpoint.playback = Mock()
         endpoint.output = Mock()
-        endpoint.output.latency_samples.return_value = 240
         endpoint.tracker = module.PlaybackTracker()
         endpoint.drained_total = 0
-        clock = 1.0
-        frame = b'\0' * module.FRAME_BYTES
+        clock = 0.0
+        sink_end = 0.0
+        starts, gaps = [], []
         metadata = {'response_id': 'r', 'item_id': 'i', 'content_index': 0}
-        deliveries = iter([(1.10, frame), (1.12, None), (1.16, frame),
-                           (1.26, None), (1.30, None)])
-        drained_at = []
-        wrote_at = []
-
+        # Observed 100, 150 and 250 ms deltas from a real call.
+        arrivals = [(0.0, 100), (0.180, 150), (0.584, 250), (0.584, 250), (0.882, 250)]
+        class Delivery(module.queue.Queue):
+            def get(self, *args, **kwargs):
+                if self.empty():
+                    advance(kwargs.get('timeout', 0))
+                return super().get(block=False)
+        endpoint.playback = Delivery()
         def advance(seconds):
             nonlocal clock
             clock += seconds
-            if drained_at:
-                endpoint.closed.set()
-
-        def deliver(**_):
-            nonlocal clock
-            item = next(deliveries, None)
-            if item is None:
-                endpoint.closed.set()
-                raise module.queue.Empty()
-            expected, data = item
-            clock = max(clock, expected)
-            if data is None:
-                raise module.queue.Empty()
-            return data, metadata
-
-        endpoint.playback.get.side_effect = deliver
-        endpoint.playback.empty.side_effect = lambda: bool(drained_at)
-        endpoint.closed.wait.side_effect = advance
-        endpoint.output.write.side_effect = lambda _: wrote_at.append(clock)
-        endpoint.output.drain.side_effect = lambda: drained_at.append(clock)
-        with patch.object(module.time, 'monotonic', side_effect=lambda: clock), \
+            while arrivals and arrivals[0][0] <= clock:
+                _, ms = arrivals.pop(0)
+                endpoint.handle({'command': 'play', 'metadata': metadata,
+                                 'pcm': module.base64.b64encode(bytes(ms * 48)).decode()})
+        def write(data):
+            nonlocal sink_end
+            if starts:
+                gaps.append(max(0, clock - sink_end))
+            starts.append(clock)
+            sink_end = max(clock, sink_end) + len(data) / (2 * module.RATE)
+            advance(max(0, sink_end - clock - 0.12))
+        advance(0)
+        endpoint.output.write.side_effect = write
+        endpoint.output.latency_samples.side_effect = lambda: round(max(0, sink_end - clock) * module.RATE)
+        endpoint.output.drain.side_effect = endpoint.closed.set
+        with patch.object(endpoint.closed, 'wait', side_effect=advance), \
+             patch.object(module.time, 'monotonic', side_effect=lambda: clock), \
              patch.object(module, 'emit') as emit:
             endpoint.play()
-        self.assertEqual(wrote_at, [1.10, 1.16])
-        self.assertEqual(drained_at, [1.30])
-        self.assertEqual(endpoint.drained_total, module.FRAME_BYTES)
-        self.assertEqual(emit.call_args.args[0]['cursor']['played_samples'], module.FRAME_BYTES)
+        self.assertLessEqual(starts[0], 0.38)
+        self.assertLess(max(gaps), 0.001)
+        self.assertEqual(endpoint.drained_total, module.RATE)
+        self.assertEqual(emit.call_args.args[0]['cursor']['played_samples'], module.RATE)
+        endpoint.output.drain.assert_called_once()
 
     def test_saved_volumes_are_applied_to_the_selected_devices(self):
         volumes = {'microphone': 100, 'speaker': 40}
