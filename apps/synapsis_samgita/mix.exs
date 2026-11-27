@@ -36,7 +36,7 @@ defmodule SynapsisSamgita.MixProject do
       {:samgita_protocol_websocket, "~> 0.5.0"},
       {:websock_adapter, "~> 0.16.6", hex: :gaoxy_websock_adapter, override: true},
       {:gaoxy_test, "~> 0.16.6", only: :test},
-      {:formata, "~> 0.3.5"},
+      {:formata, "~> 0.4"},
       {:http_fetch, "~> 1.0.0-rc.20"}
     ]
   end

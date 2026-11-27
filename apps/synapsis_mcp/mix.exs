@@ -36,7 +36,7 @@ defmodule SynapsisMcp.MixProject do
       {:backplane_mcp_protocol, "~> 1.10.98"},
       {:backplane_skill_protocol, "~> 1.10.103"},
       {:gaoxy_test, "~> 0.16.6", only: :test},
-      {:formata, "~> 0.3.5"},
+      {:formata, "~> 0.4"},
       {:http_fetch, "~> 1.0.0-rc.20"}
     ]
   end

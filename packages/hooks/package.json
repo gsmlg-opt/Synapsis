@@ -1,18 +1,18 @@
 {
-  "name": "@synapsis/hooks",
-  "version": "0.0.1",
-  "private": true,
-  "type": "module",
-  "main": "src/index.ts",
   "dependencies": {
-    "@duskmoon-dev/components": "2.0.0-rc.4",
-    "react": "19.3.1",
+    "@duskmoon-dev/components": "2.2.0",
     "phoenix": "file:../../deps/phoenix",
     "phoenix_html": "file:../../deps/phoenix_html",
     "phoenix_live_view": "file:../../deps/phoenix_live_view",
-    "preact": "^11.2.0"
+    "preact": "^11.2.0",
+    "react": "19.3.1"
   },
   "devDependencies": {
-    "@types/react": "19.3.0"
-  }
+    "@types/react": "19.3.3"
+  },
+  "main": "src/index.ts",
+  "name": "@synapsis/hooks",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1"
 }

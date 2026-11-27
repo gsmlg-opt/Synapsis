@@ -65,7 +65,8 @@ defmodule Synapsis.LocalAgentConfig do
         |> validate_required([:url, :repository])
         |> validate_change(:url, fn :url, url ->
           case URI.parse(url) do
-            %URI{scheme: scheme, host: host} when scheme in ["ws", "wss"] and host not in [nil, ""] ->
+            %URI{scheme: scheme, host: host}
+            when scheme in ["ws", "wss"] and host not in [nil, ""] ->
               []
 
             _ ->

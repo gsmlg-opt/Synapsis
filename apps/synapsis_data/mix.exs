@@ -39,7 +39,7 @@ defmodule SynapsisData.MixProject do
       {:concord, "~> 3.1.18"},
       {:crontab, "~> 1.2.1"},
       {:file_system, "~> 1.0"},
-      {:formata, "~> 0.3.5"}
+      {:formata, "~> 0.4"}
     ]
   end
 

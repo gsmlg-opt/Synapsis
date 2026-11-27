@@ -41,7 +41,7 @@ defmodule SynapsisCore.MixProject do
       {:tzdata, "~> 1.2.2"},
       {:file_system, "~> 1.0"},
       {:gaoxy_test, "~> 0.16.6", only: :test},
-      {:formata, "~> 0.3.5"},
+      {:formata, "~> 0.4"},
       {:http_fetch, "~> 1.0.0-rc.20"}
     ]
   end

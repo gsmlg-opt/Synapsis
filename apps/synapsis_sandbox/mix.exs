@@ -28,7 +28,7 @@ defmodule SynapsisSandbox.MixProject do
   defp deps do
     [
       {:synapsis_core, in_umbrella: true},
-      {:formata, "~> 0.3.5"}
+      {:formata, "~> 0.4"}
     ]
   end
 end

@@ -31,7 +31,7 @@ defmodule SynapsisLocalAgents.MixProject do
       {:synapsis_data, in_umbrella: true},
       {:samgita_codex_driver, "~> 0.5.0"},
       {:samgita_protocol_websocket, "~> 0.5.0"},
-      {:formata, "~> 0.3.5"}
+      {:formata, "~> 0.4"}
     ]
   end
 end

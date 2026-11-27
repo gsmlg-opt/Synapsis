@@ -17,9 +17,16 @@ defmodule Synapsis.SamgitaConfig do
   @type secret :: :app_server_token | :agent_credential
 
   @id "default"
-  @fields %{app_server_token: "app_server_token_encrypted", agent_credential: "agent_credential_encrypted"}
+  @fields %{
+    app_server_token: "app_server_token_encrypted",
+    agent_credential: "agent_credential_encrypted"
+  }
 
-  @spec get() :: %{base_url: String.t() | nil, app_server_token?: boolean, agent_credential?: boolean}
+  @spec get() :: %{
+          base_url: String.t() | nil,
+          app_server_token?: boolean,
+          agent_credential?: boolean
+        }
   def get do
     raw = raw()
 
@@ -46,7 +53,8 @@ defmodule Synapsis.SamgitaConfig do
     end
   end
 
-  @spec resolve_secret(secret) :: {:ok, String.t()} | {:error, :not_configured | :credential_unavailable}
+  @spec resolve_secret(secret) ::
+          {:ok, String.t()} | {:error, :not_configured | :credential_unavailable}
   def resolve_secret(kind) when is_map_key(@fields, kind) do
     case raw()[Map.fetch!(@fields, kind)] do
       nil -> {:error, :not_configured}
@@ -79,7 +87,8 @@ defmodule Synapsis.SamgitaConfig do
 
   defp validate_url(url) do
     case URI.parse(url) do
-      %URI{scheme: scheme, host: host} when scheme in ["http", "https"] and is_binary(host) and host != "" ->
+      %URI{scheme: scheme, host: host}
+      when scheme in ["http", "https"] and is_binary(host) and host != "" ->
         {:ok, String.trim_trailing(url, "/")}
 
       _ ->

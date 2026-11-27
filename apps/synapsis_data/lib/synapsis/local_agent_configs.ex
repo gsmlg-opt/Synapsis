@@ -38,7 +38,8 @@ defmodule Synapsis.LocalAgentConfigs do
   def update(%LocalAgentConfig{id: id}, attrs) when is_map(attrs) do
     Store.with_write_lock(fn ->
       with {:ok, current} <- Store.get(@store_type, id),
-           changeset = LocalAgentConfig.changeset(to_struct(current), Map.drop(attrs, [:id, "id"])),
+           changeset =
+             LocalAgentConfig.changeset(to_struct(current), Map.drop(attrs, [:id, "id"])),
            {:ok, record} <- Ecto.Changeset.apply_action(changeset, :update),
            {:ok, merged} <- Store.replace_existing(@store_type, id, to_store_map(record)) do
         {:ok, to_struct(merged)}
@@ -81,8 +82,11 @@ defmodule Synapsis.LocalAgentConfigs do
           {:ok, String.t()} | {:error, :not_configured | :credential_unavailable}
   def resolve_token(id) do
     case get(id) do
-      %LocalAgentConfig{token_encrypted: encrypted} when is_binary(encrypted) -> decrypt(encrypted)
-      _ -> {:error, :not_configured}
+      %LocalAgentConfig{token_encrypted: encrypted} when is_binary(encrypted) ->
+        decrypt(encrypted)
+
+      _ ->
+        {:error, :not_configured}
     end
   end
 
@@ -101,7 +105,9 @@ defmodule Synapsis.LocalAgentConfigs do
   end
 
   defp to_struct(map) do
-    record = %LocalAgentConfig{} |> LocalAgentConfig.changeset(map) |> Ecto.Changeset.apply_changes()
+    record =
+      %LocalAgentConfig{} |> LocalAgentConfig.changeset(map) |> Ecto.Changeset.apply_changes()
+
     %{record | id: map["id"] || record.id, token_encrypted: map["token_encrypted"]}
   end
 

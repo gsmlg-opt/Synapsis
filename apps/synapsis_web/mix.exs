@@ -37,18 +37,18 @@ defmodule SynapsisWeb.MixProject do
       {:synapsis_workspace, in_umbrella: true},
       {:synapsis_samgita, in_umbrella: true},
       {:synapsis_local_agents, in_umbrella: true},
-      {:phoenix, "~> 1.8.17"},
+      {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.2"},
-      {:phoenix_live_view, "~> 1.2.15"},
-      {:duskmoon_phoenix, "2.0.0-rc.4"},
+      {:phoenix_live_view, "~> 1.2"},
+      {:duskmoon_phoenix, "~> 2.0"},
       {:gettext, "~> 1.0"},
-      {:gaoxy_test, "~> 0.16.6", only: :test},
-      {:websock_adapter, "~> 0.16.6", hex: :gaoxy_websock_adapter, override: true},
-      {:duskmoon_bundler_runtime, "~> 10.1.12"},
-      {:duskmoon_bundler, "~> 10.1.12", runtime: Mix.env() in [:dev, :test]},
+      {:gaoxy_test, "~> 0.16", only: :test},
+      {:websock_adapter, "~> 0.16", hex: :gaoxy_websock_adapter, override: true},
+      {:duskmoon_bundler_runtime, "~> 10.1"},
+      {:duskmoon_bundler, "~> 10.1", runtime: Mix.env() in [:dev, :test]},
       {:lazy_html, "~> 0.1.13"},
-      {:formata, "~> 0.3.5"},
-      {:http_fetch, "~> 1.0.0-rc.20"}
+      {:formata, "~> 0.4"},
+      {:http_fetch, "~> 1.0"}
     ]
   end
 

@@ -33,7 +33,7 @@ defmodule SynapsisProvider.MixProject do
       {:phoenix_pubsub, "~> 2.4.1"},
       {:backplane_ai_protocol, "~> 1.10.98"},
       {:gaoxy_test, "~> 0.16.6", only: :test},
-      {:formata, "~> 0.3.5"},
+      {:formata, "~> 0.4"},
       {:http_fetch, "~> 1.0.0-rc.20"},
       {:http_web_socket, "~> 1.0.0-rc.20"}
     ]
