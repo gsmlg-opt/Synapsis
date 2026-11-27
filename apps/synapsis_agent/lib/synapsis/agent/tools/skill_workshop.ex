@@ -85,13 +85,15 @@ defmodule Synapsis.Agent.Tools.SkillWorkshop do
     with {:ok, context} <- execution_context(native),
          {:ok, _} <-
            classify(context, CatalogBinding.classification_operation(operation, context)),
-         :ok <- current_scope(context.scope),
-         {:ok, deadline} <- effect_deadline(native),
+         scope = context.scope,
+         :ok <- current_scope(scope),
+         getter = native[:effect_deadline],
+         {:ok, deadline} <- effect_deadline(getter),
          true <- is_map(native[:catalog_snapshot]) and is_function(native[:stage_catalog], 1),
-         assert_live = fn -> check_live(native, context.scope, deadline) end,
+         assert_live = fn -> check_live(getter, scope, deadline) end,
          :ok <- assert_live.(),
          {:ok, source} <-
-           Workshop.run(context.scope, operation.arguments, %{
+           Workshop.run(scope, operation.arguments, %{
              deadline: deadline,
              assert_live: assert_live,
              actor: "agent",
@@ -122,7 +124,7 @@ defmodule Synapsis.Agent.Tools.SkillWorkshop do
     native = operation.backend_context
 
     with %{"details" => %{"change" => %{}}} <- source,
-         {:ok, _} <- effect_deadline(native),
+         {:ok, _} <- effect_deadline(native[:effect_deadline]),
          {:ok, update} <- context.prepare_successor.(operation, native.catalog_snapshot),
          {:ok, %{status: :staged}} <- native.stage_catalog.(update) do
       :ok
@@ -252,8 +254,8 @@ defmodule Synapsis.Agent.Tools.SkillWorkshop do
     end
   end
 
-  defp check_live(native, scope, deadline) do
-    with {:ok, ^deadline} <- effect_deadline(native) do
+  defp check_live(getter, scope, deadline) do
+    with {:ok, ^deadline} <- effect_deadline(getter) do
       current_scope(scope)
     else
       {:ok, _} -> {:error, :stale_snapshot}
@@ -261,7 +263,7 @@ defmodule Synapsis.Agent.Tools.SkillWorkshop do
     end
   end
 
-  defp effect_deadline(%{effect_deadline: getter}) when is_function(getter, 0) do
+  defp effect_deadline(getter) when is_function(getter, 0) do
     with {:ok, %{deadline_ms: deadline, remaining_ms: remaining, paused: false}} <- getter.(),
          true <- is_integer(deadline) and is_integer(remaining) and remaining > 0 do
       {:ok, deadline}

@@ -120,6 +120,7 @@ defmodule Synapsis.SkillReader do
 
   defp body_view(_, _), do: {:error, :invalid_input}
 
+  defp rank(entries, "*", _view), do: Enum.sort_by(entries, &{&1.name, &1.binding.entry.locator})
   defp rank(entries, query, nil), do: SkillSearch.rank(entries, query)
   defp rank(entries, query, %{index: index}), do: SkillSearch.rank(entries, query, index)
 

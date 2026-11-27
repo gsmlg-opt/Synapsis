@@ -109,6 +109,64 @@ defmodule Synapsis.Agent.Tools.SkillsTest do
              )
   end
 
+  test "a wildcard lists assigned metadata without matching names or skill bodies", ctx do
+    assert {:ok, %{structured: %{results: [hit], truncated: false}}} =
+             Skills.execute(operation(ctx, @search, %{"query" => "*"}))
+
+    assert hit.name == "review"
+    assert hit.locator == ctx.locator
+    refute Map.has_key?(hit, :content)
+  end
+
+  test "searching an assigned skill body keeps the pinned tool catalog outside the reader heap",
+       ctx do
+    catalog_id = make_ref()
+    cache = start_supervised!({Synapsis.Agent.Tools.SkillBodyCache, catalog_id: catalog_id})
+    [binding] = SkillReader.bindings(ctx.context.snapshot)
+
+    prepared = %{
+      catalog_id: catalog_id,
+      availability: :reader,
+      targets: %{SkillReader.binding_key(binding) => :allow}
+    }
+
+    context =
+      Map.merge(ctx.context, %{
+        catalog_id: catalog_id,
+        body_cache: %{pid: cache, catalog_id: catalog_id},
+        prepare_search: fn _, _ ->
+          :erlang.garbage_collect()
+          {:ok, prepared}
+        end
+      })
+
+    {:ok, [descriptor, _]} = Skills.descriptors(context)
+    other = %{schema: %{enum: List.duplicate("option", 1024)}}
+    tools = Map.put(Map.new(1..512, &{"tool-#{&1}", other}), @search, descriptor)
+    catalog = %{revision: 1, authority: authority(), registry: %{tools: tools}}
+    deadline = System.monotonic_time(:millisecond) + 5_000
+
+    native =
+      Map.merge(context, %{
+        catalog_snapshot: catalog,
+        effect_deadline: fn ->
+          {:ok,
+           %{
+             deadline_ms: deadline,
+             remaining_ms: deadline - System.monotonic_time(:millisecond),
+             paused: false
+           }}
+        end
+      })
+
+    op = operation(ctx, @search, %{"query" => "instructions"})
+
+    assert {:ok, %{structured: %{results: [hit]}}} =
+             Skills.execute(%{op | backend_context: native})
+
+    assert hit.record_id == ctx.record.id
+  end
+
   test "search publishes metadata and read publishes inert text plus citation", ctx do
     assert {:ok, %{content: text, structured: %{results: [hit]}}} =
              Skills.execute(operation(ctx, @search, %{"query" => "review"}))

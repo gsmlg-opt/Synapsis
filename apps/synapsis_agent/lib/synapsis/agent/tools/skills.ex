@@ -96,7 +96,7 @@ defmodule Synapsis.Agent.Tools.Skills do
     {description, properties, required} =
       case name do
         @search ->
-          {"Search assigned and Agent-private learned skills. Pass source_id to search an enabled Backplane source, including unassigned metadata. Results identify assignment requirements. Read complete instructions before applying a skill.",
+          {"Search assigned and Agent-private learned skills. To list currently usable skills, pass query=\"*\" without source_id. Pass source_id to search an enabled Backplane source, including unassigned metadata. Results identify assignment requirements. Read complete instructions before applying a skill.",
            %{
              "query" => %{"type" => "string", "minLength" => 1, "maxLength" => 2048},
              "limit" => %{"type" => "integer", "minimum" => 1, "maximum" => 20},
@@ -274,7 +274,7 @@ defmodule Synapsis.Agent.Tools.Skills do
         end
       end
 
-      with {:ok, view} <- search_view(context, prepared, deadline, recheck),
+      with {:ok, view} <- search_view(args["query"], context, prepared, deadline, recheck),
            :ok <- recheck.(),
            {:ok, result} <-
              SkillReader.search(context.snapshot, args["query"],
@@ -306,13 +306,15 @@ defmodule Synapsis.Agent.Tools.Skills do
 
   defp effect_deadline(_), do: {:error, :invalid_context}
 
-  defp search_view(context, %{availability: :metadata_only}, _deadline, recheck) do
+  defp search_view("*", _context, _prepared, _deadline, _recheck), do: {:ok, nil}
+
+  defp search_view(_query, context, %{availability: :metadata_only}, _deadline, recheck) do
     with :ok <- recheck.() do
       {:ok, finished_view(context.snapshot, [], 0)}
     end
   end
 
-  defp search_view(context, prepared, deadline, recheck) do
+  defp search_view(_query, context, prepared, deadline, recheck) do
     with :ok <- recheck.() do
       case SkillBodyCache.claim(context.body_cache, context.catalog_id) do
         {:ready, view} ->
@@ -330,7 +332,8 @@ defmodule Synapsis.Agent.Tools.Skills do
 
         {:owner, claim} ->
           try do
-            with {:ok, view} <- build_view(context.snapshot, prepared.targets, deadline, recheck),
+            with {:ok, view} <-
+                   build_authorized_view(context.snapshot, prepared.targets, deadline, recheck),
                  :ok <- recheck.(),
                  :ok <- SkillBodyCache.complete(context.body_cache, claim, view) do
               {:ok, view}
@@ -368,6 +371,31 @@ defmodule Synapsis.Agent.Tools.Skills do
       entry.enabled and entry.prompt_visible and
         (entry.authority != :backplane or (is_binary(entry.revision) and entry.revision != ""))
     end)
+  end
+
+  # Keep the pinned runtime catalog in the effect's linked checker. Copying its
+  # recheck closure into each heap-limited body reader can exhaust the reader
+  # before it even examines the selected skill.
+  defp build_authorized_view(snapshot, targets, deadline, recheck) do
+    {:ok, checker} = Agent.start_link(fn -> recheck end)
+
+    try do
+      build_view(snapshot, targets, deadline, fn ->
+        remaining = deadline - System.monotonic_time(:millisecond)
+
+        if remaining > 0 do
+          try do
+            Agent.get(checker, fn check -> check.() end, remaining)
+          catch
+            :exit, {:timeout, _} -> {:error, :timeout}
+          end
+        else
+          {:error, :timeout}
+        end
+      end)
+    after
+      Agent.stop(checker, :normal, 5_000)
+    end
   end
 
   defp build_view(snapshot, targets, deadline, recheck) do
@@ -463,9 +491,11 @@ defmodule Synapsis.Agent.Tools.Skills do
     entries =
       Enum.map_join(results, "\n", fn hit ->
         status =
-          if Map.get(hit, :assignment_required),
-            do: "\nAgent assignment required before reading.",
-            else: ""
+          case hit do
+            %{assignment_required: true} -> "\nAgent assignment required before reading."
+            %{readable: true} -> "\nAssigned to this Agent and readable."
+            _ -> ""
+          end
 
         "#{hit.name}: #{hit.description}\nSource: #{hit.locator}" <> status
       end)

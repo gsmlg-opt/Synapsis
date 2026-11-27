@@ -20,7 +20,7 @@ OpenClaw 只作为**产品形态参考**（常驻、记忆、技能、自动化�
 - Skills、MCP、Memory 与 Sigma 等其他 Backplane agent 共享相同的运行时代码和调用方式，Synapsis 不另造一套协议。
 - 存储沿用 ADR-006：会话进程是在途回合的读权威，Concord 保存每回合快照，配置为 TOML，记忆为文件。
 
-原生 Agent 在 Skills 配置中选择 Backplane 发现来源，保存为 `config["backplane_skill_source_ids"]`。会话独立读取来源的常驻摘要。该来源已分配的其他技能仍可搜索与读取。`synapsis::skills_search` 的 `source_id` 参数搜索该来源，其结果带精确 revision/digest 和分配条件。完整清单同步继续更新可分配记录，发现结果通过既有 `skill_ids` 分配约束读取。`synapsis::skills_read` 的可选 `resource` 读取同一已验证包中列出的相对文件，读取结束清理临时目录。常驻发现与搜索需要兼容的 Skill Protocol SDK 和服务端，旧版本返回 `unsupported_capability`。依赖发布跟踪见 [backplane#193](https://github.com/gsmlg-opt/backplane/issues/193)。
+原生 Agent 在 Skills 配置中选择 Backplane 发现来源，保存为 `config["backplane_skill_source_ids"]`。会话独立读取来源的常驻摘要。使用 `synapsis::skills_search(query="*")` 并省略 `source_id`，可列出当前 Agent 有权自动使用的已分配技能和私有技能，结果遵循 `limit` 并标明截断。该来源已分配的其他技能仍可搜索与读取。`synapsis::skills_search` 的 `source_id` 参数搜索该来源，其结果带精确 revision/digest 和分配条件。完整清单同步继续更新可分配记录，发现结果通过既有 `skill_ids` 分配约束读取。`synapsis::skills_read` 的可选 `resource` 读取同一已验证包中列出的相对文件，读取结束清理临时目录。常驻发现与搜索通过 Backplane Skill Protocol SDK 调用。未确认发现视图的旧服务端返回 `unsupported_capability`。
 
 `synapsis::skills_create` 使用来源当前凭据创建 Backplane 技能，必填 `source_id`、小写连字符 `slug`、显示名称 `name`、`description` 与 Markdown 正文 `content`。新 Agent 沿用原生写工具默认策略。已有 Agent 可在 Agent → Tools 页面创建或编辑 Toolset，于 Workflow 分类选中该工具，再在具体 Agent 的 Tools 配置选择这个 Toolset，并在 Skills 选择目标 Backplane 发现来源。来源凭据需要 `skill::write` 权限。创建返回精确版本引用，分配与常驻展示由各自配置管理。私有技能继续通过 `synapsis::skill_workshop` 编辑。
 

@@ -381,7 +381,7 @@ defmodule Synapsis.Agent.ContextBuilder do
     case agent[:remote_skill_discovery] do
       %{sources: sources, errors: errors} when sources != [] or map_size(errors) > 0 ->
         guidance =
-          "Search Backplane sources with synapsis::skills_search and source_id. Read only assigned results with their exact locator. Unassigned results require the user to assign the skill in Agent settings."
+          "For the skills this Agent can use now, call synapsis::skills_search with query=\"*\" and omit source_id. To discover other skills, search Backplane sources with source_id. Read only assigned results with their exact locator. Unassigned results require the user to assign the skill in Agent settings."
 
         source_text =
           Enum.map_join(sources, "\n", fn source ->

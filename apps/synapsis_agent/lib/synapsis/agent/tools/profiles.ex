@@ -363,7 +363,15 @@ defmodule Synapsis.Agent.Tools.Profiles do
       reader = Map.get(catalog.registry.tools, "synapsis::skills_read")
       paired = Map.get(snapshot.issued_descriptors, "synapsis::skills_read")
 
-      if is_map(reader) and reader === paired and reader.backend == Skills and
+      # Cloud bodies are read only by explicit locator. Searching a cloud-only
+      # assignment needs metadata, even when the paired reader is authorized.
+      indexable? =
+        Enum.any?(SkillReader.bindings(snapshot.skill_snapshot), fn %{entry: entry} ->
+          entry.enabled and entry.prompt_visible and
+            entry.loader.type in [:inline, :local, :workshop]
+        end)
+
+      if indexable? and is_map(reader) and reader === paired and reader.backend == Skills and
            reader.tool_revision == search.tool_revision and
            reader.backend_context === search.backend_context do
         binding = Map.fetch!(projected.selected, "synapsis::skills_read")
