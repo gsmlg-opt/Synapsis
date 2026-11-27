@@ -5687,9 +5687,9 @@
         "version": "1.10.98"
       },
       "backplane_skill_protocol": {
-        "outer_checksum": "fd258b1fe8482a231e7b180dcff96c6224198a84952d636e2c143eb44b52a78d",
-        "package_checksum": "bf0ad59936ac3745eb8f9fc336c7631472aaf02a4f7e0113b2a0d8694175aac4",
-        "version": "1.10.98"
+        "outer_checksum": "54af1acc75b8e9058853e7939bf5611a9c55e5da3a2ab90decc3dfda1b22637e",
+        "package_checksum": "544939fa596e5fa9bb6b02879e69a1debb6529257d146ac5ef5d733c54025f07",
+        "version": "1.10.103"
       },
       "formata": {
         "outer_checksum": "6aa9db0069420c340a21d88eea87f74728300b88ff6ceb8f08207626413dcef2",

@@ -1,7 +1,7 @@
 defmodule SynapsisCore.MixProject do
   use Mix.Project
 
-  @version "0.4.1"
+  @version "0.4.2"
 
   def project do
     [
@@ -34,11 +34,7 @@ defmodule SynapsisCore.MixProject do
       {:synapsis_data, in_umbrella: true},
       {:synapsis_provider, in_umbrella: true},
       {:backplane_agent_runtime, "~> 1.10.98"},
-      {:backplane_skill_protocol,
-       git: "https://github.com/gsmlg-opt/backplane.git",
-       ref: "d0ca5382c0d9b7a30ba6edc94487d788cdedd3c5",
-       sparse: "apps/backplane_skill_protocol",
-       depth: 1},
+      {:backplane_skill_protocol, "~> 1.10.103"},
       {:phoenix_pubsub, "~> 2.4.1"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
