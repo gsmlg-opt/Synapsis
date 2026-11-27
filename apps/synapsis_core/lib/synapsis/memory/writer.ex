@@ -4,7 +4,6 @@ defmodule Synapsis.Memory.Writer do
   Implements the observer pattern — the agent loop does not change.
   """
   use GenServer
-  require Logger
 
   @pubsub Synapsis.PubSub
 

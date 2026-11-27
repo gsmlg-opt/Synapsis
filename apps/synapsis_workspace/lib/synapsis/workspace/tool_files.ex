@@ -129,7 +129,6 @@ defmodule Synapsis.Workspace.ToolFiles do
       )
     else
       false -> {:error, :invalid_input}
-      :denied -> {:error, :permission_denied}
       error -> error
     end
   end

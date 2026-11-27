@@ -137,7 +137,7 @@ defmodule Synapsis.Session.ReadSnapshotTailIndexFunctionalTest do
         Enum.map(records, & &1.key)
       end)
 
-    assert scanned_keys == Enum.map(1_002..0, &Store.turn_key(id, &1 * 7))
+    assert scanned_keys == Enum.map(1_002..0//-1, &Store.turn_key(id, &1 * 7))
 
     for {previous, next} <- Enum.zip(index_calls, Enum.drop(index_calls, 1)) do
       {:ok, _records, %{has_more: true, last_key: last_key}} = previous.result

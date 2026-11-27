@@ -465,8 +465,8 @@ defmodule Synapsis.Provider.MessageMapper do
       {:ok, json} ->
         {:ok, {:json, json}}
 
-      {:error, error} ->
-        Error.invalid("Tool call arguments are not JSON encodable: #{Exception.message(error)}")
+      {:error, :invalid_json} ->
+        Error.invalid("Tool call arguments are not JSON encodable")
     end
   end
 

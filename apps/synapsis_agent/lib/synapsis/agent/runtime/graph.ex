@@ -174,9 +174,6 @@ defmodule Synapsis.Agent.Runtime.Graph do
     end
   end
 
-  defp validate_destination(destination, _nodes),
-    do: {:error, {:invalid_destination, destination}}
-
   defp resolve_direct_destination(graph, current_node, selector) do
     case ensure_destination(graph, current_node, selector) do
       {:ok, destination} ->

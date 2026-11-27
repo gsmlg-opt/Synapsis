@@ -90,7 +90,6 @@ defmodule Synapsis.Agent.Tools.Web.Search do
       execute_ready(arguments, runtime, context.tool_name, trusted_opts)
     else
       {:error, %Error{} = error} -> ToolEffects.reject(operation, error)
-      _ -> failure(:execution_failure, "Search configuration is unavailable")
     end
   rescue
     _ -> failure(:unknown_outcome, "Search execution could not be observed")

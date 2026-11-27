@@ -1115,7 +1115,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
                           :if={length(toolset.tool_names || []) > 4}
                           class="text-[11px] text-on-surface-variant"
                         >
-                          +{length(toolset.tool_names || []) - 4}
+                          +{length(toolset.tool_names) - 4}
                         </span>
                       </span>
                     </span>
@@ -2570,8 +2570,6 @@ defmodule SynapsisWeb.AgentLive.Agents do
       _ -> default_workspace_path(agent, %{})
     end
   end
-
-  defp workspace_path(_agent), do: default_workspace_path(nil, %{})
 
   defp default_workspace_path(%AgentConfig{name: name}, _attrs) when name not in [nil, ""] do
     "~/.synapsis/agents/#{name}"

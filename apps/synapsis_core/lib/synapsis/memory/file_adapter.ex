@@ -12,7 +12,6 @@ defmodule Synapsis.Memory.FileAdapter do
   @behaviour Synapsis.Memory.Adapter
 
   use GenServer
-  require Logger
 
   @table :synapsis_memory_file_index
   @default_memory_dir Path.join(System.user_home!() || "/tmp", ".config/synapsis/memory")

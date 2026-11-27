@@ -172,7 +172,7 @@ defmodule Synapsis.Agent.Tools.SkillWorkshop do
   end
 
   defp input(%{tool_name: @name, arguments: %{"action" => action} = args}) do
-    with true <- is_map(args) and not is_struct(args) and Map.keys(args) -- @fields == [],
+    with true <- not is_struct(args) and Map.keys(args) -- @fields == [],
          true <- Enum.all?(args, fn {_, value} -> is_binary(value) and String.valid?(value) end),
          true <- action in @actions,
          {:ok, name} <- name(args, action),

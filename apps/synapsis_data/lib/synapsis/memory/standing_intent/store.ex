@@ -177,7 +177,8 @@ defmodule Synapsis.Memory.StandingIntent.Store do
         {:ok, 0, 0}
 
       {:ok,
-       %Record{
+       %{
+         __struct__: Record,
          value: %{schema: 1, kind: :generation, agent_id: ^agent_id, generation: generation},
          mod_revision: mod_revision
        }}
@@ -221,7 +222,7 @@ defmodule Synapsis.Memory.StandingIntent.Store do
     end
   end
 
-  defp row_compare(context, agent_id, revision, row, %Record{} = record) do
+  defp row_compare(context, agent_id, revision, row, %{__struct__: Record} = record) do
     with {:ok, previous} <- payload(record.value, agent_id, row["id"]),
          true <- previous["createdAt"] == row["createdAt"],
          :ok <- verify_order(context, agent_id, previous, revision) do
@@ -257,11 +258,11 @@ defmodule Synapsis.Memory.StandingIntent.Store do
     end
   end
 
-  defp order_entry(%Record{value: value} = record, agent_id) do
+  defp order_entry(%{__struct__: Record, key: key, value: value}, agent_id) do
     case value do
       %{schema: 1, kind: :order, agent_id: ^agent_id, id: id, created_at: created_at} ->
         if canonical_id?(id) and valid_time?(created_at) and
-             Map.get(record, :key) ==
+             key ==
                order_key(agent_id, %{"id" => id, "createdAt" => created_at}) do
           {:ok, id, created_at}
         else
@@ -362,8 +363,9 @@ defmodule Synapsis.Memory.StandingIntent.Store do
 
   defp directory_agents(records) do
     Enum.reduce_while(records, {:ok, []}, fn record, {:ok, agents} ->
-      with %Record{value: %{schema: 1, kind: :agent, agent_id: agent_id}} <- record,
-           {:ok, ^agent_id} <- directory_id(Map.get(record, :key)) do
+      with %{__struct__: Record, key: key, value: %{schema: 1, kind: :agent, agent_id: agent_id}} <-
+             record,
+           {:ok, ^agent_id} <- directory_id(key) do
         {:cont, {:ok, [agent_id | agents]}}
       else
         _ -> {:halt, {:error, :invalid_record}}
@@ -401,9 +403,10 @@ defmodule Synapsis.Memory.StandingIntent.Store do
       {:ok, [], %{has_more: false}} ->
         {:ok, nil}
 
-      {:ok, [%Record{mod_revision: mod_revision} = record], %{has_more: false}}
+      {:ok, [%{__struct__: Record, key: ^key, mod_revision: mod_revision} = record],
+       %{has_more: false}}
       when is_integer(mod_revision) and mod_revision > 0 and mod_revision <= revision ->
-        if Map.get(record, :key) == key, do: {:ok, record}, else: {:error, :invalid_record}
+        {:ok, record}
 
       {:ok, _, _} ->
         {:error, :invalid_record}

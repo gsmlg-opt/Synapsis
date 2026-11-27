@@ -200,7 +200,7 @@ defmodule Synapsis.SessionDirectory.Projection.PortSession do
 
   defp send_chunks(session, transfer_id, body, sequence) do
     size = min(byte_size(body), @history_raw_chunk)
-    <<chunk::binary-size(size), rest::binary>> = body
+    <<chunk::binary-size(^size), rest::binary>> = body
 
     with :ok <-
            history_control(session, %{

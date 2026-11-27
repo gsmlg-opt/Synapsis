@@ -12,8 +12,6 @@ defmodule Synapsis.Provider.OAuth.OpenAI do
   See: https://developers.openai.com/codex/auth
   """
 
-  require Logger
-
   @client_id "app_EMoamEEZ73f0CkXaXp7hrann"
   @auth_base_url "https://auth.openai.com"
   @verification_url "https://auth.openai.com/codex/device"

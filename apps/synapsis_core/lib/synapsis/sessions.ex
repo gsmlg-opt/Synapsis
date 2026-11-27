@@ -768,15 +768,11 @@ defmodule Synapsis.Sessions do
   end
 
   defp first_enabled_provider_name do
-    case Synapsis.Providers.list(enabled: true) do
-      {:ok, providers} ->
-        providers
-        |> Enum.filter(&Synapsis.Providers.runtime_available?/1)
-        |> Enum.find_value(&provider_name/1)
+    {:ok, providers} = Synapsis.Providers.list(enabled: true)
 
-      _ ->
-        nil
-    end
+    providers
+    |> Enum.filter(&Synapsis.Providers.runtime_available?/1)
+    |> Enum.find_value(&provider_name/1)
   end
 
   defp provider_name(%{name: name}) when is_binary(name) do

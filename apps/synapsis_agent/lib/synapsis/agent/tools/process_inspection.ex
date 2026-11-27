@@ -95,7 +95,6 @@ defmodule Synapsis.Agent.Tools.ProcessInspection do
       end
     else
       {:error, %Error{} = error} -> ToolEffects.reject(operation, error)
-      _ -> failure(:validation, "Command inspection invocation is unavailable")
     end
   catch
     :exit, _ -> failure(:unknown_outcome, "Command inspection acknowledgement is unavailable")

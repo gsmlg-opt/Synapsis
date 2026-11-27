@@ -15,10 +15,8 @@ defmodule Synapsis.Backplane.ProviderSource do
   end
 
   def available do
-    case Providers.list() do
-      {:ok, providers} -> Enum.filter(providers, &backplane?/1)
-      _ -> []
-    end
+    {:ok, providers} = Providers.list()
+    Enum.filter(providers, &backplane?/1)
   end
 
   def backplane?(provider) do

@@ -483,9 +483,7 @@ defmodule Synapsis.Session.ReadSnapshot do
     end
   end
 
-  defp valid_record?(%Record{} = record, revision) do
-    key = Map.get(record, :key)
-
+  defp valid_record?(%{__struct__: Record, key: key} = record, revision) do
     map_size(record) == map_size(%Record{}) + 1 and
       is_binary(key) and byte_size(key) in 1..4_096 and
       is_nil(record.value) and is_integer(record.create_revision) and record.create_revision > 0 and

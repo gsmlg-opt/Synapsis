@@ -7,7 +7,6 @@ defmodule Synapsis.Agent.Approval do
   """
 
   alias Synapsis.ToolApproval
-  require Logger
 
   @doc """
   Check the approval policy for a tool invocation.

@@ -10,8 +10,6 @@ defmodule Synapsis.Git do
   Commands run through a `Port` with an explicit timeout per guardrails.
   """
 
-  require Logger
-
   @timeout_ms 10_000
   @head_max_bytes 64
   @max_output_bytes 1_048_576

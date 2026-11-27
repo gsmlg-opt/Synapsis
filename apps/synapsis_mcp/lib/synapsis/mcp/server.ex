@@ -22,8 +22,6 @@ defmodule Synapsis.MCP.Server do
 
   use GenServer
 
-  require Logger
-
   alias Backplane.McpProtocol.Client, as: MCPClient
   alias Backplane.McpProtocol.MCP.Error, as: ProtocolError
   alias Backplane.McpProtocol.MCP.Response, as: ProtocolResponse

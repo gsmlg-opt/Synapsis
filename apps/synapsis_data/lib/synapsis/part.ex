@@ -8,7 +8,6 @@ defmodule Synapsis.Part do
   def type, do: :map
 
   def cast(%{} = part), do: {:ok, cast_part(part)}
-  def cast(part) when is_struct(part), do: {:ok, part}
   def cast(_), do: :error
 
   def load(%{} = data), do: {:ok, load_part(data)}

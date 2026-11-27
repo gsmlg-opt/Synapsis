@@ -106,7 +106,7 @@ defmodule Synapsis.Agent.Routine.Occurrence do
 
       %{status: "scheduled"} = occ ->
         occ
-        |> Map.merge(%{status: "claimed", claimed_at: now, attempt: occ.attempt || 1})
+        |> Map.merge(%{status: "claimed", claimed_at: now, attempt: occ.attempt})
         |> persist()
 
       %{status: status} = occ when status in @active_statuses ->

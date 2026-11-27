@@ -456,13 +456,13 @@ defmodule SynapsisCli.HTTPTest do
 
         {moon_offset, _length} = :binary.match(payload, "🌙")
         split_at = moon_offset + 2
-        <<first::binary-size(split_at), rest::binary>> = payload
+        <<first::binary-size(^split_at), rest::binary>> = payload
         {crlf_offset, _length} = :binary.match(rest, "\r\n\r\n")
         split_at = crlf_offset + 3
-        <<second::binary-size(split_at), rest::binary>> = rest
+        <<second::binary-size(^split_at), rest::binary>> = rest
         {lf_offset, _length} = :binary.match(rest, "\n\n")
         split_at = lf_offset + 1
-        <<third::binary-size(split_at), rest::binary>> = rest
+        <<third::binary-size(^split_at), rest::binary>> = rest
 
         Enum.reduce([first, second, third, rest], conn, fn chunk, conn ->
           assert {:ok, conn} = Plug.Conn.chunk(conn, chunk)

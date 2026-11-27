@@ -439,7 +439,7 @@ defmodule Synapsis.SkillWorkshop.Files do
 
   defp write_chunks(ctx, io, bytes) do
     count = min(@chunk, byte_size(bytes))
-    <<chunk::binary-size(count), rest::binary>> = bytes
+    <<chunk::binary-size(^count), rest::binary>> = bytes
 
     with :ok <- check(ctx), :ok <- :file.write(io, chunk), do: write_chunks(ctx, io, rest)
   end

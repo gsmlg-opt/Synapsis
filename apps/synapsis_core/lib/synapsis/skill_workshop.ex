@@ -497,7 +497,7 @@ defmodule Synapsis.SkillWorkshop do
          true <- old != new,
          [position] <- match_positions(before, old, 0, []) do
       size = byte_size(old)
-      <<prefix::binary-size(position), _::binary-size(size), suffix::binary>> = before
+      <<prefix::binary-size(^position), _::binary-size(^size), suffix::binary>> = before
       {:ok, prefix <> new <> suffix}
     else
       false -> {:error, :unchanged}

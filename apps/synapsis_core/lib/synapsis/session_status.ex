@@ -29,7 +29,6 @@ defmodule Synapsis.SessionStatus do
     else
       false -> {:error, :output_limit}
       {:error, reason} when is_atom(reason) -> {:error, reason}
-      _ -> {:error, :malformed_metadata}
     end
   end
 

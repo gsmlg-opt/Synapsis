@@ -653,7 +653,7 @@ defmodule SynapsisCli.Main do
         {:error, :sse_frame_too_large}
 
       {index, length} ->
-        <<frame::binary-size(index), _delimiter::binary-size(length), rest::binary>> = buffer
+        <<frame::binary-size(^index), _delimiter::binary-size(^length), rest::binary>> = buffer
         {:ok, frame, rest}
     end
   end

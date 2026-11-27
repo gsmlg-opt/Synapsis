@@ -1347,18 +1347,13 @@ defmodule Synapsis.Agent.Daemon.Execution do
 
   defp workspace_status(assistant_name) do
     prefix = "/agents/#{assistant_name || "main"}"
+    {:ok, resources} = Synapsis.Workspace.list(prefix, limit: 10, sort: :recent)
 
-    case Synapsis.Workspace.list(prefix, limit: 10, sort: :recent) do
-      {:ok, resources} ->
-        resources
-        |> Enum.take(10)
-        |> Enum.map_join("\n", fn resource ->
-          "- #{resource.path} (#{resource.kind})"
-        end)
-
-      _error ->
-        ""
-    end
+    resources
+    |> Enum.take(10)
+    |> Enum.map_join("\n", fn resource ->
+      "- #{resource.path} (#{resource.kind})"
+    end)
   rescue
     _error -> ""
   catch

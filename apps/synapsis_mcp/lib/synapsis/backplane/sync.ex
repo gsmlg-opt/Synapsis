@@ -283,17 +283,13 @@ defmodule Synapsis.Backplane.Sync do
   end
 
   defp managed_capability_state(connection) do
-    providers =
-      case Providers.list() do
-        {:ok, listed} ->
-          listed
-          |> Enum.filter(&owned?(&1.config, connection.id, "provider"))
-          |> Enum.map(&Map.take(&1, [:id, :name, :type, :base_url, :api_key_encrypted, :config]))
-          |> Enum.sort_by(& &1.id)
+    {:ok, listed} = Providers.list()
 
-        _error ->
-          []
-      end
+    providers =
+      listed
+      |> Enum.filter(&owned?(&1.config, connection.id, "provider"))
+      |> Enum.map(&Map.take(&1, [:id, :name, :type, :base_url, :api_key_encrypted, :config]))
+      |> Enum.sort_by(& &1.id)
 
     skills =
       connection.id
@@ -803,7 +799,7 @@ defmodule Synapsis.Backplane.Sync do
             marker(provider.config, "source_name") || capability.name
           )
 
-        Providers.update(id, %{config: Map.merge(provider.config || %{}, config)})
+        Providers.update(id, %{config: Map.merge(provider.config, config)})
       else
         {:ok, provider}
       end
@@ -1330,13 +1326,8 @@ defmodule Synapsis.Backplane.Sync do
   end
 
   defp find_provider(connection_id, external_id) do
-    case Providers.list() do
-      {:ok, providers} ->
-        Enum.find(providers, &owned?(&1.config, connection_id, "provider", external_id))
-
-      _error ->
-        nil
-    end
+    {:ok, providers} = Providers.list()
+    Enum.find(providers, &owned?(&1.config, connection_id, "provider", external_id))
   end
 
   defp owned_skills(connection_id, skill_store \\ Skills) do
@@ -1556,14 +1547,10 @@ defmodule Synapsis.Backplane.Sync do
   defp artifact_name(connection), do: "backplane-" <> connection.name
 
   defp available_provider_name(connection, current) do
-    names =
-      case Providers.list() do
-        {:ok, providers} ->
-          providers |> Enum.reject(&(&1.id == id_of(current))) |> Enum.map(& &1.name)
+    {:ok, providers} = Providers.list()
 
-        _error ->
-          []
-      end
+    names =
+      providers |> Enum.reject(&(&1.id == id_of(current))) |> Enum.map(& &1.name)
 
     available_name(connection, names)
   end

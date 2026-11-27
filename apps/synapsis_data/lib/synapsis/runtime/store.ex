@@ -97,7 +97,7 @@ defmodule Synapsis.Runtime.Store do
 
     with {:ok, pairs} <- scan_facts(prefix) do
       facts =
-        Map.new(pairs, fn {<<_::binary-size(prefix_size), encoded::binary>>, value} ->
+        Map.new(pairs, fn {<<_::binary-size(^prefix_size), encoded::binary>>, value} ->
           {Base.url_decode64!(encoded, padding: false), value}
         end)
 

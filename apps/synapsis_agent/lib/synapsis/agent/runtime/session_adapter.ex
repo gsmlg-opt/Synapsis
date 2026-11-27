@@ -1545,10 +1545,6 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     else
       {:error, %Error{}} = error ->
         {:reply, error, state}
-
-      {:error, _} ->
-        {:reply, failure(:execution_failure, "Subagent intent could not be persisted"),
-         %{state | error: :storage_failed}}
     end
   end
 

@@ -207,7 +207,7 @@ defmodule Synapsis.SkillSearch do
     prefix_size = byte_size(units) - 4
 
     case units do
-      <<prefix::binary-size(prefix_size), last::16, last::16>>
+      <<prefix::binary-size(^prefix_size), last::16, last::16>>
       when byte_size(units) > 6 and last not in [?l, ?s, ?f, ?z, ?a, ?e, ?i, ?o, ?u] ->
         :unicode.characters_to_binary(<<prefix::binary, last::16>>, {:utf16, :big}, :utf8)
 

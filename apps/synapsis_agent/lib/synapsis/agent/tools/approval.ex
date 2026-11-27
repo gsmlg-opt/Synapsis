@@ -149,8 +149,6 @@ defmodule Synapsis.Agent.Tools.Approval do
     end
   end
 
-  defp current_context(_, _, _), do: {:error, :approval_context_changed}
-
   defp refresh(approval) do
     case approval.refresh.() do
       {:ok, current} when is_map(current) -> {:ok, current}

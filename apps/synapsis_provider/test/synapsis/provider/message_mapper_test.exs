@@ -10,6 +10,26 @@ defmodule Synapsis.Provider.MessageMapperTest do
     parameters: %{"type" => "object"}
   }
 
+  test "rejects tool arguments that cannot be JSON encoded without raising" do
+    messages = [
+      %{
+        role: "assistant",
+        parts: [
+          %Synapsis.Part.ToolUse{
+            tool: @tool.name,
+            tool_use_id: "call-invalid",
+            input: %{"invalid" => self()}
+          }
+        ]
+      }
+    ]
+
+    assert {:error, error} =
+             MessageMapper.build_request(:openai_responses, messages, [@tool], %{model: "fixture"})
+
+    assert error.message == "Tool call arguments are not JSON encodable"
+  end
+
   test "encodes Anthropic text, system, image, tools, and limits with string keys" do
     messages = [
       @text_message,

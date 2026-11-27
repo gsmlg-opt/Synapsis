@@ -322,7 +322,7 @@ defmodule Synapsis.Browser.PortSession do
         {:error, state}
 
       {offset, 1} when offset < @frame_limit ->
-        <<line::binary-size(offset), _newline, rest::binary>> = bytes
+        <<line::binary-size(^offset), _newline, rest::binary>> = bytes
 
         with {:ok, frame} <- Formata.JSON.decode(line),
              {:ok, state} <- receive_frame(frame, state) do
