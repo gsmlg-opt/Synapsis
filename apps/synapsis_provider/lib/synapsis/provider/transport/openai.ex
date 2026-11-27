@@ -21,7 +21,7 @@ defmodule Synapsis.Provider.Transport.OpenAI do
     url = models_url(base_url, config)
 
     # TODO(upstream): gsmlg-opt/backplane#73 - distinguish unavailable auth state from HTTP 401.
-    case Synapsis.Provider.Transport.HTTP.json(url, headers: headers, timeout: 5_000) do
+    case Synapsis.Provider.Transport.HTTP.json(url, headers: headers, timeout: 60_000) do
       {:ok, %{status: 200, body: %{"data" => models}}} ->
         {:ok,
          Enum.map(models, fn m ->

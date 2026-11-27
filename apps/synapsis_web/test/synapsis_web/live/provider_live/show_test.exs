@@ -7,7 +7,10 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       create_provider!(%{
         name: "test-show-provider",
         type: "anthropic",
-        api_key_encrypted: "sk-ant-test-key"
+        api_key_encrypted: "sk-ant-test-key",
+        config: %{
+          "available_models" => [%{"id" => "claude-haiku-3-5-20241022", "name" => "Claude Haiku"}]
+        }
       })
 
     {:ok, provider: provider}
@@ -71,6 +74,44 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
   end
 
   describe "provider show page" do
+    test "uncached models are only requested on click and settings remain available", %{
+      conn: conn
+    } do
+      bypass = Gaoxy.Test.open()
+      owner = self()
+
+      Gaoxy.Test.expect_once(bypass, "GET", "/v1/models", fn request ->
+        send(owner, {:discovery, self()})
+
+        receive do
+          :respond -> Plug.Conn.send_resp(request, 503, "")
+        after
+          3_000 -> Plug.Conn.send_resp(request, 504, "")
+        end
+      end)
+
+      provider =
+        create_provider!(%{
+          name: "slow-provider",
+          type: "openai",
+          base_url: Gaoxy.Test.url(bypass, "/v1")
+        })
+
+      conn = get(conn, ~p"/settings/providers/#{provider.id}")
+      assert html_response(conn, 200) =~ "Save Changes"
+      refute_received {:discovery, _}
+      {:ok, view, _} = live(conn)
+      assert render_async(view) =~ "No models loaded"
+      refute_received {:discovery, _}
+      render_click(element(view, "button[phx-click=refresh_models]"))
+      assert_receive {:discovery, request}, 1_000
+      assert has_element?(view, "button[phx-click=refresh_models][disabled]")
+      assert has_element?(view, "button", "Save Changes")
+      send(request, :respond)
+      assert render_async(view) =~ "Failed to refresh models"
+      assert has_element?(view, "button", "Refresh Models")
+    end
+
     test "mounts and displays provider name", %{conn: conn, provider: provider} do
       {:ok, _view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
       assert html =~ provider.name
@@ -236,10 +277,8 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       assert {:ok, raw} = Synapsis.Config.Store.get(:provider, provider.id)
       refute Map.has_key?(raw, "api_key_encrypted")
 
-      html =
-        view
-        |> element(~s(button[phx-click="refresh_models"]))
-        |> render_click()
+      render_click(element(view, ~s(button[phx-click="refresh_models"])))
+      html = render_async(view)
 
       assert html =~ "Models refreshed"
       assert html =~ "backplane-model"
@@ -406,7 +445,8 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
     end
 
     test "shows models section for anthropic provider", %{conn: conn, provider: provider} do
-      {:ok, _view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      html = render_async(view)
       assert html =~ "Models"
       assert html =~ "Claude"
     end
@@ -442,10 +482,8 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
       {:ok, view, html} = live(conn, ~p"/settings/providers/#{provider.id}")
       assert html =~ "Old Model"
 
-      html =
-        view
-        |> element(~s(button[phx-click="refresh_models"]))
-        |> render_click()
+      render_click(element(view, ~s(button[phx-click="refresh_models"])))
+      html = render_async(view)
 
       assert html =~ "Models refreshed"
       assert html =~ "fresh-model"
@@ -480,6 +518,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
     test "chat panel shows model selector", %{conn: conn, provider: provider} do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      render_async(view)
 
       html =
         view
@@ -499,6 +538,7 @@ defmodule SynapsisWeb.ProviderLive.ShowTest do
 
     test "chat_select_model changes selected model", %{conn: conn, provider: provider} do
       {:ok, view, _html} = live(conn, ~p"/settings/providers/#{provider.id}")
+      render_async(view)
 
       view
       |> element(~s(div[phx-click="toggle_chat"]))

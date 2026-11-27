@@ -12,18 +12,16 @@ defmodule SynapsisWeb.ProviderLive.Show do
     case Synapsis.Providers.get(id) do
       {:ok, provider} ->
         {:ok, credentials} = Synapsis.Credentials.list()
-        all_models = fetch_models(provider)
-        default_model = if all_models != [], do: hd(all_models).id, else: nil
 
         {:ok,
          assign(socket,
            provider: provider,
            credentials: credentials,
            page_title: provider.name,
-           all_models: all_models,
            # Test chat state
            chat_open: false,
-           chat_model: default_model,
+           chat_model: nil,
+           refreshing_models: false,
            chat_messages: [],
            chat_streaming: false,
            chat_stream_text: "",
@@ -37,6 +35,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
            oauth_error: nil,
            oauth_poll_timer: nil
          )
+         |> load_models(provider)
          |> start_chat_bridge()}
 
       {:error, :not_found} ->
@@ -72,6 +71,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
         {:noreply,
          socket
          |> assign(provider: provider)
+         |> load_models(provider)
          |> reset_react_form("edit-provider-form", provider_form_values(provider))
          |> put_flash(:info, "Provider updated")}
 
@@ -95,6 +95,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
         {:noreply,
          socket
          |> assign(provider: provider)
+         |> load_models(provider)
          |> reset_react_form("edit-provider-form", values)
          |> put_flash(:info, "Access token cleared")}
 
@@ -113,31 +114,16 @@ defmodule SynapsisWeb.ProviderLive.Show do
     end
   end
 
+  def handle_event("refresh_models", _params, %{assigns: %{refreshing_models: true}} = socket),
+    do: {:noreply, socket}
+
   def handle_event("refresh_models", _params, socket) do
-    case Synapsis.Providers.refresh_models(socket.assigns.provider.id) do
-      {:ok, provider} ->
-        all_models = Synapsis.Providers.cached_models(provider)
+    id = socket.assigns.provider.id
 
-        {:noreply,
-         socket
-         |> assign(
-           provider: provider,
-           all_models: all_models,
-           chat_model: default_chat_model(all_models, socket.assigns.chat_model)
-         )
-         |> reset_react_form("provider-chat-model-form", %{
-           "model" => default_chat_model(all_models, socket.assigns.chat_model)
-         })
-         |> put_flash(:info, "Models refreshed")}
-
-      {:error, reason} ->
-        Logger.warning("provider_models_refresh_failed",
-          provider_id: socket.assigns.provider.id,
-          reason: inspect(reason)
-        )
-
-        {:noreply, put_flash(socket, :error, "Failed to refresh models")}
-    end
+    {:noreply,
+     socket
+     |> assign(:refreshing_models, true)
+     |> start_async(:refresh_models, fn -> Synapsis.Providers.refresh_models(id) end)}
   end
 
   # -- Test Chat Events --
@@ -279,6 +265,7 @@ defmodule SynapsisWeb.ProviderLive.Show do
         {:noreply,
          socket
          |> assign(provider: updated)
+         |> load_models(updated)
          |> put_flash(:info, "OAuth tokens refreshed")}
 
       {:error, :oauth_reauth_required} ->
@@ -411,12 +398,10 @@ defmodule SynapsisWeb.ProviderLive.Show do
       {:ok, provider} ->
         {:ok, credentials} = Synapsis.Credentials.list()
 
-        {:noreply,
-         assign(socket,
-           provider: provider,
-           credentials: credentials,
-           all_models: Synapsis.Providers.cached_models(provider)
-         )}
+        socket =
+          if provider != socket.assigns.provider, do: load_models(socket, provider), else: socket
+
+        {:noreply, assign(socket, provider: provider, credentials: credentials)}
 
       {:error, :not_found} ->
         {:noreply,
@@ -609,18 +594,16 @@ defmodule SynapsisWeb.ProviderLive.Show do
       {:ok, tokens} ->
         case Synapsis.Providers.save_oauth_tokens(socket.assigns.provider.id, tokens) do
           {:ok, provider} ->
-            all_models = fetch_models(provider)
-
             {:noreply,
              socket
              |> assign(
                provider: provider,
-               all_models: all_models,
                oauth_state: :authorized,
                oauth_poll_timer: nil,
                oauth_user_code: nil,
                oauth_device_auth_id: nil
              )
+             |> load_models(provider)
              |> put_flash(:info, "OAuth login successful")}
 
           {:error, _reason} ->
@@ -642,11 +625,37 @@ defmodule SynapsisWeb.ProviderLive.Show do
     end
   end
 
-  defp fetch_models(provider) do
-    case Synapsis.Providers.models_by_id(provider.id) do
-      {:ok, models} -> models
-      {:error, _} -> []
+  defp load_models(socket, provider) do
+    case Synapsis.Providers.cached_catalog(provider) do
+      {:ok, models} ->
+        assign(socket,
+          models_status: :ready,
+          all_models: models,
+          chat_model: default_chat_model(models, socket.assigns.chat_model)
+        )
+
+      {:error, _} ->
+        assign(socket, models_status: :unavailable, all_models: [], chat_model: nil)
+
+      :miss ->
+        assign(socket, models_status: :ready, all_models: [], chat_model: nil)
     end
+  end
+
+  @impl true
+  def handle_async(:refresh_models, {:ok, {:ok, provider}}, socket) do
+    socket = load_models(socket, provider)
+
+    {:noreply,
+     socket
+     |> assign(refreshing_models: false)
+     |> reset_react_form("provider-chat-model-form", %{"model" => socket.assigns.chat_model})
+     |> put_flash(:info, "Models refreshed")}
+  end
+
+  def handle_async(:refresh_models, _failure, socket) do
+    {:noreply,
+     socket |> assign(:refreshing_models, false) |> put_flash(:error, "Failed to refresh models")}
   end
 
   defp default_chat_model([], current), do: current
@@ -919,7 +928,12 @@ defmodule SynapsisWeb.ProviderLive.Show do
           <div class="flex justify-between items-center w-full">
             <span>Models</span>
             <div class="flex items-center gap-2">
-              <.dm_btn variant="ghost" size="xs" phx-click="refresh_models">
+              <.dm_btn
+                variant="ghost"
+                size="xs"
+                phx-click="refresh_models"
+                disabled={@refreshing_models}
+              >
                 Refresh Models
               </.dm_btn>
               <.link navigate={~p"/settings/models"} class="link text-sm">Manage Models</.link>
@@ -927,7 +941,12 @@ defmodule SynapsisWeb.ProviderLive.Show do
           </div>
         </:title>
 
-        <div :if={@all_models == []} class="text-sm text-on-surface-variant">
+        <p :if={@refreshing_models} role="status">Refreshing models…</p>
+        <p :if={@models_status == :unavailable}>Provider is currently unavailable.</p>
+        <div
+          :if={not @refreshing_models and @models_status == :ready and @all_models == []}
+          class="text-sm text-on-surface-variant"
+        >
           No models loaded. Use Refresh Models to load the provider's model list.
         </div>
 

@@ -15,7 +15,7 @@ defmodule Synapsis.Provider.Transport.Anthropic do
 
     url = models_url(base_url)
 
-    case Synapsis.Provider.Transport.HTTP.json(url, headers: auth_headers(config), timeout: 5_000) do
+    case Synapsis.Provider.Transport.HTTP.json(url, headers: auth_headers(config), timeout: 60_000) do
       {:ok, %{status: 200, body: %{"data" => models}}} when is_list(models) ->
         {:ok, Enum.map(models, &model_from_response/1)}
 

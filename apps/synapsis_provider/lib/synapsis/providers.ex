@@ -483,20 +483,27 @@ defmodule Synapsis.Providers do
 
   @doc "Fetch all available models for a provider by id."
   def models_by_id(id) do
-    with {:ok, provider} <- get(id),
-         :ok <- ensure_runtime_available(provider) do
-      provider
-      |> cached_models()
-      |> case do
-        [] ->
+    with {:ok, provider} <- get(id) do
+      case cached_catalog(provider) do
+        :miss ->
           config = build_runtime_config(provider)
 
           with {:ok, models} <- Synapsis.Provider.Adapter.models(config) do
             {:ok, filter_catalog_models(provider, models)}
           end
 
-        models ->
-          {:ok, filter_catalog_models(provider, models)}
+        result ->
+          result
+      end
+    end
+  end
+
+  @doc "Read discoverable cached models without contacting the provider."
+  def cached_catalog(provider) do
+    with :ok <- ensure_runtime_available(provider) do
+      case cached_models(provider) do
+        [] -> :miss
+        models -> {:ok, filter_catalog_models(provider, models)}
       end
     end
   end
