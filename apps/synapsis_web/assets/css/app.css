@@ -56,9 +56,14 @@
     line-height: 1.25rem;
   }
 
+  dialog.synapsis-mcp-modal,
+  dialog.synapsis-model-modal {
+    width: min(40rem, calc(100vw - 2rem));
+    max-width: 40rem;
+  }
+
   .synapsis-mcp-modal .dialog-box,
   .synapsis-model-modal .dialog-box {
-    width: min(40rem, calc(100vw - 2rem));
     max-height: calc(100dvh - 2rem);
     overflow-y: auto;
   }
