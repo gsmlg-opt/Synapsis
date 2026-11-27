@@ -98,6 +98,20 @@ defmodule SynapsisWeb.SkillLive.Index do
       {:ok, {:ok, %{status: "ready"}}} ->
         {:noreply, put_flash(socket, :info, "Remote skills refreshed")}
 
+      {:ok, {:ok, source}} ->
+        if Synapsis.Backplane.Connection.surface_enabled?(source, "skills") and
+             source.unavailable != [] and "skills" not in source.unavailable do
+          {:noreply,
+           put_flash(
+             socket,
+             :info,
+             "Remote skills refreshed. Check source status for #{Enum.join(source.unavailable, ", ")}."
+           )}
+        else
+          reason = skill_auth_issue(source) || source.last_error || "Check source status."
+          {:noreply, put_flash(socket, :error, "Remote skill discovery failed. #{reason}")}
+        end
+
       {:ok, {:error, :provider_unavailable}} ->
         source = Enum.find(socket.assigns.sources, &(&1.id == source_id))
 
@@ -136,6 +150,19 @@ defmodule SynapsisWeb.SkillLive.Index do
   end
 
   defp list_skills, do: Synapsis.Skills.list()
+
+  defp skill_auth_issue(source) do
+    case get_in(source.metadata, ["surface_errors", "skills"]) do
+      "{:skill_protocol, :unauthorized}" ->
+        "Backplane requires a valid credential to list skills (HTTP 401)."
+
+      "{:skill_protocol, :forbidden}" ->
+        "Backplane denied access to skills (HTTP 403). Check the credential’s skill::read scope."
+
+      _ ->
+        nil
+    end
+  end
 
   defp provider_issue(nil), do: nil
 
@@ -203,17 +230,29 @@ defmodule SynapsisWeb.SkillLive.Index do
         </.react_form>
         <div
           :for={source <- @sources}
+          :if={
+            Synapsis.Backplane.Connection.surface_enabled?(source, "skills") ||
+              Enum.any?(@source_providers, &(&1.id == source.provider_id))
+          }
           class="flex flex-wrap items-center gap-3 mt-3 min-w-0"
           data-source-id={source.id}
         >
           <% provider_issue = provider_issue(source.provider_id) %>
+          <% auth_issue = skill_auth_issue(source) %>
           <% skills_enabled = Synapsis.Backplane.Connection.surface_enabled?(source, "skills") %>
           <span class="break-all">{source.name}</span><.dm_badge size="sm">{source.status}</.dm_badge>
           <span :if={!source.enabled} class="text-error text-sm">Disabled</span>
           <span :if={provider_issue} class="min-w-0 break-words text-error text-sm">{provider_issue}</span>
           <.dm_link :if={provider_issue} navigate={~p"/settings/providers"}>Manage providers</.dm_link>
           <span :if={!skills_enabled && !provider_issue} class="min-w-0 break-words text-sm">{skills_not_enabled_message()}</span>
-          <span :if={source.last_error} role="alert" class="min-w-0 break-words text-error text-sm">{source.last_error}</span>
+          <span :if={source.last_error} role="alert" class="min-w-0 break-words text-error text-sm">{auth_issue ||
+            source.last_error}</span>
+          <.dm_link
+            :if={auth_issue && !provider_issue && source.provider_id}
+            navigate={~p"/settings/providers/#{source.provider_id}"}
+          >
+            Configure provider credential
+          </.dm_link>
           <.dm_btn
             size="sm"
             phx-click="refresh_source"

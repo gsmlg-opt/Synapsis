@@ -97,6 +97,60 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
            )
   end
 
+  test "omits a tools-only source whose provider no longer exists", %{conn: conn} do
+    {provider, source} = create_source(%{}, "tools")
+    :ok = Synapsis.Config.Store.Server.delete(:provider, provider.id)
+
+    {:ok, view, _} = live(conn, ~p"/settings/skills")
+    refute has_element?(view, "[data-source-id='#{source.id}']")
+    assert {:ok, _} = Synapsis.Backplane.Connection.get(source.id)
+  end
+
+  test "explains catalog authentication failures and refreshes after a credential is linked", %{
+    conn: conn
+  } do
+    server = Gaoxy.Test.open()
+    {provider, source} = create_source(%{base_url: Gaoxy.Test.url(server)})
+    route = "/skill-protocol/v1/catalog"
+
+    Gaoxy.Test.stub(server, "GET", route, fn conn ->
+      case Plug.Conn.get_req_header(conn, "authorization") do
+        [] ->
+          Plug.Conn.send_resp(conn, 401, "")
+
+        ["Bearer test-read-token"] ->
+          conn
+          |> Plug.Conn.put_resp_content_type("application/json")
+          |> Plug.Conn.send_resp(200, ~s({"protocol_version":"1","data":[],"next_cursor":null}))
+      end
+    end)
+
+    {:ok, view, _} = live(conn, ~p"/settings/skills")
+    button = "[phx-click='refresh_source'][phx-value-id='#{source.id}']"
+    row = "[data-source-id='#{source.id}']"
+    view |> element(button) |> render_click()
+
+    assert render_async(view) =~
+             "Remote skill discovery failed. Backplane requires a valid credential"
+
+    assert has_element?(view, "#{row} [role='alert']", "HTTP 401")
+    assert has_element?(view, "#{row} a[href='/settings/providers/#{provider.id}']")
+
+    {:ok, credential} =
+      Synapsis.Credentials.create(%{name: "catalog read", key: "test-read-token"})
+
+    {:ok, _} = Synapsis.Providers.update(provider.id, %{credential_id: credential.id})
+
+    on_exit(fn ->
+      Synapsis.Providers.delete(provider.id)
+      Synapsis.Credentials.delete(credential.id)
+    end)
+
+    view |> element(button) |> render_click()
+    assert render_async(view) =~ "Remote skills refreshed"
+    refute has_element?(view, "#{row} [role='alert']")
+  end
+
   test "explains an unavailable credential reference", %{conn: conn} do
     {:ok, credential} = Synapsis.Credentials.create(%{name: "skill-source-key", key: "test-key"})
     {provider, source} = create_source(%{credential_id: credential.id})
@@ -110,6 +164,27 @@ defmodule SynapsisWeb.SkillLive.IndexTest do
              "[data-source-id='#{source.id}']",
              "Provider #{provider.name} credential is unavailable. Update it in Providers."
            )
+  end
+
+  test "reports a successful skill refresh when the same source fails MCP discovery", %{
+    conn: conn
+  } do
+    server = Gaoxy.Test.open()
+    {provider, source} = create_source(%{base_url: Gaoxy.Test.url(server)})
+    {:ok, _} = Synapsis.Backplane.select_provider(provider.id, "tools")
+
+    Gaoxy.Test.stub(server, "POST", "/mcp", fn conn -> Plug.Conn.send_resp(conn, 403, "") end)
+
+    Gaoxy.Test.stub(server, "GET", "/skill-protocol/v1/catalog", fn conn ->
+      conn
+      |> Plug.Conn.put_resp_content_type("application/json")
+      |> Plug.Conn.send_resp(200, ~s({"protocol_version":"1","data":[],"next_cursor":null}))
+    end)
+
+    {:ok, view, _} = live(conn, ~p"/settings/skills")
+    view |> element("[phx-click='refresh_source'][phx-value-id='#{source.id}']") |> render_click()
+    assert render_async(view) =~ "Remote skills refreshed. Check source status for tools."
+    assert has_element?(view, "[data-source-id='#{source.id}'] [role='alert']", "tools:")
   end
 
   test "explains a missing provider endpoint", %{conn: conn} do
