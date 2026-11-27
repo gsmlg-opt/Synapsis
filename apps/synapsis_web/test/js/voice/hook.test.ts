@@ -209,3 +209,48 @@ test('an invalid tool call leaves the active call controls available', () => {
   assert.equal(element('[data-action=stop]').hidden, false)
   assert.match(element('[data-voice-error]').textContent, /You can ask again/)
 })
+
+test('Device Voice controls remain available to a returning tab during reconnect', () => {
+  const { root, element, update, pushes } = environment({ fixedHost: true })
+  update({ phase: 'reconnecting', ...endpoint, owned: false, device_call: true,
+    muted: true, reason: 'realtime_disconnected' })
+
+  assert.equal(root.dataset.active, 'true')
+  assert.equal(root.dataset.ready, 'false')
+  assert.equal(element('[data-voice-status]').textContent, 'Reconnecting audio…')
+  assert.equal(element('[data-action=start]').hidden, true)
+  assert.equal(element('[data-action=stop]').hidden, false)
+  assert.equal(element('[data-action=stop]').disabled, false)
+  assert.equal(element('[data-action=mute]').hidden, false)
+  assert.equal(element('[data-action=mute]').textContent, 'Unmute microphone')
+  assert.equal(element('[data-action=mute]').attributes.get('aria-pressed'), 'true')
+  assert.equal(element('[data-action=commit_audio]').hidden, true)
+  assert.match(element('[data-voice-error]').textContent, /Reconnecting automatically/)
+  assert.doesNotMatch(element('[data-voice-error]').textContent, /Start a call/)
+
+  root.onclick({ target: { closest: () => ({ dataset: { action: 'mute' } }) } })
+  assert.deepEqual(JSON.parse(JSON.stringify(pushes.at(-1)?.payload)), { muted: false })
+  root.onclick({ target: { closest: () => ({ dataset: { action: 'stop' } }) } })
+  assert.equal(pushes.at(-1)?.event, 'stop')
+
+  update({ phase: 'offline', device_call: false })
+  assert.equal(element('[data-action=stop]').hidden, true)
+  assert.equal(element('[data-action=start]').hidden, false)
+})
+
+test('losing Device Voice controls preserves the running call presentation', () => {
+  const { root, element, update, disconnected } = environment({ fixedHost: true })
+  update({ phase: 'listening', ...endpoint, owned: false, device_call: true, muted: true })
+  assert.equal(root.dataset.ready, 'true')
+  assert.equal(element('[data-action=stop]').hidden, false)
+  disconnected()
+
+  assert.equal(root.dataset.active, 'true')
+  assert.equal(root.dataset.ready, 'false')
+  assert.equal(element('[data-voice-status]').textContent, 'Call controls disconnected')
+  assert.equal(element('[data-action=stop]').hidden, false)
+  assert.equal(element('[data-action=stop]').disabled, true)
+  assert.equal(element('[data-action=mute]').disabled, true)
+  assert.equal(element('[data-action=mute]').attributes.get('aria-pressed'), 'true')
+  assert.match(element('[data-voice-devices]').textContent, /K66 microphone/)
+})

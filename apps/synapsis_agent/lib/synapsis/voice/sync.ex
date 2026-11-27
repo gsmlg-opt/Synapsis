@@ -51,9 +51,20 @@ defmodule Synapsis.Voice.Sync do
     %{sync | calls: Enum.reduce(calls, sync.calls, &MapSet.put(&2, &1.id))}
   end
 
-  defp remember(sync, item) do
+  def remember(sync, item) do
     if item in sync.items, do: sync, else: %{sync | items: sync.items ++ [item]}
   end
+
+  # Live input enters the Realtime conversation at commit, independently of
+  # when the native provider attempt subscribes.
+  defp project(
+         %{role: :user, content: [%{live_microphone: true, connection_generation: gen}]},
+         gen,
+         _,
+         _,
+         _
+       ),
+       do: :skip
 
   defp project(
          %{

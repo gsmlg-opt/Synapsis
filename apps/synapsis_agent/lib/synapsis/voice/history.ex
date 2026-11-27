@@ -8,6 +8,19 @@ defmodule Synapsis.Voice.History do
   def audio_input(item, generation),
     do: [%{type: :committed_audio, item_id: item, connection_generation: generation}]
 
+  def microphone_prompt(item, generation) do
+    [block] = audio_input(item, generation)
+    [Map.put(block, :live_microphone, true)]
+  end
+
+  def microphone_message(item, generation) do
+    %{
+      role: :user,
+      id: "mic-" <> generation <> ":" <> item,
+      content: audio_input(item, generation)
+    }
+  end
+
   def initial(messages) do
     messages
     |> Enum.take(-100)
@@ -20,24 +33,32 @@ defmodule Synapsis.Voice.History do
   end
 
   def append(session_id, canonical, image_payloads \\ %{}) do
-    with {:ok, offset} <- Store.count_turns(session_id),
-         {:ok, meta} <- Store.get_meta(session_id),
-         {:ok, previous} <- Store.list_turns(session_id) do
+    with {:ok, previous} <- Store.list_turns(session_id) do
       ids = MapSet.new(previous, &(&1[:id] || &1["id"]))
+      append_messages(session_id, project(session_id, canonical, image_payloads, ids))
+    end
+  end
 
-      turns = session_id |> project(canonical, image_payloads, ids) |> Enum.map(&Message.encode/1)
+  # The voice owner deduplicates by message id and serializes projected batches.
+  def append_messages(_, []), do: :ok
 
-      if turns == [] do
-        :ok
-      else
-        Store.commit_turns(session_id, offset, turns, %{meta | updated_at: DateTime.utc_now()})
-      end
+  def append_messages(session_id, messages) do
+    with {:ok, offset} <- Store.count_turns(session_id),
+         {:ok, meta} <- Store.get_meta(session_id) do
+      Store.commit_turns(session_id, offset, Enum.map(messages, &Message.encode/1), %{
+        meta
+        | updated_at: DateTime.utc_now()
+      })
     end
   end
 
   def project(session_id, canonical, image_payloads, ids) do
     canonical
     |> Enum.with_index()
+    |> Enum.reject(fn
+      {%{role: :user, content: [%{live_microphone: true}]}, _} -> true
+      _ -> false
+    end)
     |> Enum.flat_map(fn {item, index} ->
       id = item[:id] || synthesized_id(canonical, item, index)
 

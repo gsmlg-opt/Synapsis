@@ -106,6 +106,7 @@ defmodule Synapsis.Voice.AudioEndpoint.Host do
     with {:ok, port} <- open_helper() do
       command = %{
         command: "start",
+        muted: Keyword.get(state.options, :muted, false),
         input_device: Keyword.get(state.options, :input_device),
         output_device: Keyword.get(state.options, :output_device),
         input_volume: Keyword.get(state.options, :input_volume),

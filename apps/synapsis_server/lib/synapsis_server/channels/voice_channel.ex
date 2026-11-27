@@ -19,7 +19,7 @@ defmodule SynapsisServer.VoiceChannel do
          true <- Sessions.voice?(session),
          :ok <- Phoenix.PubSub.subscribe(Synapsis.PubSub, VoiceSession.topic(id)),
          {:ok, status} <- VoiceSession.status(id) do
-      {:ok, Map.put(status, :owned, false), assign(socket, :voice_session, id)}
+      {:ok, control_status(status, false), assign(socket, :voice_session, id)}
     else
       _ -> {:error, %{reason: "voice_session_unavailable"}}
     end
@@ -30,7 +30,7 @@ defmodule SynapsisServer.VoiceChannel do
   @impl true
   def handle_in("start", params, socket) do
     case VoiceSession.start(id(socket), endpoint_options(params)) do
-      {:ok, status} -> voice_reply({:ok, Map.put(status, :owned, true)}, socket)
+      {:ok, status} -> voice_reply({:ok, control_status(status, true)}, socket)
       error -> voice_reply(error, socket)
     end
   end
@@ -97,7 +97,7 @@ defmodule SynapsisServer.VoiceChannel do
 
   @impl true
   def handle_info({:voice_status, owner, status}, socket) do
-    push(socket, "status", Map.put(status, :owned, owner == self()))
+    push(socket, "status", control_status(status, owner == self()))
     {:noreply, socket}
   end
 
@@ -133,6 +133,9 @@ defmodule SynapsisServer.VoiceChannel do
   end
 
   defp endpoint_options(_), do: []
+
+  defp control_status(status, owned),
+    do: Map.put(status, :owned, owned or status[:device_call] == true)
 
   defp id(socket), do: socket.assigns.voice_session
 

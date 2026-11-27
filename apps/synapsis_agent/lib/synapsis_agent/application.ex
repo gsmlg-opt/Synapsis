@@ -12,7 +12,8 @@ defmodule SynapsisAgent.Application do
       Synapsis.Session.DynamicSupervisor,
       {Registry, keys: :unique, name: Synapsis.Voice.Registry},
       {DynamicSupervisor, strategy: :one_for_one, name: Synapsis.Voice.Supervisor},
-      Synapsis.Agent.Supervisor
+      Synapsis.Agent.Supervisor,
+      Synapsis.Voice.DeviceCallRestorer
     ]
 
     opts = [strategy: :rest_for_one, name: SynapsisAgent.Supervisor]

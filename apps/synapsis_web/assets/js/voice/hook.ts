@@ -13,6 +13,7 @@ type Endpoint = {
 type Status = {
   phase: string
   owned?: boolean
+  device_call?: boolean
   reason?: string
   generation?: string
   playback?: { played_ms: number | null }
@@ -67,6 +68,7 @@ function mount(root: HTMLElement) {
   let connected = false
 
   function error(reason: string) {
+    const reconnecting = latestStatus.device_call === true && latestStatus.phase === 'reconnecting'
     const messages: Record<string, string> = {
       voice_channel_disconnected: 'Connection lost. Reconnecting to the voice controls…',
       voice_channel_unavailable:
@@ -74,8 +76,6 @@ function mount(root: HTMLElement) {
       media_owner_lost: 'The connection controlling this call ended. Start a new call to continue.',
       voice_runtime_failed: 'The voice runtime could not complete the reply.',
       voice_runtime_admission_failed: 'The voice runtime could not accept this turn.',
-      voice_input_queue_full:
-        'A microphone segment was skipped while the queue was full. Speak again after it clears.',
       voice_runtime_requires_recovery: fork
         ? 'A previous turn needs recovery. Continue in a copy of this chat.'
         : 'A previous turn in this Device Voice Agent conversation needs recovery before another call can start.',
@@ -84,11 +84,15 @@ function mount(root: HTMLElement) {
       realtime_protocol_error: 'The Realtime service rejected a voice request.',
       invalid_function_call: 'The model returned an invalid tool call. You can ask again.',
       realtime_duplicate_call_id: 'The model repeated a tool call. You can ask again.',
-      realtime_response_failed:
-        'The Realtime service could not produce the reply. Start a call to continue here.',
-      realtime_response_timeout:
-        'The Realtime service stopped responding. Start a call to continue here.',
-      realtime_disconnected: 'The Realtime connection ended. Start a call to continue here.',
+      realtime_response_failed: latestStatus.phase === 'listening'
+        ? 'The Realtime service could not produce that reply. You can speak again.'
+        : 'The Realtime service could not produce the reply.',
+      realtime_response_timeout: reconnecting
+        ? 'The Realtime service stopped responding.'
+        : 'The Realtime service stopped responding. Start a call to continue here.',
+      realtime_disconnected: reconnecting
+        ? 'The Realtime connection ended.'
+        : 'The Realtime connection ended. Start a call to continue here.',
       realtime_policy_rejected:
         'The Realtime gateway rejected the call. Check the selected Backplane connection.',
       realtime_not_configured: 'Realtime is unavailable on the selected connection.',
@@ -143,7 +147,11 @@ function mount(root: HTMLElement) {
     closeBrowser()
     owned = false
     connected = false
-    statusUpdated({ phase: 'offline', reason: 'voice_channel_disconnected' })
+    statusUpdated(
+      latestStatus.device_call
+        ? { ...latestStatus, owned: false, reason: 'voice_channel_disconnected' }
+        : { phase: 'offline', reason: 'voice_channel_disconnected' }
+    )
   }
 
   function control(event: string, payload: object = {}, success?: (data: any) => void) {
@@ -157,23 +165,26 @@ function mount(root: HTMLElement) {
   function statusUpdated(view: Status) {
     latestStatus = view
     const ended = view.phase === 'offline' || view.phase === 'error'
-    owned = !ended && view.owned === true
+    owned = !ended && (view.owned === true || view.device_call === true)
     if (!owned) closeBrowser()
-    const callActive = ['connecting', 'listening', 'responding', 'switching', 'ending'].includes(
-      view.phase
-    )
+    const callActive = [
+      'connecting', 'reconnecting', 'listening', 'responding', 'switching', 'ending'
+    ].includes(view.phase)
     const active = owned && callActive
-    const ready = owned && ['listening', 'responding'].includes(view.phase)
+    const ready = connected && owned && ['listening', 'responding'].includes(view.phase)
     const phases: Record<string, string> = {
       offline: 'Ready to call',
       connecting: 'Connecting audio…',
+      reconnecting: 'Reconnecting audio…',
       listening: view.playback ? 'Speaking' : view.muted ? 'Microphone muted' : 'Listening',
       responding: view.playback ? 'Speaking' : 'Preparing reply…',
       switching: 'Switching audio devices…',
       ending: 'Ending call…',
       error: 'Call stopped'
     }
-    if (callActive && !owned) {
+    if (!connected && view.device_call) {
+      status.textContent = 'Call controls disconnected'
+    } else if (callActive && !owned) {
       status.textContent = 'Call controlled in another tab or process'
     } else {
       status.textContent =
@@ -181,7 +192,12 @@ function mount(root: HTMLElement) {
     }
     errorNotice.hidden = !view.reason
     errorNotice.textContent = ''
-    if (view.reason) error(view.reason)
+    if (view.reason) {
+      error(view.reason)
+      if (view.device_call && view.phase === 'reconnecting') {
+        errorNotice.textContent += ' Reconnecting automatically.'
+      }
+    }
     root.dataset.active = String(active)
     root.dataset.ready = String(ready)
     const requiresRecovery = view.reason === 'voice_runtime_requires_recovery'
@@ -189,8 +205,9 @@ function mount(root: HTMLElement) {
     start.hidden = active || (requiresRecovery && !!fork)
     if (fork) fork.hidden = !requiresRecovery
     hangup.hidden = !active
-    hangup.disabled = view.phase === 'ending'
-    mute.hidden = !ready
+    hangup.disabled = !connected || view.phase === 'ending'
+    mute.hidden = !ready && !(active && view.device_call)
+    mute.disabled = !connected || view.phase === 'ending'
     stopPlayback.hidden = !ready
     stopPlayback.disabled = !view.playback && view.phase !== 'responding'
     muted = view.muted === true

@@ -815,34 +815,80 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     {%{inventory | entries: entries}, retired}
   end
 
-  # An interrupted provider can leave a voice Conversation waiting for a
-  # future utterance. After its owner exits, start a fresh run from the saved
-  # transcript only when the journal proves no work remains in the old run.
+  # Recovery runs in a fresh voice owner. Its Realtime socket and provider
+  # subscription cannot receive events or tool calls from a previous owner.
   defp retired_voice_run?(%{
-         locator: %{kind: :root, incarnation: incarnation},
-         aggregate: %{
-           incarnation: incarnation,
-           outbox: [],
-           run: %{
-             state: :running,
-             active_provider: nil,
-             active_tools: tools,
-             active_wait: nil,
-             children: [],
-             dependencies: [],
-             execution_intents: intents,
-             context: %{conversation: conversation}
-           }
-         }
+         locator: %{kind: :root, incarnation: incarnation} = locator,
+         aggregate:
+           %{
+             incarnation: incarnation,
+             run: %{
+               state: :running,
+               active_tools: tools,
+               active_wait: nil,
+               children: [],
+               dependencies: [],
+               context: %{conversation: conversation}
+             }
+           } = aggregate
        })
-       when map_size(tools) == 0 and map_size(intents) > 0 do
-    match?(%{outcome: :interrupted}, List.last(conversation.turns)) and
-      is_nil(conversation.pending_interaction) and
+       when map_size(tools) == 0 do
+    is_nil(conversation.pending_interaction) and
       Enum.all?([:steering, :follow_up, :mailbox, :goal_outbox], &(conversation[&1] == [])) and
-      Enum.all?(Map.values(intents), &match?(%{type: :provider, status: :consumed}, &1))
+      retired_voice_provider?(aggregate, locator, conversation)
   end
 
   defp retired_voice_run?(_), do: false
+
+  defp retired_voice_provider?(
+         %{outbox: [], run: %{active_provider: nil, execution_intents: intents}},
+         _locator,
+         conversation
+       )
+       when map_size(intents) > 0 do
+    match?(%{outcome: :interrupted}, List.last(conversation.turns)) and
+      consumed_provider_intents?(intents)
+  end
+
+  # Shutdown can occur on either side of the provider outbox acknowledgement.
+  # The durable started intent must identify the same audio turn in both cases.
+  defp retired_voice_provider?(
+         %{
+           effects: [],
+           outbox: outbox,
+           run: %{
+             run_id: id,
+             incarnation: inc,
+             active_provider:
+               %{run_id: id, incarnation: inc, attempt_id: attempt, step_id: step} = active,
+             current_step: %{attempt_id: attempt, step_id: step},
+             execution_intents: intents,
+             tool_results: results,
+             settled_children: [],
+             continuation_results: continuations
+           }
+         },
+         %{run_id: id, incarnation: inc},
+         %{host_feedback: [], queue_status: :active, messages: messages, turn_id: turn}
+       )
+       when map_size(results) == 0 and map_size(continuations) == 0 and is_binary(attempt) do
+    key = "provider:" <> attempt
+
+    case Map.pop(intents, key) do
+      {%{type: :provider, status: :started, operation: %{turn_id: ^turn} = op} = intent, prior} ->
+        outbox in [[], [intent]] and Map.take(op, Map.keys(active)) == active and
+          match?(%{role: :user, content: [%{type: :committed_audio}]}, List.last(messages)) and
+          consumed_provider_intents?(prior)
+
+      _ ->
+        false
+    end
+  end
+
+  defp retired_voice_provider?(_, _, _), do: false
+
+  defp consumed_provider_intents?(intents),
+    do: Enum.all?(Map.values(intents), &match?(%{type: :provider, status: :consumed}, &1))
 
   defp restore_retired_voice_root(
          %{namespace: namespace, root: %{run_id: id} = root} = saved,

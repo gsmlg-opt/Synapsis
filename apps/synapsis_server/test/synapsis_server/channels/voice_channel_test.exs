@@ -57,5 +57,13 @@ defmodule SynapsisServer.VoiceChannelTest do
 
       assert_push "status", %{phase: :listening, generation: ^generation, owned: ^owned}
     end
+
+    Phoenix.PubSub.broadcast(
+      Synapsis.PubSub,
+      VoiceSession.topic(session.id),
+      {:voice_status, nil, %{phase: :reconnecting, device_call: true, muted: true}}
+    )
+
+    assert_push "status", %{phase: :reconnecting, device_call: true, muted: true, owned: true}
   end
 end

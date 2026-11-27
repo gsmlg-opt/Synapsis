@@ -130,6 +130,62 @@ defmodule Synapsis.VoiceSessionTest do
     assert same_id == session.id
   end
 
+  test "device call outlives the caller, redials after loss, and restores mute after owner restart",
+       ctx do
+    {:ok, host} = AgentConfigs.update(ctx.agent, %{kind: :host_voice})
+    {:ok, session} = Sessions.create(host.name)
+    id = session.id
+
+    on_exit(fn ->
+      VoiceSession.stop(id)
+      VoiceSession.delete(id)
+      Synapsis.Session.Store.delete_session(id)
+    end)
+
+    parent = self()
+
+    {caller, monitor} =
+      spawn_monitor(fn ->
+        send(parent, {:device_started, VoiceSession.start(id, input_device: "fixture-mic")})
+      end)
+
+    assert_receive {:device_started, {:ok, %{device_call: true, generation: initial}}}, @wait
+    assert_receive {:DOWN, ^monitor, :process, ^caller, :normal}, @wait
+    assert_receive {:realtime_wire, first}, @wait
+    assert_receive {:client_event, %{"type" => "session.update"}}, @wait
+    assert :ok = VoiceSession.mute(id, true)
+    assert {:ok, %{muted: true, generation: ^initial}} = VoiceSession.status(id)
+
+    # Keep the gateway in setup so the test never opens physical audio.
+    send(first, :sever)
+    assert_receive {:realtime_wire, second}, @wait
+    assert_receive {:client_event, %{"type" => "session.update"}}, @wait
+    assert {:ok, %{device_call: true, muted: true, generation: next}} = VoiceSession.status(id)
+    assert next != initial
+    [{owner, _}] = Elixir.Registry.lookup(Synapsis.Voice.Registry, id)
+    Process.exit(owner, :kill)
+    assert_receive {:realtime_wire, restored}, @wait
+    assert_receive {:client_event, %{"type" => "session.update"}}, @wait
+    assert second != restored
+
+    assert {:ok, %{device_call: true, muted: true, endpoint: %{input_device: "fixture-mic"}}} =
+             VoiceSession.status(id)
+
+    assert :ok = VoiceSession.mute(id, false)
+    assert {:ok, %{muted: false}} = VoiceSession.status(id)
+    send(restored, :sever)
+    assert_receive {:realtime_wire, retry}, @wait
+    send(retry, :sever)
+
+    wait_for(fn ->
+      assert {:ok, %{phase: :reconnecting}} = VoiceSession.status(id)
+    end)
+
+    assert :ok = VoiceSession.stop(id)
+    assert {:ok, %{phase: :offline, device_call: false}} = VoiceSession.status(id)
+    refute_receive {:realtime_wire, _}, 1000
+  end
+
   test "explicit browser selection uses its own saved devices and volumes", ctx do
     assert {:ok, _} =
              AgentConfigs.update(ctx.agent, %{
@@ -153,6 +209,7 @@ defmodule Synapsis.VoiceSessionTest do
 
   test "one audio reference enters native history and playback-only stop preserves completion",
        ctx do
+    {:ok, _} = AgentConfigs.update(ctx.agent, %{tools: ["apply_patch", "spawn_agent"]})
     %{socket: socket, generation: generation} = call(ctx.id)
     pcm = :binary.copy(<<0, 0>>, 480)
 
@@ -168,6 +225,8 @@ defmodule Synapsis.VoiceSessionTest do
     committed(socket, ut)
     committed(socket, ut)
     attempt = response(socket, "resp-a", ut)
+    assert Enum.any?(attempt["tools"], &(&1["name"] == "spawn_agent"))
+    refute Enum.any?(attempt["tools"], &(&1["name"] == "apply_patch"))
 
     event(socket, %{
       "type" => "response.output_audio.delta",
@@ -277,12 +336,12 @@ defmodule Synapsis.VoiceSessionTest do
     done(socket, "resp-speech", [assistant("item_speech_answer", "Speech answer")])
 
     wait_for(fn ->
-      assert [visual, %{id: ^answer_id}, spoken, _answer2] = Sessions.get_messages(ctx.id)
+      assert [visual, spoken, %{id: ^answer_id}, _answer2] = Sessions.get_messages(ctx.id)
       assert visual.id == input_id
       assert [%Synapsis.Part.Text{content: "Describe this image"}, ^image] = visual.parts
       assert [%Synapsis.Part.CommittedAudio{item_id: "item_followup_speech"}] = spoken.parts
 
-      assert %{messages: [%{id: ^input_id}, %{id: ^answer_id}, _, _], reply: nil} =
+      assert %{messages: [%{id: ^input_id}, _, %{id: ^answer_id}, _], reply: nil} =
                VoiceSession.chat_snapshot(ctx.id)
     end)
   end
@@ -316,40 +375,163 @@ defmodule Synapsis.VoiceSessionTest do
     assert Process.alive?(owner)
   end
 
-  test "a full microphone queue skips overflow and drains in order without hanging up", ctx do
+  test "live microphone commits appear immediately and never replay as a FIFO of replies", ctx do
     %{socket: socket} = call(ctx.id)
-    committed(socket, "item_first")
-    response(socket, "resp-first", "item_first")
+    committed(socket, "first")
+    response(socket, "resp-first", "first")
+    event(socket, %{"type" => "input_audio_buffer.speech_started", "item_id" => "live1"})
 
-    for index <- 1..16, do: committed(socket, "item_queued_#{index}")
-    committed(socket, "item_overflow")
+    assert_receive {:client_event, %{"type" => "response.cancel", "response_id" => "resp-first"}},
+                   @wait
+
+    items = Enum.map(1..24, &"live#{&1}")
+    for item <- items, do: committed(socket, item)
+    committed(socket, "live24")
 
     event(socket, %{
       "type" => "conversation.item.input_audio_transcription.completed",
-      "item_id" => "item_overflow",
-      "transcript" => "Discarded audio"
+      "item_id" => "live24",
+      "transcript" => "Latest speech"
     })
 
     wait_for(fn ->
-      assert {:ok, %{phase: :responding, reason: :voice_input_queue_full}} =
-               VoiceSession.status(ctx.id)
-
-      assert %{queued: 16, facts: %{voice_transcript: transcripts}} =
-               VoiceSession.chat_snapshot(ctx.id)
-
-      assert transcripts == %{}
+      assert %{queued: 0, messages: messages, facts: facts} = VoiceSession.chat_snapshot(ctx.id)
+      assert Enum.map(messages, fn m -> hd(m.parts).item_id end) == ["first" | items]
+      assert "Latest speech" in Map.values(facts.voice_transcript)
     end)
 
-    refute_receive {:client_event, %{"type" => "response.cancel"}}, 60
-    done(socket, "resp-first", [assistant("item_answer", "First reply")])
-    response(socket, "resp-next", "item_queued_1")
-    assert {:ok, %{phase: :responding, reason: nil}} = VoiceSession.status(ctx.id)
-    assert %{queued: 15} = VoiceSession.chat_snapshot(ctx.id)
-    committed(socket, "item_after_overflow")
+    done(socket, "resp-first", [])
+    current = response(socket, "resp-live", "live24")
+    assert Enum.map(current["input"], & &1["id"]) == ["first" | items]
+    done(socket, "resp-live", [assistant("answer", "Heard you")])
+    wait_for(fn -> assert length(Sessions.get_messages(ctx.id)) == 26 end)
+    refute_receive {:client_event, %{"type" => "response.create"}}, 120
+  end
+
+  test "a warm call plays and finishes the current utterance before native admission returns",
+       ctx do
+    %{socket: socket, generation: generation} = call(ctx.id)
+    committed(socket, "warm")
+    response(socket, "warm-reply", "warm")
+    [{owner, _}] = Elixir.Registry.lookup(Synapsis.Voice.Registry, ctx.id)
+    adapter = :sys.get_state(owner).adapter
+    :sys.suspend(adapter)
+
+    try do
+      done(socket, "warm-reply", [assistant("warm-answer", "Ready")])
+      committed(socket, "live")
+      response(socket, "live-reply", "live")
+
+      event(socket, %{
+        "type" => "response.output_audio.delta",
+        "response_id" => "live-reply",
+        "item_id" => "live-answer",
+        "content_index" => 0,
+        "delta" => Base.encode64(<<0, 0>>)
+      })
+
+      assert_receive {:voice_pcm, ^generation, _, %{item_id: "live-answer"}, _}, @wait
+      done(socket, "live-reply", [assistant("live-answer", "On time")])
+    after
+      :sys.resume(adapter)
+    end
 
     wait_for(fn ->
-      assert {:ok, %{phase: :responding, reason: nil}} = VoiceSession.status(ctx.id)
-      assert %{queued: 16} = VoiceSession.chat_snapshot(ctx.id)
+      assert [%{role: "user"}, %{role: "assistant"}, %{role: "user"}, answer] =
+               Sessions.get_messages(ctx.id)
+
+      assert [%Synapsis.Part.SpokenAudio{text: "On time"}] = answer.parts
+    end)
+
+    refute_receive {:client_event, %{"type" => "response.create"}}, 100
+  end
+
+  test "VAD prepares the native response during speech and dispatches on commit", ctx do
+    %{socket: socket} = call(ctx.id)
+    event(socket, %{"type" => "input_audio_buffer.speech_started", "item_id" => "speaking"})
+    wait_for(fn -> assert {:ok, %{phase: :responding}} = VoiceSession.status(ctx.id) end)
+    assert %{messages: []} = VoiceSession.chat_snapshot(ctx.id)
+    refute_receive {:client_event, %{"type" => "response.create"}}, 60
+    committed(socket, "speaking")
+    response(socket, "now", "speaking")
+    done(socket, "now", [assistant("response", "Hello")])
+
+    wait_for(fn ->
+      assert [%{role: "user"}, %{role: "assistant"}] = Sessions.get_messages(ctx.id)
+    end)
+  end
+
+  test "speech during history sync retires the unsent reply and accepts the next input", ctx do
+    %{socket: socket, generation: generation} = call(ctx.id)
+    assert :ok = VoiceSession.submit(ctx.id, "First question", [])
+
+    assert_receive {:client_event, %{"type" => "conversation.item.create", "item" => prior}},
+                   @wait
+
+    event(socket, %{"type" => "input_audio_buffer.speech_started"})
+    committed(socket, "item_second")
+    acknowledge_item(socket, prior["id"])
+    response(socket, "reply-second", "item_second")
+    done(socket, "reply-second", [assistant("answer-second", "Still here")])
+
+    wait_for(fn ->
+      assert {:ok, %{phase: :listening, generation: ^generation}} = VoiceSession.status(ctx.id)
+
+      assert [%{role: "user"}, %{role: "user"}, %{role: "assistant"}] =
+               Sessions.get_messages(ctx.id)
+    end)
+  end
+
+  test "a failed provider reply leaves the same connection ready for a new utterance", ctx do
+    %{socket: socket, generation: generation} = call(ctx.id)
+    committed(socket, "item_failed")
+    response(socket, "reply-failed", "item_failed")
+
+    event(socket, %{
+      "type" => "response.output_audio.delta",
+      "response_id" => "reply-failed",
+      "item_id" => "partial-answer",
+      "content_index" => 0,
+      "delta" => Base.encode64(<<0, 0>>)
+    })
+
+    assert_receive {:voice_pcm, ^generation, _, %{item_id: "partial-answer"}, _}, @wait
+
+    event(socket, %{
+      "type" => "response.done",
+      "response" => %{
+        "id" => "reply-failed",
+        "status" => "failed",
+        "status_details" => %{
+          "type" => "failed",
+          "error" => %{"type" => "server_error", "code" => nil}
+        }
+      }
+    })
+
+    wait_for(fn ->
+      assert {:ok,
+              %{phase: :listening, reason: :realtime_response_failed, generation: ^generation}} =
+               VoiceSession.status(ctx.id)
+    end)
+
+    assert_receive {:voice_flush, ^generation, token, false}, @wait
+    VoiceSession.flushed(ctx.id, generation, token, nil)
+
+    assert_receive {:client_event,
+                    %{"type" => "conversation.item.truncate", "item_id" => "partial-answer"}},
+                   @wait
+
+    committed(socket, "item_next")
+    response(socket, "reply-next", "item_next")
+    done(socket, "reply-next", [assistant("answer-next", "Back online")])
+
+    wait_for(fn ->
+      assert [%{role: "user"}, %{role: "user"}, %{role: "assistant"}] =
+               Sessions.get_messages(ctx.id)
+
+      assert {:ok, %{phase: :listening, reason: nil, generation: ^generation}} =
+               VoiceSession.status(ctx.id)
     end)
   end
 
@@ -639,6 +821,62 @@ defmodule Synapsis.VoiceSessionTest do
     end)
   end
 
+  test "redial after owner loss abandons a provider-only audio attempt in the same session",
+       ctx do
+    archived = %Synapsis.Part.CommittedAudio{item_id: "archived", connection_generation: "past"}
+    assert {:ok, _} = Synapsis.Message.append(ctx.id, %{role: "user", parts: [archived]})
+    old = record_orphaned_audio_attempt(ctx.id)
+    history = Sessions.get_messages(ctx.id)
+
+    %{socket: next} = call(ctx.id)
+    refute_receive {:client_event, %{"type" => "response.create"}}, 100
+    assert Sessions.get_messages(ctx.id) == history
+
+    committed(next, "item_next")
+    fresh = response(next, "reply-next", "item_next")
+    assert old["metadata"]["attempt"] != fresh["metadata"]["attempt"]
+    refute %{"type" => "item_reference", "id" => "item_orphan"} in fresh["input"]
+    done(next, "reply-next", [assistant("answer-next", "Back online")])
+
+    wait_for(fn ->
+      {previous, new} = Enum.split(Sessions.get_messages(ctx.id), length(history))
+      assert previous == history
+      assert [%{role: "user"}, %{role: "assistant"}] = new
+    end)
+  end
+
+  test "owner loss after outbox acknowledgement admits fresh audio without replay", ctx do
+    record_orphaned_audio_attempt(ctx.id, &%{&1 | outbox: []})
+    %{socket: next} = call(ctx.id)
+    refute_receive {:client_event, %{"type" => "response.create"}}, 100
+
+    committed(next, "new-audio")
+    response(next, "new-reply", "new-audio")
+    done(next, "new-reply", [assistant("new-answer", "Heard you")])
+
+    wait_for(fn ->
+      assert [old, fresh, %{role: "assistant"}] = Sessions.get_messages(ctx.id)
+      assert [%Synapsis.Part.CommittedAudio{item_id: "item_orphan"}] = old.parts
+      assert [%Synapsis.Part.CommittedAudio{item_id: "new-audio"}] = fresh.parts
+    end)
+  end
+
+  test "a provider outbox belonging to a different attempt still requires recovery", ctx do
+    record_orphaned_audio_attempt(ctx.id, fn aggregate ->
+      [intent] = aggregate.outbox
+      %{aggregate | outbox: [put_in(intent.operation.attempt_id, "another_attempt")]}
+    end)
+
+    VoiceSession.start(ctx.id)
+
+    wait_for(fn ->
+      assert {:ok, %{phase: :error, reason: :voice_runtime_requires_recovery}} =
+               VoiceSession.status(ctx.id)
+    end)
+
+    refute_receive {:client_event, %{"type" => "response.create"}}, 100
+  end
+
   test "an unresponsive Realtime reply ends before the Conversation deadline and permits reconnect",
        ctx do
     key = :voice_response_idle_timeout
@@ -833,6 +1071,40 @@ defmodule Synapsis.VoiceSessionTest do
              VoiceSession.capture(ctx.id, original, 1, <<0, 0>>)
 
     assert :ok = VoiceSession.capture(ctx.id, generation, 1, <<0, 0>>)
+  end
+
+  # Restore the last durable checkpoint before the old owner could run its
+  # shutdown callbacks, as after a VM exit in the middle of response.create.
+  defp record_orphaned_audio_attempt(id, change \\ &Function.identity/1) do
+    journal = Synapsis.Runtime.Store
+    %{socket: socket} = call(id)
+    committed(socket, "item_orphan")
+    response = response(socket, "reply-orphan", "item_orphan")
+
+    {:ok, %{entries: [%{locator: loc, aggregate: checkpoint}]}} =
+      Synapsis.Agent.Runtime.RunInventory.load(id)
+
+    {:ok, projection} = journal.get_projection(id)
+    [{owner, _}] = Elixir.Registry.lookup(Synapsis.Voice.Registry, id)
+    adapter = :sys.get_state(owner).adapter
+    ref = Process.monitor(adapter)
+    assert :ok = VoiceSession.delete(id)
+    assert_receive {:DOWN, ^ref, :process, ^adapter, _}, @wait
+    {:ok, latest} = journal.load(loc.namespace, loc.run_id)
+    checkpoint = %{change.(checkpoint) | revision: latest.revision + 1}
+
+    assert :ok =
+             journal.commit(
+               loc.namespace,
+               loc.run_id,
+               latest.revision,
+               loc.incarnation,
+               checkpoint
+             )
+
+    assert :ok = journal.put_projection(id, put_in(projection.root.status, :unknown_outcome))
+    flush_wire_messages()
+    response
   end
 
   defp hangup(id, generation) do

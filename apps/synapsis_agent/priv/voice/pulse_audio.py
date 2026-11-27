@@ -286,7 +286,7 @@ class Pulse:
 class Endpoint:
     def __init__(self, options):
         self.closed = threading.Event()
-        self.muted = False
+        self.muted = bool(options.get('muted', False))
         self.playback = queue.Queue(maxsize=MAX_PLAYBACK_FRAMES)
         self.controls = queue.Queue(maxsize=16)
         self.tracker = PlaybackTracker()
