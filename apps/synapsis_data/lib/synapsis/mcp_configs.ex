@@ -14,6 +14,16 @@ defmodule Synapsis.MCPConfigs do
     @store_type |> Store.list() |> Enum.map(&to_struct/1) |> Enum.sort_by(& &1.name)
   end
 
+  @doc "Human-facing source name for a configured MCP server."
+  def display_name(%{provider_id: id, name: name}) when is_binary(id) do
+    case Store.get(:provider, id) do
+      {:ok, %{"name" => provider_name}} -> provider_name
+      _ -> name
+    end
+  end
+
+  def display_name(source), do: source.name
+
   @doc "List enabled MCP configs."
   def enabled, do: Enum.filter(list(), &runtime_available?/1)
 

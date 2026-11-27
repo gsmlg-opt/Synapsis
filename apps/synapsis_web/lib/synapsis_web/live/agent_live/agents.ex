@@ -573,6 +573,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
       |> assign(:draft, draft)
       |> assign(:mcp_policy, mcp_policy)
       |> assign(:mcp_groups, mcp_groups)
+      |> assign(:mcp_source_names, Map.new(mcp_groups, &{&1.id, &1.name}))
       |> assign(:deferred_tools, deferred_tools)
       |> assign(:deferred_tool_names, deferred_tool_names(assigns.agent))
       |> assign(:form_structure, form_structure)
@@ -1250,7 +1251,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
                     checked={tool.name in @deferred_tool_names}
                   />
                   <span class="break-all font-mono">
-                    {tool.name}<span
+                    {deferred_tool_label(tool.name, @mcp_source_names)}<span
                       :if={!tool.available}
                       class="ml-2 text-xs text-on-surface-variant"
                     >unavailable or no longer selected</span>
@@ -2453,6 +2454,17 @@ defmodule SynapsisWeb.AgentLive.Agents do
     available ++ unavailable
   end
 
+  defp deferred_tool_label("mcp::" <> qualified = name, sources) do
+    with [id, raw] <- String.split(qualified, "::", parts: 2),
+         {:ok, source_name} <- Map.fetch(sources, id) do
+      "mcp::#{source_name}::#{raw}"
+    else
+      _ -> name
+    end
+  end
+
+  defp deferred_tool_label(name, _sources), do: name
+
   defp selected_deferred_tool_names(agent, toolsets, groups, policy) do
     if native_tool_selection?(agent, toolsets) do
       known = MapSet.new(Synapsis.Agent.Tools.DisplayCatalog.list(), & &1.name)
@@ -3050,7 +3062,7 @@ defmodule SynapsisWeb.AgentLive.Agents do
 
       %{
         id: source.id,
-        name: source.name,
+        name: Synapsis.MCPConfigs.display_name(source),
         enabled: source.enabled,
         unavailable: source.unavailable,
         status:

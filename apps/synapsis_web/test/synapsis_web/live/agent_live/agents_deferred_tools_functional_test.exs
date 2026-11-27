@@ -4,10 +4,10 @@ defmodule SynapsisWeb.AgentLive.AgentsDeferredToolsFunctionalTest do
 
   import SynapsisWeb.ReactFormHelpers
 
-  alias Synapsis.{AgentConfigs, MCPConfigs, Toolsets}
+  alias Synapsis.{AgentConfigs, MCPConfigs, Providers, Toolsets}
   alias Synapsis.Config.Store
 
-  @field ~s(input[name="agent[deferred_tool_names][]"])
+  @field ~s(label input[name="agent[deferred_tool_names][]"])
 
   defmodule SnapshotSource do
     use GenServer
@@ -39,17 +39,21 @@ defmodule SynapsisWeb.AgentLive.AgentsDeferredToolsFunctionalTest do
   end
 
   test "empty deferred list offers only selected native and canonical MCP names", %{conn: conn} do
-    source = source!(["read::nested", "other"])
+    {:ok, provider} = Providers.create(%{name: "backplane", type: "openai"})
+    on_exit(fn -> Providers.delete(provider.id) end)
+    source = source!(["read::nested", "other"], provider.id)
     selected = "mcp::#{source.config.id}::read::nested"
 
     policy = policy(source.config.id, "selected", ["read::nested"])
-    agent = agent!(["synapsis::file_read"], %{"mcp_selection" => policy})
+    agent = agent!(["synapsis::read"], %{"mcp_selection" => policy})
     {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
     render_click(view, "switch_config_tab", %{"tab" => "tools"})
 
     assert has_element?(view, "#agent-deferred-tools", "Deferred tools")
     assert has_element?(view, "#agent-deferred-tools", "Leave empty")
-    assert names(view) == ["synapsis::file_read", selected]
+    assert has_element?(view, "#agent-deferred-tools label", "mcp::backplane::read::nested")
+    refute has_element?(view, "#agent-deferred-tools label", selected)
+    assert names(view) == ["synapsis::read", selected]
     assert checked_names(view) == []
     assert values(view)["agent"]["deferred_tool_names"] == []
     assert :error = Map.fetch(AgentConfigs.get(agent.id).config, "deferred_tool_names")
@@ -60,7 +64,7 @@ defmodule SynapsisWeb.AgentLive.AgentsDeferredToolsFunctionalTest do
   } do
     source = source!(["read::nested"])
     canonical = "mcp::#{source.config.id}::read::nested"
-    tools = [canonical, "synapsis::file_read", canonical]
+    tools = [canonical, "synapsis::read", canonical]
 
     config = %{
       "mcp_selection" => policy(source.config.id, "selected", ["read::nested"]),
@@ -69,7 +73,7 @@ defmodule SynapsisWeb.AgentLive.AgentsDeferredToolsFunctionalTest do
 
     agent = agent!(tools, config)
     {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
-    deferred = [canonical, "synapsis::file_read"]
+    deferred = [canonical, "synapsis::read"]
 
     react_form_change(view, "agent-config-form", %{
       "agent" => %{"deferred_tool_names" => deferred, "label" => "Deferred draft"}
@@ -97,6 +101,13 @@ defmodule SynapsisWeb.AgentLive.AgentsDeferredToolsFunctionalTest do
 
     {:ok, reopened, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
     render_click(reopened, "switch_config_tab", %{"tab" => "tools"})
+
+    assert has_element?(
+             reopened,
+             "#agent-deferred-tools label",
+             "mcp::#{source.config.name}::read::nested"
+           )
+
     assert Enum.sort(checked_names(reopened)) == Enum.sort(deferred)
     react_form_submit(reopened, "agent-config-form", %{"agent" => %{"deferred_tool_names" => []}})
     assert AgentConfigs.get(agent.id).config["deferred_tool_names"] == []
@@ -114,7 +125,7 @@ defmodule SynapsisWeb.AgentLive.AgentsDeferredToolsFunctionalTest do
       Toolsets.create(%{
         name: unique_name(),
         tool_contract_version: 1,
-        tool_names: ["synapsis::file_read", "synapsis::session_status"]
+        tool_names: ["synapsis::read", "synapsis::session_status"]
       })
 
     on_exit(fn -> Toolsets.delete(toolset) end)
@@ -128,7 +139,7 @@ defmodule SynapsisWeb.AgentLive.AgentsDeferredToolsFunctionalTest do
     {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
     render_click(view, "switch_config_tab", %{"tab" => "tools"})
     first_names = Enum.map(["one", "two::suffix"], &"mcp::#{first.config.id}::#{&1}")
-    assert names(view) == ["synapsis::file_read", "synapsis::session_status"] ++ first_names
+    assert names(view) == ["synapsis::read", "synapsis::session_status"] ++ first_names
 
     react_form_change(view, "agent-config-form", %{
       "mcp_selection" => %{
@@ -137,7 +148,7 @@ defmodule SynapsisWeb.AgentLive.AgentsDeferredToolsFunctionalTest do
     })
 
     assert names(view) == [
-             "synapsis::file_read",
+             "synapsis::read",
              "synapsis::session_status",
              List.last(first_names)
            ]
@@ -168,7 +179,7 @@ defmodule SynapsisWeb.AgentLive.AgentsDeferredToolsFunctionalTest do
   test "saved unavailable deferred entries stay checked through unrelated save and explicit removal",
        %{conn: conn} do
     missing = "mcp::#{Ecto.UUID.generate()}::saved::missing"
-    deferred = [missing, "synapsis::file_read"]
+    deferred = [missing, "synapsis::read"]
 
     config = %{
       "deferred_tool_names" => deferred,
@@ -176,7 +187,7 @@ defmodule SynapsisWeb.AgentLive.AgentsDeferredToolsFunctionalTest do
       "mcp_selection" => %{"default" => "selected", "sources" => %{}}
     }
 
-    agent = agent!(["synapsis::file_read"], config)
+    agent = agent!(["synapsis::read"], config)
     {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.id}/config")
     render_click(view, "switch_config_tab", %{"tab" => "tools"})
 
@@ -192,14 +203,16 @@ defmodule SynapsisWeb.AgentLive.AgentsDeferredToolsFunctionalTest do
     assert AgentConfigs.get(agent.id).config["other"] == config["other"]
 
     react_form_submit(view, "agent-config-form", %{
-      "agent" => %{"deferred_tool_names" => ["synapsis::file_read"]}
+      "agent" => %{"deferred_tool_names" => ["synapsis::read"]}
     })
 
-    assert AgentConfigs.get(agent.id).config["deferred_tool_names"] == ["synapsis::file_read"]
+    assert AgentConfigs.get(agent.id).config["deferred_tool_names"] == ["synapsis::read"]
   end
 
-  defp source!(names) do
-    {:ok, config} = MCPConfigs.create(%{name: unique_name(), command: "false"})
+  defp source!(names, provider_id \\ nil) do
+    {:ok, config} =
+      MCPConfigs.create(%{name: unique_name(), command: "false", provider_id: provider_id})
+
     pid = start_supervised!({SnapshotSource, {config.id, names}}, id: config.id)
     on_exit(fn -> MCPConfigs.delete(config) end)
     %{config: config, pid: pid}
