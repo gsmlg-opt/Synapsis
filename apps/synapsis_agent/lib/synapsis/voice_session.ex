@@ -185,7 +185,12 @@ defmodule Synapsis.VoiceSession do
     with {:ok, session} <- Sessions.get(id),
          true <- Sessions.voice?(session) or {:error, :voice_session_required},
          {:ok, adapter} <-
-           SessionAdapter.start_link(session_id: id, owner: self(), epoch: make_ref()) do
+           SessionAdapter.start_link(
+             session_id: id,
+             owner: self(),
+             epoch: make_ref(),
+             voice: true
+           ) do
       messages = Sessions.get_messages(id)
 
       {canonical, [], image_payloads} =
@@ -205,6 +210,7 @@ defmodule Synapsis.VoiceSession do
          socket: nil,
          socket_ref: nil,
          session_ready: false,
+         runtime_ready: false,
          options: nil,
          phase: :offline,
          reason: nil,
@@ -481,6 +487,12 @@ defmodule Synapsis.VoiceSession do
     do: {:noreply, disconnect(state, :realtime_attempt_retired)}
 
   def handle_cast(
+        {:retire_response, ref, :realtime_response_timeout},
+        %{attempt: %{ref: ref}} = state
+      ),
+      do: {:noreply, disconnect(state, :realtime_response_timeout)}
+
+  def handle_cast(
         {:playback_ack, owner, generation, seq},
         %{controller: owner, generation: generation, output_seq: sent, output_ack: ack} = state
       )
@@ -518,6 +530,12 @@ defmodule Synapsis.VoiceSession do
         %{connection_generation: generation, phase: :connecting, session_ready: false} = state
       ),
       do: {:noreply, disconnect(state, :realtime_setup_timeout)}
+
+  def handle_info(
+        {:setup_timeout, generation},
+        %{connection_generation: generation, phase: :connecting, runtime_ready: false} = state
+      ),
+      do: {:noreply, disconnect(state, :voice_runtime_check_timeout)}
 
   def handle_info(
         {:endpoint_timeout, generation},
@@ -592,6 +610,9 @@ defmodule Synapsis.VoiceSession do
       when type in [:run_failed, :run_cancelled, :storage_failed],
       do: {:noreply, disconnect(%{state | run_phase: :failed}, :voice_runtime_failed)}
 
+  def handle_info({:runtime_admission_failed, _, :recovery_required}, state),
+    do: {:noreply, disconnect(%{state | run_phase: :failed}, :voice_runtime_requires_recovery)}
+
   def handle_info({:runtime_admission_failed, _, _}, state),
     do: {:noreply, disconnect(%{state | run_phase: :failed}, :voice_runtime_admission_failed)}
 
@@ -616,7 +637,19 @@ defmodule Synapsis.VoiceSession do
           acc
       end)
 
-    {:noreply, publish(next)}
+    next =
+      case {state.runtime_ready, roster[:recovery_required]} do
+        {false, true} ->
+          disconnect(%{next | run_phase: :failed}, :voice_runtime_requires_recovery)
+
+        {false, false} ->
+          %{next | runtime_ready: true} |> open_initial_endpoint() |> publish()
+
+        _ ->
+          publish(next)
+      end
+
+    {:noreply, next}
   end
 
   def handle_info({:voice_child_cancelled, _agent, _run, {:error, _}}, state),
@@ -770,6 +803,13 @@ defmodule Synapsis.VoiceSession do
   defp valid_device?(nil), do: true
   defp valid_device?(id), do: is_binary(id) and byte_size(id) <= 512 and String.valid?(id)
 
+  defp open_initial_endpoint(
+         %{phase: :connecting, session_ready: true, runtime_ready: true, endpoint: nil} = state
+       ),
+       do: open_endpoint(state)
+
+  defp open_initial_endpoint(state), do: state
+
   defp open_endpoint(state) do
     Process.send_after(self(), {:endpoint_timeout, state.generation}, @setup_timeout)
 
@@ -824,7 +864,7 @@ defmodule Synapsis.VoiceSession do
   defp ready(state), do: state
 
   defp receive_realtime(%{session_ready: false} = state, %{"type" => "session.updated"}),
-    do: open_endpoint(%{state | session_ready: true})
+    do: open_initial_endpoint(%{state | session_ready: true})
 
   defp receive_realtime(state, %{
          "type" => "error",
@@ -967,22 +1007,13 @@ defmodule Synapsis.VoiceSession do
       case Protocol.finish(response, attempt.names, attempt.interrupt) do
         {:ok, calls, terminal} ->
           if Enum.any?(calls, &MapSet.member?(state.sync.calls, &1.id)) do
-            disconnect(state, :realtime_duplicate_call_id)
+            reject_function_calls(state, response, :realtime_duplicate_call_id)
           else
-            Enum.each(calls, &emit(attempt, %{type: :tool_call_completed, tool_call: &1}))
-
-            sync =
-              if terminal.type == :response_completed do
-                Sync.completed(state.sync, response["output"], calls)
-              else
-                state.sync
-              end
-
-            state
-            |> Map.put(:sync, sync)
-            |> mark_generated(id)
-            |> finish_attempt(associate_generation(terminal, state.connection_generation))
+            finish_realtime_response(state, response["output"], calls, terminal)
           end
+
+        {:error, :invalid_function_call} ->
+          reject_function_calls(state, response, :invalid_function_call)
 
         {:error, reason} ->
           disconnect(state, reason)
@@ -994,6 +1025,26 @@ defmodule Synapsis.VoiceSession do
   end
 
   defp receive_realtime(state, _), do: state
+
+  defp reject_function_calls(state, response, reason) do
+    Logger.warning("voice_function_call_rejected", session_id: state.session.id, reason: reason)
+    {output, terminal} = Protocol.finish_without_calls(response)
+    finish_realtime_response(%{state | reason: reason}, output, [], terminal)
+  end
+
+  defp finish_realtime_response(state, output, calls, terminal) do
+    Enum.each(calls, &emit(state.attempt, %{type: :tool_call_completed, tool_call: &1}))
+
+    sync =
+      if terminal.type == :response_completed,
+        do: Sync.completed(state.sync, output, calls),
+        else: state.sync
+
+    state
+    |> Map.put(:sync, sync)
+    |> mark_generated(state.attempt.id)
+    |> finish_attempt(associate_generation(terminal, state.connection_generation))
+  end
 
   defp safe_realtime_field(value) when is_binary(value) and byte_size(value) <= 128 do
     if Regex.match?(~r/\A[a-zA-Z0-9_.\[\]-]+\z/, value), do: value
@@ -1042,9 +1093,13 @@ defmodule Synapsis.VoiceSession do
             image_payloads: Map.merge(state.image_payloads, images)
         }
 
-        if next.reason == :voice_input_queue_full,
-          do: publish(%{next | reason: nil}),
-          else: next
+        if next.reason in [
+             :voice_input_queue_full,
+             :invalid_function_call,
+             :realtime_duplicate_call_id
+           ],
+           do: publish(%{next | reason: nil}),
+           else: next
 
       {:empty, _} ->
         state

@@ -392,6 +392,68 @@ defmodule Synapsis.VoiceSessionTest do
     assert {:ok, %{tasks: []}} = VoiceSession.status(ctx.id)
   end
 
+  test "a malformed tool response leaves the same call available for the next turn", ctx do
+    %{socket: socket, generation: generation} = call(ctx.id)
+    committed(socket, "item_tool_request")
+    response(socket, "reply-with-bad-tool", "item_tool_request")
+
+    valid = function("call_valid", %{"task_name" => "untrusted-batch", "message" => "Ignore"})
+    malformed = %{function("call_invalid", %{}) | "arguments" => ~s(["not an object"])}
+    done(socket, "reply-with-bad-tool", [valid, malformed])
+
+    wait_for(fn ->
+      assert {:ok, %{phase: :listening, generation: ^generation, reason: :invalid_function_call}} =
+               VoiceSession.status(ctx.id)
+
+      assert %{busy: false, reply: nil} = VoiceSession.chat_snapshot(ctx.id)
+    end)
+
+    refute_receive {:realtime_closed, _}, 60
+    refute_receive {:client_event, %{"type" => "response.create"}}, 60
+    assert {:ok, %{tasks: []}} = VoiceSession.status(ctx.id)
+
+    committed(socket, "item_next_question")
+    next = response(socket, "reply-next", "item_next_question")
+    refute Enum.any?(next["input"], &(&1["id"] in ["item_call_valid", "item_call_invalid"]))
+    assert {:ok, %{phase: :responding, reason: nil}} = VoiceSession.status(ctx.id)
+    done(socket, "reply-next", [assistant("item_next_answer", "Still connected")])
+
+    wait_for(fn ->
+      assert [%{role: "user"}, %{role: "user"}, %{role: "assistant"}] =
+               Sessions.get_messages(ctx.id)
+    end)
+  end
+
+  test "a journaled provider-only interruption lets the same voice session reopen after restart",
+       ctx do
+    %{socket: socket} = call(ctx.id)
+    committed(socket, "item_interrupted")
+    response(socket, "reply-interrupted", "item_interrupted")
+    send(socket, :sever)
+
+    wait_for(fn ->
+      assert %{busy: false, phase: :error} = VoiceSession.chat_snapshot(ctx.id)
+      assert [%{role: "user"}] = Sessions.get_messages(ctx.id)
+    end)
+
+    assert :ok = VoiceSession.delete(ctx.id)
+
+    wait_for(fn ->
+      assert {:ok, %{root: %{status: :unknown_outcome}}} =
+               Synapsis.Runtime.Store.get_projection(ctx.id)
+    end)
+
+    %{socket: reopened} = call(ctx.id)
+    committed(reopened, "item_new")
+    response(reopened, "reply-reopened", "item_new")
+    done(reopened, "reply-reopened", [assistant("item_answer", "Same session")])
+
+    wait_for(fn ->
+      assert [%{role: "user"}, %{role: "user"}, %{role: "assistant"}] =
+               Sessions.get_messages(ctx.id)
+    end)
+  end
+
   test "standard child retains its own model and delivers the result after media hangup", ctx do
     test = self()
 
@@ -577,6 +639,125 @@ defmodule Synapsis.VoiceSessionTest do
     end)
   end
 
+  test "an unresponsive Realtime reply ends before the Conversation deadline and permits reconnect",
+       ctx do
+    key = :voice_response_idle_timeout
+    saved = Application.fetch_env(:synapsis_agent, key)
+    Application.put_env(:synapsis_agent, key, 500)
+
+    on_exit(fn ->
+      case saved do
+        {:ok, value} -> Application.put_env(:synapsis_agent, key, value)
+        :error -> Application.delete_env(:synapsis_agent, key)
+      end
+    end)
+
+    %{socket: socket} = call(ctx.id)
+    committed(socket, "item_stalled")
+    response(socket, "reply-stalled", "item_stalled")
+
+    wait_for(fn ->
+      assert {:ok, %{phase: :error, reason: :realtime_response_timeout}} =
+               VoiceSession.status(ctx.id)
+
+      assert %{busy: false, reply: nil} = VoiceSession.chat_snapshot(ctx.id)
+    end)
+
+    %{socket: reopened} = call(ctx.id)
+    committed(reopened, "item_new")
+    response(reopened, "reply-new", "item_new")
+    done(reopened, "reply-new", [assistant("answer-new", "Back online")])
+
+    wait_for(fn ->
+      assert [%{role: "user"}, %{role: "user"}, %{role: "assistant"}] =
+               Sessions.get_messages(ctx.id)
+    end)
+  end
+
+  test "a recovery-required voice session can continue from a copy of its saved history", ctx do
+    journal = Synapsis.Runtime.Store
+    root = %{status: :unknown_outcome, run_id: "unsettled"}
+
+    assert :ok =
+             journal.put_projection(ctx.id, %{root: root, agents: [], recovery_required: true})
+
+    audio = %Synapsis.Part.CommittedAudio{item_id: "item_prior", connection_generation: "old"}
+    assert {:ok, _} = Synapsis.Message.append(ctx.id, %{role: "user", parts: [audio]})
+    assert :ok = journal.put_fact(ctx.id, :voice_transcript, "old:item_prior", "Saved speech")
+
+    spoken = %Synapsis.Part.SpokenAudio{
+      item_id: "item_played",
+      response_id: "reply-old",
+      content_index: 0,
+      connection_generation: "old",
+      text: "Saved reply"
+    }
+
+    assert {:ok, _} = Synapsis.Message.append(ctx.id, %{role: "assistant", parts: [spoken]})
+    playback = %{generated: true, interrupted: false}
+    assert :ok = journal.put_fact(ctx.id, :voice_playback, "old:item_played:0", playback)
+
+    assert :ok =
+             journal.put_fact(ctx.id, :voice_transcript, "old:unadmitted", "Skipped speech")
+
+    case VoiceSession.start(ctx.id) do
+      {:ok, %{phase: :connecting}} ->
+        receive do
+          {:realtime_wire, socket} -> event(socket, %{"type" => "session.updated"})
+        after
+          100 -> :ok
+        end
+
+      {:error, :voice_runtime_requires_recovery} ->
+        :ok
+    end
+
+    wait_for(fn ->
+      assert {:ok, %{phase: :error, reason: :voice_runtime_requires_recovery}} =
+               VoiceSession.status(ctx.id)
+    end)
+
+    refute_receive {:voice_browser_open, _, _}, 100
+    flush_wire_messages()
+
+    assert {:ok, branch} = Sessions.fork(ctx.id)
+    on_exit(fn -> Sessions.delete(branch.id) end)
+
+    assert {:ok, %{"old:item_prior" => "Saved speech"}} =
+             journal.list_facts_by_identity(branch.id, :voice_transcript)
+
+    assert {:ok, %{"old:item_played:0" => ^playback}} =
+             journal.list_facts_by_identity(branch.id, :voice_playback)
+
+    assert :not_found = journal.get_projection(branch.id)
+    assert {:ok, %{root: ^root}} = journal.get_projection(ctx.id)
+
+    %{socket: next} = call(branch.id)
+    committed(next, "item_next")
+
+    assert_receive {:client_event, %{"type" => "conversation.item.create", "item" => prior}},
+                   @wait
+
+    assert [%{"text" => "[Prior microphone transcript] Saved speech"}] = prior["content"]
+    acknowledge_item(next, prior["id"])
+
+    assert_receive {:client_event,
+                    %{"type" => "conversation.item.create", "item" => prior_reply}},
+                   @wait
+
+    assert [%{"text" => "[Prior assistant speech played to the user] Saved reply"}] =
+             prior_reply["content"]
+
+    acknowledge_item(next, prior_reply["id"])
+    response(next, "reply-new", "item_next")
+    done(next, "reply-new", [assistant("answer-new", "Continued")])
+
+    wait_for(fn ->
+      assert [%{role: "user"}, %{role: "assistant"}, %{role: "user"}, %{role: "assistant"}] =
+               Sessions.get_messages(branch.id)
+    end)
+  end
+
   test "cancel is scoped to the observed child run and keeps media available", ctx do
     test = self()
 
@@ -658,6 +839,17 @@ defmodule Synapsis.VoiceSessionTest do
     assert :ok = VoiceSession.stop(id)
     assert_receive {:voice_flush, ^generation, token, true}, @wait
     VoiceSession.flushed(id, generation, token, nil)
+  end
+
+  defp flush_wire_messages do
+    receive do
+      {:upgrade, _, _} -> flush_wire_messages()
+      {:realtime_wire, _} -> flush_wire_messages()
+      {:realtime_closed, _} -> flush_wire_messages()
+      {:client_event, _} -> flush_wire_messages()
+    after
+      0 -> :ok
+    end
   end
 
   defp expect_connection(fixture, test) do

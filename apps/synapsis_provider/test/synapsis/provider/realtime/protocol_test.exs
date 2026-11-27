@@ -43,12 +43,43 @@ defmodule Synapsis.Provider.Realtime.ProtocolTest do
     assert {:ok, [], %{type: :response_interrupted, reason: "barge_in"}} =
              Protocol.finish(%{response | "status" => "cancelled"}, %{}, "barge_in")
 
+    assert {:ok, [], %{type: :response_interrupted, reason: "barge_in"}} =
+             Protocol.finish(response, %{}, "barge_in")
+
     assert {:error, :invalid_function_call} =
              Protocol.finish(
                %{response | "output" => [call, %{call | "arguments" => "{}"}]},
                %{"native" => "native"},
                nil
              )
+  end
+
+  test "a rejected tool batch can preserve completed assistant speech and usage" do
+    speech = %{
+      "type" => "message",
+      "role" => "assistant",
+      "status" => "completed",
+      "id" => "item_speech",
+      "content" => [%{"type" => "output_audio", "transcript" => "Already spoken"}]
+    }
+
+    malformed = %{"type" => "function_call", "id" => "item_tool", "status" => "incomplete"}
+
+    response = %{
+      "id" => "resp_reply",
+      "status" => "completed",
+      "output" => [speech, malformed],
+      "usage" => %{"input_tokens" => 20}
+    }
+
+    assert {:error, :invalid_function_call} = Protocol.finish(response, %{}, nil)
+
+    assert {[^speech],
+            %{
+              type: :response_completed,
+              message: %{content: [%{type: :spoken_audio, text: "Already spoken"}]},
+              usage: %{input_tokens: 20}
+            }} = Protocol.finish_without_calls(response)
   end
 
   test "Realtime tools keep the object properties and omit unsupported root constraints" do

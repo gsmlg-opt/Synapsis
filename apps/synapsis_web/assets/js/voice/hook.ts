@@ -41,6 +41,7 @@ function mount(root: HTMLElement) {
   const mute = get<HTMLButtonElement>('[data-action=mute]')
   const commit = get<HTMLButtonElement>('[data-action=commit_audio]')
   const start = get<HTMLButtonElement>('[data-action=start]')
+  const fork = root.querySelector<HTMLButtonElement>('[data-voice-fork]')
   const hangup = get<HTMLButtonElement>('[data-action=stop]')
   const stopPlayback = get<HTMLButtonElement>('[data-action=stop_playback]')
   const deviceIdentity = get('[data-voice-devices]')
@@ -75,13 +76,18 @@ function mount(root: HTMLElement) {
       voice_runtime_admission_failed: 'The voice runtime could not accept this turn.',
       voice_input_queue_full:
         'A microphone segment was skipped while the queue was full. Speak again after it clears.',
-      voice_runtime_requires_recovery:
-        root.dataset.mode === 'host'
-          ? 'A previous turn in this Device Voice Agent conversation needs recovery before another call can start.'
-          : 'This session needs runtime recovery. Open a new session to continue.',
+      voice_runtime_requires_recovery: fork
+        ? 'A previous turn needs recovery. Continue in a copy of this chat.'
+        : 'A previous turn in this Device Voice Agent conversation needs recovery before another call can start.',
+      voice_runtime_check_timeout:
+        'The session recovery check timed out. Start a call to try again.',
       realtime_protocol_error: 'The Realtime service rejected a voice request.',
+      invalid_function_call: 'The model returned an invalid tool call. You can ask again.',
+      realtime_duplicate_call_id: 'The model repeated a tool call. You can ask again.',
       realtime_response_failed:
         'The Realtime service could not produce the reply. Start a call to continue here.',
+      realtime_response_timeout:
+        'The Realtime service stopped responding. Start a call to continue here.',
       realtime_disconnected: 'The Realtime connection ended. Start a call to continue here.',
       realtime_policy_rejected:
         'The Realtime gateway rejected the call. Check the selected Backplane connection.',
@@ -178,8 +184,10 @@ function mount(root: HTMLElement) {
     if (view.reason) error(view.reason)
     root.dataset.active = String(active)
     root.dataset.ready = String(ready)
-    start.disabled = !connected || callActive || (root.dataset.mode === 'host' && view.reason === 'voice_runtime_requires_recovery')
-    start.hidden = active
+    const requiresRecovery = view.reason === 'voice_runtime_requires_recovery'
+    start.disabled = !connected || callActive || requiresRecovery
+    start.hidden = active || (requiresRecovery && !!fork)
+    if (fork) fork.hidden = !requiresRecovery
     hangup.hidden = !active
     hangup.disabled = view.phase === 'ending'
     mute.hidden = !ready

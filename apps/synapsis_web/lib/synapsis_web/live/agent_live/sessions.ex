@@ -740,6 +740,17 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
   end
 
+  defp handle_session_event("fork_voice_session", _params, socket) do
+    session = socket.assigns.current_session
+
+    with true <- Sessions.voice?(session) and not Sessions.host_voice?(session),
+         {:ok, branch} <- Sessions.fork(session.id) do
+      {:noreply, push_patch(socket, to: ~p"/agent/agents/#{branch.agent}/sessions/#{branch.id}")}
+    else
+      _ -> {:noreply, put_flash(socket, :error, "Could not copy the voice conversation")}
+    end
+  end
+
   defp handle_session_event("switch_session", %{"id" => session_id}, socket) do
     agent_id = socket.assigns.agent_id
     {:noreply, push_patch(socket, to: ~p"/agent/agents/#{agent_id}/sessions/#{session_id}")}
@@ -1589,6 +1600,18 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               >
                 Start call
               </button>
+              <.dm_btn
+                :if={!Sessions.host_voice?(@session)}
+                type="button"
+                size="sm"
+                variant="primary"
+                data-voice-fork
+                phx-click="fork_voice_session"
+                phx-disable-with="Copying…"
+                hidden
+              >
+                Copy chat and continue
+              </.dm_btn>
               <.dm_btn type="button" size="sm" variant="error" data-action="stop" hidden>
                 Hang up
               </.dm_btn>

@@ -118,6 +118,30 @@ defmodule Synapsis.Runtime.Store do
 
   def get_projection(session_id), do: read(projection_key(session_id))
 
+  @doc false
+  def voice_fork_entries(source, destination, identities) do
+    Enum.reduce_while([:voice_transcript, :voice_playback], {:ok, []}, fn kind, {:ok, entries} ->
+      case Map.get(identities, kind, []) do
+        [] ->
+          {:cont, {:ok, entries}}
+
+        keys ->
+          case list_facts_by_identity(source, kind) do
+            {:ok, facts} ->
+              copied =
+                for {key, value} <- Map.take(facts, keys) do
+                  {fact_prefix(destination, kind) <> segment(key), value}
+                end
+
+              {:cont, {:ok, copied ++ entries}}
+
+            {:error, _} = error ->
+              {:halt, error}
+          end
+      end
+    end)
+  end
+
   defp compare_and_swap(key, value, mod_revision, deadline) do
     with {:ok, timeout} <- remaining_timeout(deadline) do
       case adapter().compare_and_swap(key, value, mod_revision: mod_revision, timeout: timeout) do

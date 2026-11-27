@@ -79,6 +79,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
         owner: owner,
         owner_ref: Process.monitor(owner),
         session_id: id,
+        voice: Keyword.get(opts, :voice, false),
         adapter: self(),
         epoch: Keyword.fetch!(opts, :epoch),
         provider: Keyword.get(opts, :provider, ProviderAdapter),
@@ -720,7 +721,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
   end
 
   defp load_goal_recovery(state) do
-    with {:ok, recovered} <- recover(state.session_id),
+    with {:ok, recovered} <- recover(state.session_id, state.voice),
          {:ok, facts} <- Journal.list_facts(state.session_id, :goal_attribution),
          {:ok, goal} <-
            Goal.start_link(
@@ -741,7 +742,7 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     end
   end
 
-  defp recover(id) do
+  defp recover(id, voice) do
     saved =
       case Journal.get_projection(id) do
         {:ok, value} -> {:ok, value}
@@ -753,6 +754,9 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
          {:ok, intents} <- Journal.list_facts(id, :admission_intent),
          {:ok, receipts} <- Journal.list_facts(id, :admission_receipt),
          {:ok, inventory} <- RunInventory.load(id) do
+      {inventory, retired} = exclude_retired_voice_runs(inventory, voice)
+      saved = restore_retired_voice_root(saved, retired)
+
       unresolved =
         Enum.any?(intents, fn intent ->
           not Enum.any?(receipts, &(&1.attempt_id == intent.attempt_id))
@@ -776,8 +780,10 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     end
   end
 
-  defp finalize_goal_recovery(id, recovered) do
+  defp finalize_goal_recovery(id, recovered, voice) do
     with {:ok, inventory} <- RunInventory.load(id) do
+      {inventory, _retired} = exclude_retired_voice_runs(inventory, voice)
+
       uncertain =
         recovered.structural_uncertain or Enum.any?(inventory.entries, &unsettled_inventory?/1)
 
@@ -801,6 +807,55 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     aggregate.run.state not in [:completed, :failed, :cancelled, :timed_out] or
       get_in(aggregate, [:run, :context, :conversation, :goal_outbox]) not in [nil, []]
   end
+
+  defp exclude_retired_voice_runs(inventory, false), do: {inventory, []}
+
+  defp exclude_retired_voice_runs(inventory, true) do
+    {retired, entries} = Enum.split_with(inventory.entries, &retired_voice_run?/1)
+    {%{inventory | entries: entries}, retired}
+  end
+
+  # An interrupted provider can leave a voice Conversation waiting for a
+  # future utterance. After its owner exits, start a fresh run from the saved
+  # transcript only when the journal proves no work remains in the old run.
+  defp retired_voice_run?(%{
+         locator: %{kind: :root, incarnation: incarnation},
+         aggregate: %{
+           incarnation: incarnation,
+           outbox: [],
+           run: %{
+             state: :running,
+             active_provider: nil,
+             active_tools: tools,
+             active_wait: nil,
+             children: [],
+             dependencies: [],
+             execution_intents: intents,
+             context: %{conversation: conversation}
+           }
+         }
+       })
+       when map_size(tools) == 0 and map_size(intents) > 0 do
+    match?(%{outcome: :interrupted}, List.last(conversation.turns)) and
+      is_nil(conversation.pending_interaction) and
+      Enum.all?([:steering, :follow_up, :mailbox, :goal_outbox], &(conversation[&1] == [])) and
+      Enum.all?(Map.values(intents), &match?(%{type: :provider, status: :consumed}, &1))
+  end
+
+  defp retired_voice_run?(_), do: false
+
+  defp restore_retired_voice_root(
+         %{namespace: namespace, root: %{run_id: id} = root} = saved,
+         retired
+       ) do
+    if Enum.any?(retired, &match?(%{locator: %{run_id: ^id, namespace: ^namespace}}, &1)) do
+      put_in(saved.root, Map.put(root, :status, :interrupted))
+    else
+      saved
+    end
+  end
+
+  defp restore_retired_voice_root(saved, _), do: saved
 
   defp self_host(state), do: state.adapter
 
@@ -1314,7 +1369,9 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
     state = %{state | goal_recovery: %{diagnostic: :none}}
 
     {:noreply,
-     job(state, :recover, fn -> finalize_goal_recovery(state.session_id, recovered) end)}
+     job(state, :recover, fn ->
+       finalize_goal_recovery(state.session_id, recovered, state.voice)
+     end)}
   end
 
   defp continue_goal_recovery(state, [group | remaining], recovered) do

@@ -19,7 +19,9 @@ import time
 RATE = 24000
 FRAME_BYTES = 960
 MAX_BUFFER_BYTES = RATE * 2 * 3
-MAX_PLAYBACK_FRAMES = RATE * 2 * 15 // FRAME_BYTES
+# Realtime may synthesize several sentences faster than the sink can play them.
+# Keep the queued PCM bounded to 45 seconds (about 2.2 MB).
+MAX_PLAYBACK_FRAMES = RATE * 2 * 45 // FRAME_BYTES
 PLAYBACK_BUFFER_FRAMES = 6
 PLAYBACK_PREBUFFER_FRAMES = 3
 PLAYBACK_PREROLL_SECONDS = 0.10

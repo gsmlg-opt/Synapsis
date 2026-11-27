@@ -23,6 +23,15 @@ class CursorTest(unittest.TestCase):
         tracker.append(2400, dict(first, item_id='next'))
         self.assertEqual(tracker.cursor(6000)['audio_end_ms'], 50)
 
+    def test_host_queue_accepts_a_burst_longer_than_fifteen_seconds(self):
+        endpoint = module.Endpoint.__new__(module.Endpoint)
+        endpoint.playback = module.queue.Queue(maxsize=module.MAX_PLAYBACK_FRAMES)
+        chunk = module.base64.b64encode(b'\0' * module.RATE * 2 * 2).decode()
+        command = {'command': 'play', 'pcm': chunk, 'metadata': {}}
+        for _ in range(15):
+            endpoint.handle(command)
+        self.assertEqual(endpoint.playback.qsize(), module.RATE * 2 * 30 // module.FRAME_BYTES)
+
     def test_playback_bridges_short_delivery_gaps_and_drains_after_idle(self):
         endpoint = module.Endpoint.__new__(module.Endpoint)
         endpoint.closed = Mock(wraps=module.threading.Event())

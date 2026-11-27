@@ -1,7 +1,8 @@
 defmodule Synapsis.Session.Fork do
   @moduledoc "Fork a session at a given message, creating a new branch."
 
-  alias Synapsis.{Message, Session, Sessions}
+  alias Synapsis.{Message, Part, Session, Sessions}
+  alias Synapsis.Session.Store
 
   @doc "Copy through `:at_message`, or stop before it with `include_message: false`."
   def fork(session_id, opts \\ []) do
@@ -59,8 +60,44 @@ defmodule Synapsis.Session.Fork do
         }
       end)
 
-    with :ok <- Message.persist_list(new_session.id, copied, Session.to_meta(new_session)) do
+    with :ok <- persist_fork(session, new_session, copied) do
       {:ok, new_session}
     end
   end
+
+  defp persist_fork(source, destination, messages) do
+    meta = Session.to_meta(destination)
+
+    if Sessions.voice?(source) do
+      identities =
+        messages
+        |> Enum.flat_map(&(&1.parts || []))
+        |> Enum.flat_map(&voice_fact_identity/1)
+        |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+
+      Store.publish_voice_fork(
+        source.id,
+        destination.id,
+        Enum.map(messages, &Message.encode/1),
+        meta,
+        identities
+      )
+    else
+      Message.persist_list(destination.id, messages, meta)
+    end
+  end
+
+  defp voice_fact_identity(%Part.CommittedAudio{connection_generation: generation, item_id: id})
+       when is_binary(generation) and is_binary(id),
+       do: [{:voice_transcript, generation <> ":" <> id}]
+
+  defp voice_fact_identity(%Part.SpokenAudio{
+         connection_generation: generation,
+         item_id: id,
+         content_index: index
+       })
+       when is_binary(generation) and is_binary(id) and is_integer(index),
+       do: [{:voice_playback, generation <> ":" <> id <> ":" <> Integer.to_string(index)}]
+
+  defp voice_fact_identity(_), do: []
 end

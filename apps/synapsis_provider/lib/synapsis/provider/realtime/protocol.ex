@@ -106,42 +106,63 @@ defmodule Synapsis.Provider.Realtime.Protocol do
   defp item(item),
     do: %{type: "conversation.item.create", event_id: "put_" <> item.id, item: item}
 
+  def finish(%{"status" => status} = response, _names, reason)
+      when status in ["cancelled", "completed"] and is_binary(reason),
+      do: {:ok, [], interruption(response, reason)}
+
   def finish(%{"status" => "completed", "output" => output} = response, names, _reason)
       when is_list(output) do
     with {:ok, calls} <- calls(output, names) do
-      blocks =
-        for %{"type" => "message", "id" => item, "content" => content} <- output,
-            is_binary(item) and is_list(content),
-            {block, index} <- Enum.with_index(content),
-            is_map(block),
-            text = block["transcript"] || block["text"],
-            is_binary(text) do
-          if block["type"] == "output_audio" and is_binary(response["id"]) do
-            %{
-              type: :spoken_audio,
-              item_id: item,
-              response_id: response["id"],
-              content_index: index,
-              text: text
-            }
-          else
-            %{type: :text, text: text}
-          end
-        end
-
-      {:ok, calls,
-       %{
-         type: :response_completed,
-         message: %{role: :assistant, content: blocks},
-         usage: usage(response["usage"])
-       }}
+      {:ok, calls, completion(response, output)}
     end
   end
 
-  def finish(%{"status" => "cancelled"} = response, _names, reason) when is_binary(reason),
-    do: {:ok, [], %{type: :response_interrupted, reason: reason, usage: usage(response["usage"])}}
-
   def finish(_, _, _), do: {:error, :realtime_response_failed}
+
+  def finish_without_calls(%{"output" => output} = response) do
+    messages =
+      Enum.filter(output, fn
+        %{"type" => "message", "role" => "assistant", "status" => "completed", "id" => id}
+        when is_binary(id) and id != "" ->
+          true
+
+        _ ->
+          false
+      end)
+
+    {messages, completion(response, messages)}
+  end
+
+  defp completion(response, output) do
+    blocks =
+      for %{"type" => "message", "id" => item, "content" => content} <- output,
+          is_binary(item) and is_list(content),
+          {block, index} <- Enum.with_index(content),
+          is_map(block),
+          text = block["transcript"] || block["text"],
+          is_binary(text) do
+        if block["type"] == "output_audio" and is_binary(response["id"]) do
+          %{
+            type: :spoken_audio,
+            item_id: item,
+            response_id: response["id"],
+            content_index: index,
+            text: text
+          }
+        else
+          %{type: :text, text: text}
+        end
+      end
+
+    %{
+      type: :response_completed,
+      message: %{role: :assistant, content: blocks},
+      usage: usage(response["usage"])
+    }
+  end
+
+  defp interruption(response, reason),
+    do: %{type: :response_interrupted, reason: reason, usage: usage(response["usage"])}
 
   defp calls(output, names) do
     output

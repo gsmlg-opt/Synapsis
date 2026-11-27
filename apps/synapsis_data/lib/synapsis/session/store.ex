@@ -946,12 +946,23 @@ defmodule Synapsis.Session.Store do
   """
   def replace_turns(id, turn_maps, meta)
       when is_binary(id) and is_list(turn_maps) and is_map(meta) do
+    replace_turns_and_meta(id, turn_maps, meta, [])
+  end
+
+  @doc "Publish a voice fork's transcript and selected voice facts in one revision."
+  def publish_voice_fork(source, id, turn_maps, meta, identities) do
+    with {:ok, facts} <- Synapsis.Runtime.Store.voice_fork_entries(source, id, identities) do
+      replace_turns_and_meta(id, turn_maps, meta, facts)
+    end
+  end
+
+  defp replace_turns_and_meta(id, turn_maps, meta, facts) do
     new_puts =
       turn_maps
       |> Enum.with_index()
       |> Enum.map(fn {turn, n} -> {turn_key(id, n), turn} end)
 
-    puts = new_puts ++ [{meta_key(id), meta}]
+    puts = new_puts ++ [{meta_key(id), meta} | facts]
 
     case KV.replace_prefix(turns_prefix(id), puts, timeout: 5_000) do
       {:ok, %{succeeded: true}} -> :ok

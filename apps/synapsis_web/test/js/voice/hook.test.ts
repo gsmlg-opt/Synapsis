@@ -19,12 +19,13 @@ class ElementFixture {
   append(...children: ElementFixture[]) { this.children.push(...children) }
 }
 
-function environment({ staleMarkup = false } = {}) {
+function environment({ staleMarkup = false, fixedHost = false } = {}) {
   const elements = new Map<string, ElementFixture>()
-  for (const name of ['status', 'error', 'playback', 'tasks', 'devices']) elements.set(`[data-voice-${name}]`, new ElementFixture())
+  for (const name of ['status', 'error', 'playback', 'tasks', 'devices', 'fork']) elements.set(`[data-voice-${name}]`, new ElementFixture())
   for (const name of ['mute', 'commit_audio', 'start', 'stop', 'stop_playback']) elements.set(`[data-action=${name}]`, new ElementFixture())
   if (staleMarkup) elements.delete('[data-voice-error]')
   const element = (selector: string) => elements.get(selector)!
+  if (fixedHost) elements.delete('[data-voice-fork]')
 
   const handlers = new Map<string, (data: any) => void>()
   const pushes: Array<{ event: string; payload: object; replies: Map<string, (data: any) => void> }> = []
@@ -180,10 +181,31 @@ test('a status for a call in another tab keeps start disabled and hides hangup',
 })
 
 test('a fixed Device Voice Agent conversation starts without an endpoint picker or chat copy', () => {
-  const { root, pushes, element, handlers } = environment()
+  const { root, pushes, element, handlers } = environment({ fixedHost: true })
   root.onclick({ target: { closest: () => ({ dataset: { action: 'start' } }) } })
   assert.deepEqual(JSON.parse(JSON.stringify(pushes.at(-1)?.payload)), { mode: 'host' })
   handlers.get('status')!({ phase: 'error', reason: 'voice_runtime_requires_recovery' })
   assert.equal(element('[data-action=start]').disabled, true)
   assert.match(element('[data-voice-error]').textContent, /Device Voice Agent conversation needs recovery/)
+})
+
+test('a blocked runtime offers a chat copy in place of starting another call', () => {
+  const { element, update } = environment()
+  assert.equal(element('[data-voice-fork]').hidden, true)
+
+  update({ phase: 'error', reason: 'voice_runtime_requires_recovery' })
+
+  assert.equal(element('[data-action=start]').disabled, true)
+  assert.equal(element('[data-action=start]').hidden, true)
+  assert.equal(element('[data-voice-fork]').hidden, false)
+  assert.match(element('[data-voice-error]').textContent, /copy of this chat/)
+})
+
+test('an invalid tool call leaves the active call controls available', () => {
+  const { root, element, update } = environment()
+  update({ phase: 'listening', ...endpoint, reason: 'invalid_function_call' })
+
+  assert.equal(root.dataset.ready, 'true')
+  assert.equal(element('[data-action=stop]').hidden, false)
+  assert.match(element('[data-voice-error]').textContent, /You can ask again/)
 })
