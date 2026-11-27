@@ -28,6 +28,51 @@ defmodule Synapsis.Provider.ToolName do
 
   def encode(name), do: encode(to_string(name))
 
+  @doc "Freeze provider-safe names for a catalog and its replayed tool calls."
+  def wire_names(names, fallback \\ &encode/1) do
+    names = Enum.uniq(names)
+
+    sources =
+      for "mcp::" <> qualified <- names,
+          [id, _raw] <- [String.split(qualified, "::", parts: 2)],
+          uniq: true,
+          do: id
+
+    source_names =
+      Map.new(sources, fn id ->
+        config = Synapsis.MCPConfigs.get(id)
+        {id, config && Synapsis.MCPConfigs.display_name(config)}
+      end)
+
+    candidates = Map.new(names, &{&1, mcp_wire_name(&1, source_names) || fallback.(&1)})
+    counts = candidates |> Map.values() |> Enum.frequencies()
+
+    Map.new(candidates, fn {native, wire} ->
+      {native, if(counts[wire] > 1, do: fallback.(native), else: wire)}
+    end)
+  end
+
+  defp mcp_wire_name("mcp::" <> qualified = native, sources) do
+    with [id, raw] <- String.split(qualified, "::", parts: 2),
+         source when is_binary(source) <- sources[id] do
+      readable = String.replace("mcp::#{source}::#{raw}", "::", "__")
+      safe = String.replace(readable, ~r/[^A-Za-z0-9_-]/u, "_")
+
+      if safe == readable and byte_size(safe) <= @max_length do
+        safe
+      else
+        suffix =
+          :crypto.hash(:sha256, native) |> Base.encode16(case: :lower) |> binary_part(0, 16)
+
+        String.slice(safe, 0, @max_length - 17) <> "_" <> suffix
+      end
+    else
+      _ -> nil
+    end
+  end
+
+  defp mcp_wire_name(_, _), do: nil
+
   def decode("synapsis__" <> skill) when skill in @skill_tools, do: "synapsis::" <> skill
 
   def decode(@prefix <> encoded = name) do
@@ -50,11 +95,12 @@ defmodule Synapsis.Provider.ToolName do
 
   @doc false
   def put_aliases(request, names) when is_map(request) and is_list(names) do
-    aliases =
-      Enum.reduce(names, %{}, fn name, aliases ->
-        name = to_string(name)
-        alias_name = encode(name)
+    put_aliases(request, Map.new(names, &{&1, encode(&1)}))
+  end
 
+  def put_aliases(request, wire_names) when is_map(wire_names) do
+    aliases =
+      Enum.reduce(wire_names, %{}, fn {name, alias_name}, aliases ->
         if alias_name == name or decode(alias_name) == name do
           aliases
         else

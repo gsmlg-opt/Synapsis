@@ -51,16 +51,12 @@ defmodule Synapsis.Provider.Realtime.Protocol do
   end
 
   def tools(tools) do
+    wire_names = Synapsis.Provider.ToolName.wire_names(Enum.map(tools, & &1.name), &wire_name/1)
+
     Enum.map_reduce(tools, %{}, fn tool, names ->
       name = tool.name
 
-      wire =
-        if Regex.match?(~r/\A[A-Za-z0-9_-]{1,64}\z/, name) and
-             not String.starts_with?(name, "synapsis_") do
-          name
-        else
-          "synapsis_" <> Base.url_encode64(:crypto.hash(:sha256, name), padding: false)
-        end
+      wire = Map.fetch!(wire_names, name)
 
       {%{
          type: "function",
@@ -71,6 +67,15 @@ defmodule Synapsis.Provider.Realtime.Protocol do
          parameters: Map.drop(tool.parameters, @unsupported_tool_root_keywords)
        }, Map.put(names, wire, name)}
     end)
+  end
+
+  defp wire_name(name) do
+    if Regex.match?(~r/\A[A-Za-z0-9_-]{1,64}\z/, name) and
+         not String.starts_with?(name, "synapsis_") do
+      name
+    else
+      "synapsis_" <> Base.url_encode64(:crypto.hash(:sha256, name), padding: false)
+    end
   end
 
   def append(pcm), do: %{type: "input_audio_buffer.append", audio: Base.encode64(pcm)}

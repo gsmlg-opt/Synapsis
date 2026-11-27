@@ -36,6 +36,8 @@ OpenClaw 只作为**产品形态参考**（常驻、记忆、技能、自动化�
 
 新增工具需要说明它服务于第 1 节的哪个用途。
 
+模型直接调用 MCP 工具时，函数名包含来源名称，例如 `mcp__backplane__agent-note__get_note`。普通会话和实时语音均按本次请求的工具目录将调用映射回来源 ID 和原始工具名。
+
 ## 4. 委派与 Samgita
 
 所有跨 agent 通信统一使用 **samgita_protocol**。

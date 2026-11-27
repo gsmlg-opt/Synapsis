@@ -222,6 +222,76 @@ defmodule Synapsis.Provider.AdapterTest do
       end
     end
 
+    test "MCP calls use the provider name on the wire and restore the bound source", %{
+      bypass: bypass,
+      port: port
+    } do
+      {:ok, provider} = Synapsis.Providers.create(%{name: "backplane", type: "openai"})
+      on_exit(fn -> Synapsis.Providers.delete(provider.id) end)
+
+      {:ok, source} =
+        Synapsis.MCPConfigs.create(%{
+          name: "managed-#{provider.id}",
+          provider_id: provider.id,
+          command: "false"
+        })
+
+      on_exit(fn -> Synapsis.MCPConfigs.delete(source) end)
+
+      name = "mcp::#{source.id}::agent-note::get_note"
+      wire = "mcp__backplane__agent-note__get_note"
+      tool = %{name: name, description: "Get note", parameters: %{"type" => "object"}}
+
+      messages = [
+        %{
+          role: "assistant",
+          parts: [%Synapsis.Part.ToolUse{tool: name, tool_use_id: "call_old"}]
+        },
+        %{
+          role: "tool",
+          parts: [%Synapsis.Part.ToolResult{tool_use_id: "call_old", content: "ok"}]
+        }
+      ]
+
+      assert {:ok, request} =
+               Adapter.format_request(messages, [tool], %{
+                 model: "fixture",
+                 provider_type: "openai"
+               })
+
+      Gaoxy.Test.expect_once(bypass, "POST", "/v1/responses", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        refute body =~ source.id
+        decoded = Formata.JSON.decode!(body)
+        assert [%{"name" => ^wire}] = decoded["tools"]
+
+        assert Enum.any?(
+                 decoded["input"],
+                 &match?(%{"type" => "function_call", "name" => ^wire}, &1)
+               )
+
+        ResponsesFixture.send_sse(conn, [
+          ResponsesFixture.function_call(wire, "call_1", %{}),
+          ResponsesFixture.completed()
+        ])
+      end)
+
+      config = %{api_key: "test-key", base_url: "http://localhost:#{port}", type: "openai"}
+      assert {:ok, ref} = Adapter.stream(request, config)
+      assert {:tool_call_delta, 0, "call_1", name, "{}"} in collect_chunks(ref)
+
+      assert {[%{name: ^wire}], %{^wire => ^name}} =
+               Synapsis.Provider.Realtime.Protocol.tools([tool])
+
+      literal = %{tool | name: wire}
+      long = %{tool | name: name <> String.duplicate("_extra", 12)}
+      {declarations, names} = Synapsis.Provider.Realtime.Protocol.tools([tool, literal, long])
+      assert Enum.sort(Map.values(names)) == Enum.sort([name, wire, long.name])
+      assert names[wire] == wire
+      assert Enum.all?(declarations, &Synapsis.Provider.ToolName.openai_safe?(&1.name))
+      assert List.last(declarations).name =~ "mcp__backplane__agent-note__"
+    end
+
     test "strips request-local alias metadata and restores long tool names", %{
       bypass: bypass,
       port: port

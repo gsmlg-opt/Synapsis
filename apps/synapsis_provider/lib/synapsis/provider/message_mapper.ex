@@ -22,25 +22,34 @@ defmodule Synapsis.Provider.MessageMapper do
   def build_request(protocol, messages, tools, opts) do
     tools = protocol_tools(tools, protocol)
 
+    tool_names = Enum.map(tools, & &1.name)
+
+    history_names =
+      for message <- messages,
+          %Synapsis.Part.ToolUse{tool: name} <- field(message, :parts) || [],
+          do: name
+
+    wire_names = ToolName.wire_names(tool_names ++ history_names)
+
     model =
       option(opts, :model) ||
         Synapsis.Providers.default_model(option(opts, :provider_name) || Atom.to_string(protocol))
 
-    with {:ok, input} <- canonical_messages(messages),
+    with {:ok, input} <- canonical_messages(messages, wire_names),
          {:ok, input} <- project_history(input, protocol, model, opts),
          {:ok, request} <-
            Request.new(
              %{
                model: model,
                input: system_message(protocol, opts) ++ protocol_input(input, protocol),
-               tools: Enum.map(tools, &canonical_tool(&1, protocol)),
+               tools: Enum.map(tools, &canonical_tool(&1, wire_names)),
                settings: settings(protocol, opts)
              },
              limits: @limits
            ),
          {:ok, wire_request} <-
            Codec.encode_request(protocol, request, codec_opts(protocol, model, opts)) do
-      {:ok, ToolName.put_aliases(wire_request, Enum.map(tools, & &1.name))}
+      {:ok, ToolName.put_aliases(wire_request, Map.take(wire_names, tool_names))}
     end
   end
 
@@ -94,21 +103,21 @@ defmodule Synapsis.Provider.MessageMapper do
 
   defp responses_image(block), do: block
 
-  defp canonical_messages(messages) do
+  defp canonical_messages(messages, wire_names) do
     Enum.reduce_while(messages, {:ok, []}, fn message, {:ok, acc} ->
-      case canonical_message(message) do
+      case canonical_message(message, wire_names) do
         {:ok, items} -> {:cont, {:ok, acc ++ items}}
         {:error, _error} = error -> {:halt, error}
       end
     end)
   end
 
-  defp canonical_message(message) do
+  defp canonical_message(message, wire_names) do
     role = message |> field(:role) |> normalize_role()
     parts = field(message, :parts) || []
     {results, content_parts} = Enum.split_with(parts, &match?(%Synapsis.Part.ToolResult{}, &1))
 
-    with {:ok, content} <- canonical_parts(content_parts),
+    with {:ok, content} <- canonical_parts(content_parts, wire_names),
          {:ok, tool_results} <- canonical_tool_results(results) do
       messages = if content == [], do: [], else: [%{role: role, content: content}]
       {:ok, messages ++ tool_results}
@@ -375,14 +384,31 @@ defmodule Synapsis.Provider.MessageMapper do
   defp invalid_projection, do: Error.invalid("Invalid projected tool result")
   defp unsupported_projection, do: Error.incompatible("Unsupported projected tool result content")
 
-  defp canonical_parts(parts) do
+  defp canonical_parts(parts, wire_names) do
     Enum.reduce_while(parts, {:ok, []}, fn part, {:ok, acc} ->
-      case canonical_part(part) do
+      case canonical_part(part, wire_names) do
         {:ok, blocks} -> {:cont, {:ok, acc ++ List.wrap(blocks)}}
         {:error, _error} = error -> {:halt, error}
       end
     end)
   end
+
+  defp canonical_part(%Synapsis.Part.ToolUse{} = part, wire_names) do
+    with {:ok, arguments} <- tool_arguments(part.input) do
+      {:ok,
+       %{
+         type: :tool_call,
+         tool_call: %{
+           id: part.tool_use_id,
+           native_id: part.tool_use_id,
+           name: Map.fetch!(wire_names, part.tool),
+           raw_arguments: arguments
+         }
+       }}
+    end
+  end
+
+  defp canonical_part(part, _wire_names), do: canonical_part(part)
 
   # Invocation-local official values: no persisted Synapsis resource part is introduced.
   defp canonical_part(
@@ -413,21 +439,6 @@ defmodule Synapsis.Provider.MessageMapper do
        type: :image,
        data: %{"source" => "base64", "media_type" => media_type, "data" => data}
      }}
-  end
-
-  defp canonical_part(%Synapsis.Part.ToolUse{} = part) do
-    with {:ok, arguments} <- tool_arguments(part.input) do
-      {:ok,
-       %{
-         type: :tool_call,
-         tool_call: %{
-           id: part.tool_use_id,
-           native_id: part.tool_use_id,
-           name: ToolName.encode(part.tool),
-           raw_arguments: arguments
-         }
-       }}
-    end
   end
 
   defp canonical_part(%Synapsis.Part.Reasoning{} = part) do
@@ -512,9 +523,9 @@ defmodule Synapsis.Provider.MessageMapper do
     end)
   end
 
-  defp canonical_tool(%{type: type} = tool, _protocol) when type in [:custom, "custom"] do
+  defp canonical_tool(%{type: type} = tool, wire_names) when type in [:custom, "custom"] do
     %{
-      name: ToolName.encode(tool.name),
+      name: Map.fetch!(wire_names, tool.name),
       description: tool.description,
       input_kind: :custom,
       input_schema: Map.get(tool, :parameters),
@@ -522,9 +533,9 @@ defmodule Synapsis.Provider.MessageMapper do
     }
   end
 
-  defp canonical_tool(tool, _protocol) do
+  defp canonical_tool(tool, wire_names) do
     %{
-      name: ToolName.encode(tool.name),
+      name: Map.fetch!(wire_names, tool.name),
       description: tool.description,
       input_schema: tool.parameters
     }
