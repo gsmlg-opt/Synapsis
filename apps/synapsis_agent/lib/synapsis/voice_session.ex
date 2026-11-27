@@ -732,8 +732,10 @@ defmodule Synapsis.VoiceSession do
          {:ok, connection} <- Catalog.connection(config),
          workspace = Path.expand(agent.workspace_path || File.cwd!()),
          {:ok, workspace} <- Synapsis.Session.Worker.Boot.ensure_workspace_path(workspace) do
+      agent = Map.put(agent, :model, agent.voice_model)
+
       prompt =
-        ContextBuilder.build_system_prompt(:coding,
+        ContextBuilder.build_system_prompt(:voice,
           agent_config: agent,
           agent_id: agent.name,
           workspace_path: workspace,
@@ -749,7 +751,7 @@ defmodule Synapsis.VoiceSession do
       {:ok,
        %{
          session: session,
-         agent: Map.put(agent, :model, agent.voice_model),
+         agent: agent,
          provider_config: config,
          project_path: workspace,
          system_prompt: prompt <> "\n\n" <> voice_instructions,

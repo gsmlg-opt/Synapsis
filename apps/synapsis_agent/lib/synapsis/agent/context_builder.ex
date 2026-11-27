@@ -51,8 +51,8 @@ defmodule Synapsis.Agent.ContextBuilder do
       {:soul, load_soul(agent_id)},
       {:identity, load_identity()},
       {:skill_catalog, build_skill_catalog(agent_config, skill_context_window)},
-      {:remote_skills, build_remote_skills(agent_config, skill_context_window)},
-      {:skills, build_skills_manifest(agent_id, agent_config)},
+      {:remote_skills, build_remote_skills(agent_type, agent_config, skill_context_window)},
+      {:skills, unless(agent_type == :voice, do: build_skills_manifest(agent_id, agent_config))},
       {:memory,
        if(Keyword.get(opts, :memory_context, true),
          do:
@@ -377,29 +377,43 @@ defmodule Synapsis.Agent.ContextBuilder do
     end
   end
 
-  defp build_remote_skills(agent, context_window) do
+  defp build_remote_skills(agent_type, agent, context_window) do
     case agent[:remote_skill_discovery] do
       %{sources: sources, errors: errors} when sources != [] or map_size(errors) > 0 ->
         guidance =
           "For the skills this Agent can use now, call synapsis::skills_search with query=\"*\" and omit source_id. To discover other skills, search Backplane sources with source_id. Read only assigned results with their exact locator. Unassigned results require the user to assign the skill in Agent settings."
 
+        compact? = agent_type == :voice and "synapsis::skills_search" in (agent[:tools] || [])
+
         source_text =
           Enum.map_join(sources, "\n", fn source ->
             partial = if source.partial, do: " (partial catalog)", else: ""
-            "Backplane source #{source.name} (source_id #{source.id})#{partial}"
+            title = "Backplane source #{source.name} (source_id #{source.id})#{partial}"
+
+            if compact? do
+              names =
+                source.entries
+                |> Enum.filter(&(&1.enabled and &1.prompt_visible))
+                |> Enum.map_join(", ", & &1.name)
+
+              if names == "", do: title, else: title <> "\nAssigned skills: " <> names
+            else
+              title
+            end
           end)
 
         catalog =
-          sources
-          |> Enum.flat_map(& &1.entries)
-          |> SkillCatalog.render(model_context_window: context_window)
+          unless compact? do
+            entries = Enum.flat_map(sources, & &1.entries)
+            SkillCatalog.render(entries, model_context_window: context_window).text
+          end
 
         failures =
           Enum.map_join(errors, "\n", fn {id, code} ->
             "Backplane source #{id} discovery unavailable (#{code})."
           end)
 
-        Enum.join([guidance, source_text, catalog.text, failures], "\n")
+        Enum.join(Enum.reject([guidance, source_text, catalog, failures], &is_nil/1), "\n")
 
       _ ->
         nil

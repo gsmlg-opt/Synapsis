@@ -61,6 +61,52 @@ defmodule Synapsis.Agent.ContextBuilderTest do
       assert agent.skill_catalog == [a, b, offline, legacy]
     end
 
+    @tag :tmp_dir
+    test "voice prompts resolve assigned skill details on demand and keep workspace guidance", %{
+      tmp_dir: root
+    } do
+      File.write!(Path.join(root, "MEMORY.md"), "Voice workspace decision")
+
+      [entry] =
+        Synapsis.SkillCatalog.remote_entries("one", [
+          %{
+            "id" => "deploy",
+            "name" => "Deploy",
+            "description" => "Deployment guidance",
+            "enabled" => true
+          }
+        ])
+
+      source = %{
+        id: "one",
+        name: "Team",
+        partial: false,
+        entries: [entry, %{entry | name: "Manual", prompt_visible: false}]
+      }
+
+      agent = %{
+        tools: ["synapsis::skills_search"],
+        system_prompt: "Speak Chinese",
+        remote_skill_discovery: %{sources: [source], errors: %{}},
+        resolved_tools: [%{name: "synapsis::skills_search", description: "Search tools fixture"}]
+      }
+
+      prompt =
+        ContextBuilder.build_system_prompt(:voice, agent_config: agent, workspace_path: root)
+
+      assert prompt =~ "Speak Chinese"
+      assert prompt =~ "Voice workspace decision"
+      assert prompt =~ ~s(synapsis::skills_search with query="*")
+      assert prompt =~ "Assigned skills: Deploy"
+      refute prompt =~ "Manual"
+      refute prompt =~ entry.locator
+      refute prompt =~ "Deployment guidance"
+      refute prompt =~ "<available_skills>"
+
+      fallback = ContextBuilder.build_system_prompt(:voice, agent_config: %{agent | tools: []})
+      assert fallback =~ entry.locator
+    end
+
     test "returns a non-empty string" do
       prompt = ContextBuilder.build_system_prompt(:coding)
       assert is_binary(prompt)
