@@ -44,7 +44,6 @@ function mount(root: HTMLElement) {
   const hangup = get<HTMLButtonElement>('[data-action=stop]')
   const stopPlayback = get<HTMLButtonElement>('[data-action=stop_playback]')
   const deviceIdentity = get('[data-voice-devices]')
-  const endpointPicker = root.querySelector<HTMLSelectElement>('[data-voice-endpoint]')
   if (!failure) {
     status.textContent = 'Voice controls have changed. Reload this page to start a call.'
     start.disabled = true
@@ -77,7 +76,9 @@ function mount(root: HTMLElement) {
       voice_input_queue_full:
         'A microphone segment was skipped while the queue was full. Speak again after it clears.',
       voice_runtime_requires_recovery:
-        'This session needs runtime recovery. Open a new session to continue.',
+        root.dataset.mode === 'host'
+          ? 'A previous turn in this Device Voice Agent conversation needs recovery before another call can start.'
+          : 'This session needs runtime recovery. Open a new session to continue.',
       realtime_protocol_error: 'The Realtime service rejected a voice request.',
       realtime_response_failed:
         'The Realtime service could not produce the reply. Start a call to continue here.',
@@ -107,7 +108,7 @@ function mount(root: HTMLElement) {
   }
 
   function endpointIdentity(view: Status, active: boolean) {
-    const endpoint = active ? view.endpoint : { mode: endpointPicker?.value || root.dataset.mode }
+    const endpoint = active ? view.endpoint : { mode: root.dataset.mode }
     const host = view.host || root.dataset.host || 'the Synapsis host'
     const name = endpoint?.mode === 'host' ? 'Host' : 'Web'
     const identity = name === 'Host' ? host : 'this device'
@@ -157,10 +158,6 @@ function mount(root: HTMLElement) {
     )
     const active = owned && callActive
     const ready = owned && ['listening', 'responding'].includes(view.phase)
-    if (endpointPicker) {
-      endpointPicker.disabled = callActive && !ready
-      if (active && view.endpoint) endpointPicker.value = view.endpoint.mode
-    }
     const phases: Record<string, string> = {
       offline: 'Ready to call',
       connecting: 'Connecting audio…',
@@ -181,7 +178,7 @@ function mount(root: HTMLElement) {
     if (view.reason) error(view.reason)
     root.dataset.active = String(active)
     root.dataset.ready = String(ready)
-    start.disabled = !connected || callActive
+    start.disabled = !connected || callActive || (root.dataset.mode === 'host' && view.reason === 'voice_runtime_requires_recovery')
     start.hidden = active
     hangup.hidden = !active
     hangup.disabled = view.phase === 'ending'
@@ -359,27 +356,6 @@ function mount(root: HTMLElement) {
     .receive('error', (data) => error(data.reason || 'voice_channel_unavailable'))
     .receive('timeout', disconnected)
 
-  if (endpointPicker) {
-    endpointPicker.onchange = () => {
-      if (!owned) {
-        deviceIdentity.textContent = endpointIdentity(latestStatus, false)
-        return
-      }
-
-      const mode = endpointPicker.value
-      if (mode === latestStatus.endpoint?.mode) return
-      endpointPicker.disabled = true
-      const switchFailed = (reason: string) => {
-        statusUpdated(latestStatus)
-        error(reason)
-      }
-      channel
-        .push('switch', { mode }, 15_000)
-        .receive('error', (data) => switchFailed(data.reason || 'voice_operation_failed'))
-        .receive('timeout', () => switchFailed('voice_operation_timed_out'))
-    }
-  }
-
   root.onclick = (event) => {
     const element = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-action]')
     const action = element?.dataset.action
@@ -387,7 +363,7 @@ function mount(root: HTMLElement) {
     if (action === 'start') {
       statusUpdated({ ...latestStatus, phase: 'connecting', owned: true, reason: undefined })
       channel
-        .push('start', { mode: endpointPicker?.value || root.dataset.mode || 'browser' }, 15_000)
+        .push('start', { mode: root.dataset.mode || 'browser' }, 15_000)
         .receive('ok', statusUpdated)
         .receive('error', (data) => {
           owned = false
@@ -415,7 +391,6 @@ function mount(root: HTMLElement) {
     closeBrowser()
     socket.disconnect()
     root.onclick = null
-    if (endpointPicker) endpointPicker.onchange = null
   }
 }
 

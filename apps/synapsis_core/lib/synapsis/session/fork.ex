@@ -9,9 +9,17 @@ defmodule Synapsis.Session.Fork do
     include_message? = Keyword.get(opts, :include_message, true)
 
     with {:ok, session} <- Sessions.get(session_id),
+         :ok <- forkable(session),
          {:ok, messages} <- prefix(session.messages, message_id, include_message?) do
       do_fork(session, messages)
     end
+  end
+
+  defp forkable(session) do
+    if Sessions.host_voice?(session) or
+         match?(%{kind: :host_voice}, Synapsis.AgentConfigs.get_by_name(session.agent)),
+       do: {:error, :fixed_host_session},
+       else: :ok
   end
 
   defp prefix(messages, nil, _include_message?), do: {:ok, messages}

@@ -1,6 +1,6 @@
 # 实时语音 Agent
 
-在 **Agents → New Agent** 的 **Agent type** 选择 **Voice Agent**，页面会切换到
+在 **Agents → New Agent** 的 **Agent type** 选择 **Voice Agent**（浏览器音频）或 **Device Voice Agent**（宿主音频），页面会切换到
 **Voice setup**。原有 Agent 的默认类型为
 **Standard**，现有普通 Provider 和 Responses 配置继续可用。
 
@@ -12,7 +12,7 @@
    bearer。从 **Refresh Realtime models** 读取独立目录，选择或输入包含 Provider
    限定名的模型，例如 `openai/gpt-realtime`。直通路由允许手工输入资格模型，实际准入
    由网关决定。命名端点地址和 OAuth 连接会返回配置错误。
-2. 在 **Voice setup** 选择声音和 VAD。在 **Audio** 分别选择 Host 和 Web 的麦克风和扬声器，
+2. 在 **Voice setup** 选择声音和 VAD。在 **Audio** 选择该类型使用的麦克风和扬声器，
    并拖动滑块设定各自音量。Host 音量应用到所选宿主设备，最高 150%。Web 音量调节页面内
    增益，最高 200%。选择 **Use default volume** 可恢复端点默认值。**Discover browser devices**
    请求麦克风权限以列出可用设备。浏览器设备 ID 受站点和浏览器权限约束。
@@ -22,8 +22,9 @@
    为默认目标。普通 Agent 使用自己的模型、提示、工作区、工具和技能。其工具权限受
    父级授权上限约束。语音向普通 Agent 委派使用明确的文字任务和
    `fork_turns="none"`。可用 `agent_type` 指定其他已保存的普通 Agent。
-4. 保存后打开此 Agent 的 Sessions，创建会话。在通话面板选择 **Host audio** 或 **Web audio**，
-   然后选择 **Start call**。正在通话时也可以切换。启动和切换会读取对应端点当前保存的设备及音量。
+4. 普通 Voice Agent 可以创建多个浏览器会话。Device Voice Agent 的 **Open conversation** 始终进入同一个固定会话，
+   首次进入时建立，后续打开、挂断再拨和服务重启均沿用同一会话和历史。选择 **Start call** 才开始通话，
+   并读取该类型当前保存的设备及音量。其他标签页可以查看同一会话，当前通话由发起者控制。
    保存和打开会话不会启用采集。Web 音频启动时会请求系统麦克风权限。
    会话聊天区可在通话中发送文字和 PNG、JPEG 或 WebP 图片，
    并显示语音转写与播放状态。**Manual** 模式使用 **Send audio** 提交录音缓冲。
@@ -33,10 +34,15 @@
    下一次有效响应边界由原生协作队列交给该会话。
 
 语音配置使用既有 `agents.toml`。包含 `kind`、`voice_model`、`voice`、
-`voice_turn_detection`、默认通话端点 `audio_mode`、以 `host_audio_` 和 `browser_audio_`
+`voice_turn_detection`、由类型确定的通话端点 `audio_mode`、以 `host_audio_` 和 `browser_audio_`
 开头的设备和音量字段，以及 `voice_delegate`。原有共用音频字段归入原来 `audio_mode`
 对应的设置。缺省 `kind` 的配置以普通 Agent 载入。模型、系统提示和工具以
-逻辑会话的运行快照为准。编辑后可创建新语音会话使用新设置。
+逻辑会话的运行快照为准。
+
+每套宿主配置最多有一个 `kind = "host_voice"`，停用后仍占用名额。固定会话沿用该 Agent 的 UUID，
+不能单独删除或复制。升级后已有 `kind = "voice"` 使用浏览器端点，原宿主设备设置予以保留。
+需要继续使用宿主设备时，可将指定的 Voice Agent 原地改为 Device Voice Agent。原有会话历史保留，
+宿主通话统一进入该 Agent 的固定会话。
 
 ## 端点支持
 
@@ -49,7 +55,7 @@
 Devenv 提供宿主 helper 的外部依赖。OTP 发布包包含 `synapsis_agent/priv/voice/pulse_audio.py`，
 宿主需提供同样的运行依赖。有条件地用 `SYNAPSIS_PULSE_LIBRARY` 指定库路径。以能访问用户
 音频服务的身份运行，设备权限和用户音频服务必须可用。容器、SSH 或系统服务可能没有该会话
-的音频权限。配置错误会报告端点不可用，保留手动选择另一端点的能力。单节点同一时刻只租用
+的音频权限。配置错误会报告端点不可用。单节点同一时刻只租用
 一套宿主采播设备。浏览器控制连接消失时会释放其租用的端点。
 
 可在运行 Synapsis 的 IEx 会话或长寿命控制进程里直接控制宿主通话。调用
@@ -77,6 +83,7 @@ Synapsis 服务端持有长期 Realtime WebSocket 和音频控制器。VAD 自�
 会建立新的上游会话并使用带来源的历史转写及已确认播报；旧 PCM、未确认写入和有副作用的
 工具结果不会自动重放。媒体连接断开时，当前响应会结束。点击同一会话的 **Start call**
 可以重新接通并继续提问。若运行时自身失败且要求恢复，则仍会阻止继续执行。
+Device Voice Agent 遇到结果不确定、需要恢复的运行记录时，在原会话提示恢复，不自动重放或复制。
 
 Synapsis 锁定 `backplane_agent_runtime 1.10.98`，使用有限响应的
 `:response_interrupted`、`:response_activity` 和独立 total/idle 时限。网关建议使用

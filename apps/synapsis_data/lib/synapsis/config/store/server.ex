@@ -210,6 +210,12 @@ defmodule Synapsis.Config.Store.Server do
     {:reply, result, state}
   end
 
+  def handle_call(request, _from, %{type: :agent, load_error: error} = state)
+      when not is_nil(error) and is_tuple(request) and
+             elem(request, 0) in [:put, :replace_existing, :merge_existing, :delete] do
+    {:reply, directory_healthy(state), state}
+  end
+
   def handle_call({:routine_schedule_write, id, generation, operation}, from, state) do
     case :ets.lookup(state.table, id) do
       [{^id, current}] ->
@@ -682,7 +688,7 @@ defmodule Synapsis.Config.Store.Server do
     end)
     |> case do
       {:ok, validated} ->
-        case validate_model_identities(type, Enum.map(validated, &elem(&1, 1))) do
+        case validate_identities(type, Enum.map(validated, &elem(&1, 1))) do
           :ok -> {:ok, validated}
           {:error, reason} -> {:error, {:invalid_entry, reason}}
         end
@@ -717,10 +723,10 @@ defmodule Synapsis.Config.Store.Server do
   end
 
   defp persist(type, entries) do
-    with :ok <- validate_model_identities(type, entries), do: persist_entries(type, entries)
+    with :ok <- validate_identities(type, entries), do: persist_entries(type, entries)
   end
 
-  defp validate_model_identities(:model, entries) do
+  defp validate_identities(:model, entries) do
     identities = Enum.map(entries, &{value(&1, :provider_id), value(&1, :model)})
 
     if length(Enum.uniq(identities)) == length(identities),
@@ -728,7 +734,13 @@ defmodule Synapsis.Config.Store.Server do
       else: {:error, :duplicate_model}
   end
 
-  defp validate_model_identities(_type, _entries), do: :ok
+  defp validate_identities(:agent, entries) do
+    if Enum.count(entries, &(value(&1, :kind) in [:host_voice, "host_voice"])) <= 1,
+      do: :ok,
+      else: {:error, :host_agent_exists}
+  end
+
+  defp validate_identities(_type, _entries), do: :ok
 
   defp persist_entries(type, entries) do
     path = Store.file_path(type)
@@ -887,6 +899,19 @@ defmodule Synapsis.Config.Store.Server do
       attrs["schedule"]
     else
       _ -> nil
+    end
+  end
+
+  defp validate_entry(:agent, attrs) when is_map(attrs) do
+    if value(attrs, :kind) in [:host_voice, "host_voice"] do
+      id = id_of(attrs)
+
+      case Ecto.UUID.cast(id) do
+        {:ok, ^id} -> {:ok, attrs}
+        _ -> {:error, :invalid_host_agent_id}
+      end
+    else
+      {:ok, attrs}
     end
   end
 

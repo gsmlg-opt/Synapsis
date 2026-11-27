@@ -14,6 +14,8 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
     label = assistant_label(assigns.agent_config, assigns.agent_id)
     session = Map.get(assigns, :current_session, %{})
     voice? = Synapsis.Sessions.voice?(session)
+
+    host_history? = Synapsis.Sessions.host_history?(session, assigns.agent_config)
     voice = Map.get(assigns, :voice_chat) || %{}
     voice_phase = Map.get(voice, :phase, :offline)
     voice_ready? = voice_phase in [:listening, :responding]
@@ -56,7 +58,7 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
     results = settled_tool_results(displayed)
 
     message_actions = %{
-      voice: voice?,
+      voice: voice? or host_history?,
       regenerate: assigns.session_status == "idle" and not waiting? and not subagents?,
       branch_and_send: assigns.session_status in ~w(idle error) and not waiting? and not recovery?
     }
@@ -71,8 +73,8 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
         kind: "agent",
         assistantLabel: label,
         assistantAvatar: assistant_avatar(assigns.agent_config),
-        attachmentsAllowed: true,
-        canStop: not voice?,
+        attachmentsAllowed: not host_history?,
+        canStop: not voice? and not host_history?,
         voiceCall: voice?,
         voiceQueued: Map.get(voice, :queued, 0),
         userQuestions: user_questions,
@@ -88,15 +90,19 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
       },
       admission: %{
         canSubmit:
-          if(voice?,
-            do: voice_ready?,
-            else:
-              assigns.session_status in ~w(idle error streaming tool_executing) and not recovery?
-          ),
+          not host_history? and
+            if(voice?,
+              do: voice_ready?,
+              else:
+                assigns.session_status in ~w(idle error streaming tool_executing) and
+                  not recovery?
+            ),
         allowWhileStreaming: true,
         sendLabel: if(active? or voice[:busy] == true, do: "Queue", else: "Send"),
-        canSteer: not voice? and active? and not waiting?,
-        canRetry: not voice? and assigns.session_status == "error" and not subagents?
+        canSteer: not host_history? and not voice? and active? and not waiting?,
+        canRetry:
+          not host_history? and not voice? and assigns.session_status == "error" and
+            not subagents?
       }
     }
   end

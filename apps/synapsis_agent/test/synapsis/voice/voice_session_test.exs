@@ -99,6 +99,37 @@ defmodule Synapsis.VoiceSessionTest do
     %{id: session.id, fixture: fixture, child: child, agent: agent}
   end
 
+  test "host audio requires the current Device Voice Agent and its fixed session", ctx do
+    assert {:error, :invalid_audio_endpoint} = VoiceSession.start(ctx.id, mode: "host")
+    refute_receive {:upgrade, _, _}, 50
+
+    %{generation: generation} = call(ctx.id)
+    assert {:error, :invalid_audio_endpoint} = VoiceSession.switch(ctx.id, mode: "host")
+    hangup(ctx.id, generation)
+
+    assert {:ok, host} = AgentConfigs.update(ctx.agent, %{kind: :host_voice})
+    assert {:error, :fixed_host_session} = VoiceSession.start(ctx.id)
+    assert {:error, :fixed_host_session} = Sessions.fork(ctx.id)
+    assert {:ok, session} = Sessions.create(host.name)
+    assert session.id == host.id
+
+    on_exit(fn ->
+      VoiceSession.delete(session.id)
+      Synapsis.Session.Store.delete_session(session.id)
+    end)
+
+    assert {:error, :invalid_audio_endpoint} = VoiceSession.start(session.id, mode: "browser")
+    assert {:ok, %{phase: :connecting}} = VoiceSession.start(session.id)
+    assert_receive {:upgrade, _, _}, @wait
+    assert_receive {:realtime_wire, _socket}, @wait
+    assert_receive {:client_event, %{"type" => "session.update"}}, @wait
+    assert {:error, :media_lease_in_use} = VoiceSession.start(session.id)
+    assert :ok = VoiceSession.stop(session.id)
+    assert :ok = VoiceSession.delete(session.id)
+    assert {:ok, %{id: same_id}} = Sessions.create(host.name)
+    assert same_id == session.id
+  end
+
   test "explicit browser selection uses its own saved devices and volumes", ctx do
     assert {:ok, _} =
              AgentConfigs.update(ctx.agent, %{

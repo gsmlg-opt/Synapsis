@@ -45,7 +45,7 @@ defmodule Synapsis.AgentConfig do
     field(:label, :string)
     field(:icon, :string, default: "robot-outline")
     field(:description, :string)
-    field(:kind, Ecto.Enum, values: [:standard, :voice], default: :standard)
+    field(:kind, Ecto.Enum, values: [:standard, :voice, :host_voice], default: :standard)
     field(:provider, :string)
     field(:model, :string)
     field(:voice_model, :string)
@@ -130,8 +130,12 @@ defmodule Synapsis.AgentConfig do
       |> validate_audio_profiles()
       |> validate_format(:voice_delegate, @name_format)
 
-    if get_field(changeset, :kind) == :voice do
+    if get_field(changeset, :kind) in [:voice, :host_voice] do
       changeset
+      |> put_change(
+        :audio_mode,
+        if(get_field(changeset, :kind) == :host_voice, do: "host", else: "browser")
+      )
       |> validate_required([:provider, :voice_model, :voice, :voice_turn_detection, :audio_mode])
       |> validate_length(:voice_model, max: 256)
       |> validate_format(:voice_model, ~r/\A[^\s\/]+\/[^\s]+\z/,
@@ -161,6 +165,9 @@ defmodule Synapsis.AgentConfig do
   end
 
   def audio_fields(mode), do: Map.fetch!(@audio_fields, mode)
+  def voice?(%__MODULE__{kind: kind}), do: kind in [:voice, :host_voice]
+  def host?(%__MODULE__{kind: :host_voice}), do: true
+  def host?(%__MODULE__{}), do: false
   def max_audio_volume("host"), do: 150
   def max_audio_volume("browser"), do: 200
 

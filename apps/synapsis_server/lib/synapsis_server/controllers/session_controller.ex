@@ -111,6 +111,9 @@ defmodule SynapsisServer.SessionController do
       {:error, :not_found} ->
         conn |> put_status(404) |> json(%{error: "Session not found"})
 
+      {:error, :fixed_host_session} ->
+        conn |> put_status(409) |> json(%{error: "The Device Voice Agent has a fixed session"})
+
       {:error, reason} ->
         Logger.warning("session_delete_failed", session_id: id, reason: inspect(reason))
 

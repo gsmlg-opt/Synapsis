@@ -59,6 +59,42 @@ defmodule Synapsis.SessionsTest do
     :ok
   end
 
+  test "concurrent opens and later callers share the durable Device Voice Agent session" do
+    name = "host-#{System.unique_integer([:positive])}"
+
+    assert {:ok, agent} =
+             Synapsis.AgentConfigs.create(%{
+               name: name,
+               kind: :host_voice,
+               provider: "fixture",
+               voice_model: "openai/gpt-realtime"
+             })
+
+    on_exit(fn ->
+      Store.delete_session(agent.id)
+      Synapsis.AgentConfigs.delete(agent)
+    end)
+
+    ids =
+      1..6
+      |> Task.async_stream(fn _ ->
+        {:ok, session} = Sessions.create(name)
+        session.id
+      end)
+      |> Enum.map(fn {:ok, id} -> id end)
+
+    assert Enum.uniq(ids) == [agent.id]
+    assert {:ok, %{title: "Saved title"}} = Sessions.update_title(agent.id, "Saved title")
+    assert {:ok, session} = Sessions.create(name, %{title: "New title"})
+    assert Sessions.host_voice?(session)
+    assert session.title == "Saved title"
+    assert %{tool_contract_version: 1, session_id: id} = Store.get_value(agent.id, "permission")
+    assert id == agent.id
+    assert {:error, :fixed_host_session} = Sessions.delete(id)
+    assert {:error, :fixed_host_session} = Sessions.fork(id)
+    assert {:ok, ^session} = Sessions.get(id)
+  end
+
   @tag :contract_version
   test "new sessions author native permissions and config updates preserve the contract" do
     assert {:ok, session} =

@@ -250,6 +250,7 @@ defmodule Synapsis.AgentConfigs do
     case Store.put(@store_type, to_store_map(record)) do
       :ok -> {:ok, record}
       {:ok, _} -> {:ok, record}
+      {:error, :host_agent_exists} -> host_agent_conflict(changeset)
       error -> error
     end
   end
@@ -267,6 +268,11 @@ defmodule Synapsis.AgentConfigs do
         {key, value} -> {Atom.to_string(key), value}
       end)
 
+    changes =
+      if Ecto.Changeset.get_field(changeset, :kind) in [:voice, :host_voice],
+        do: Map.put(changes, "audio_mode", Ecto.Changeset.get_field(changeset, :audio_mode)),
+        else: changes
+
     normalized = AgentConfig.migrate_audio_attrs(current)
     removed = Map.drop(current, Map.keys(normalized))
     migrated = Map.drop(normalized, Map.keys(current))
@@ -275,10 +281,17 @@ defmodule Synapsis.AgentConfigs do
     with {:ok, merged} <-
            Store.merge_existing(@store_type, current["id"], Map.merge(migration, changes)) do
       {:ok, to_struct(merged)}
+    else
+      {:error, :host_agent_exists} -> host_agent_conflict(changeset)
+      error -> error
     end
   end
 
   defp persist_update(%Ecto.Changeset{} = changeset, _id), do: {:error, changeset}
+
+  defp host_agent_conflict(changeset),
+    do:
+      {:error, Ecto.Changeset.add_error(changeset, :kind, "a Device Voice Agent already exists")}
 
   defp ensure_id(%AgentConfig{id: nil} = record), do: %{record | id: Ecto.UUID.generate()}
   defp ensure_id(record), do: record

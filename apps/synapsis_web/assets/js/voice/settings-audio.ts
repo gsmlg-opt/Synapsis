@@ -15,7 +15,8 @@ type Hook = {
 
 function errorMessage(reason?: string) {
   const messages: Record<string, string> = {
-    host_audio_busy: 'Hang up the active Host call before testing a device.',
+    host_agent_exists: 'Open the existing Device Voice Agent to test this server’s devices.',
+    host_audio_busy: 'Hang up the active host audio call before testing a device.',
     device_muted: 'The selected device is muted in the host audio settings.',
     audio_volume_unavailable: 'Could not apply the draft volume.',
     audio_volume_restore_failed: 'Could not restore the host device volume after testing.',

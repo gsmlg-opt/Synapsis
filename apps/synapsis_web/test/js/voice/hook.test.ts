@@ -22,12 +22,9 @@ class ElementFixture {
 function environment({ staleMarkup = false } = {}) {
   const elements = new Map<string, ElementFixture>()
   for (const name of ['status', 'error', 'playback', 'tasks', 'devices']) elements.set(`[data-voice-${name}]`, new ElementFixture())
-  for (const name of ['mute', 'commit_audio', 'start', 'stop', 'switch', 'stop_playback']) elements.set(`[data-action=${name}]`, new ElementFixture())
+  for (const name of ['mute', 'commit_audio', 'start', 'stop', 'stop_playback']) elements.set(`[data-action=${name}]`, new ElementFixture())
   if (staleMarkup) elements.delete('[data-voice-error]')
   const element = (selector: string) => elements.get(selector)!
-  const picker = new ElementFixture()
-  picker.value = 'host'
-  elements.set('[data-voice-endpoint]', picker)
 
   const handlers = new Map<string, (data: any) => void>()
   const pushes: Array<{ event: string; payload: object; replies: Map<string, (data: any) => void> }> = []
@@ -82,7 +79,7 @@ function environment({ staleMarkup = false } = {}) {
     root.onclick({ target: { closest: () => ({ dataset: { action: 'start' } }) } })
     return pushes.findLast(push => push.event === 'start')!
   }
-  return { root, element, update, start, handlers, picker, pushes, disconnected: () => disconnected() }
+  return { root, element, update, start, handlers, pushes, disconnected: () => disconnected() }
 }
 
 const endpoint = {
@@ -103,22 +100,12 @@ test('stale voice controls request a reload without joining the channel', () => 
   assert.equal(handlers.size, 0)
 })
 
-test('the session selection controls startup and switches a running call', () => {
-  const { picker, start, update, pushes, element } = environment()
-  picker.value = 'browser'
-  picker.onchange!()
-  assert.match(element('[data-voice-devices]').textContent, /Web audio/)
-  assert.equal(Reflect.get(start().payload, 'mode'), 'browser')
-  update({ phase: 'listening', owned: true, endpoint: { mode: 'browser' } })
-
-  picker.value = 'host'
-  picker.onchange!()
-  assert.equal(picker.disabled, true)
-  assert.equal(pushes.at(-1)?.event, 'switch')
-  assert.equal(Reflect.get(pushes.at(-1)!.payload, 'mode'), 'host')
-  update({ phase: 'listening', ...endpoint })
-  assert.equal(picker.value, 'host')
-  assert.equal(picker.disabled, false)
+test('the configured endpoint controls call startup', () => {
+  const { root, start, element } = environment()
+  root.dataset.mode = 'browser'
+  const call = start()
+  assert.deepEqual(JSON.parse(JSON.stringify(call.payload)), { mode: 'browser' })
+  assert.equal(element('[data-voice-devices]').textContent, 'Web audio on this device.')
 })
 
 test('a rejected Realtime policy is reported as a gateway failure', () => {
@@ -190,4 +177,13 @@ test('a status for a call in another tab keeps start disabled and hides hangup',
   assert.match(element('[data-voice-status]').textContent, /another tab/)
   assert.equal(element('[data-action=start]').disabled, true)
   assert.equal(element('[data-action=stop]').hidden, true)
+})
+
+test('a fixed Device Voice Agent conversation starts without an endpoint picker or chat copy', () => {
+  const { root, pushes, element, handlers } = environment()
+  root.onclick({ target: { closest: () => ({ dataset: { action: 'start' } }) } })
+  assert.deepEqual(JSON.parse(JSON.stringify(pushes.at(-1)?.payload)), { mode: 'host' })
+  handlers.get('status')!({ phase: 'error', reason: 'voice_runtime_requires_recovery' })
+  assert.equal(element('[data-action=start]').disabled, true)
+  assert.match(element('[data-voice-error]').textContent, /Device Voice Agent conversation needs recovery/)
 })

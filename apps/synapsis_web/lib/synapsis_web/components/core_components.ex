@@ -814,6 +814,7 @@ defmodule SynapsisWeb.CoreComponents do
   """
   attr :session, :map, required: true
   attr :active, :boolean, default: false
+  attr :deletable, :boolean, default: true
   attr :class, :string, default: nil
 
   def session_list_item(assigns) do
@@ -854,6 +855,7 @@ defmodule SynapsisWeb.CoreComponents do
         </div>
       </button>
       <button
+        :if={@deletable}
         type="button"
         phx-click="confirm_delete_session"
         phx-value-id={@session.id}

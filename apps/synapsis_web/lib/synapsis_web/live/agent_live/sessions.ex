@@ -151,7 +151,27 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
   end
 
-  def handle_params(%{"agent_id" => agent_id}, _uri, socket) do
+  def handle_params(%{"agent_id" => agent_id}, uri, socket) do
+    agent = Synapsis.Agent.Resolver.resolve(agent_id)
+
+    if agent.kind == :host_voice and agent.enabled do
+      case Sessions.create(agent_id, %{interactive: true}) do
+        {:ok, session} ->
+          {:noreply,
+           push_navigate(socket, to: ~p"/agent/agents/#{agent_id}/sessions/#{session.id}")}
+
+        {:error, _reason} ->
+          {:noreply,
+           socket
+           |> refresh_model_catalog()
+           |> put_flash(:error, "Could not open the Device Voice Agent conversation")}
+      end
+    else
+      show_session_list(agent_id, uri, socket)
+    end
+  end
+
+  defp show_session_list(agent_id, _uri, socket) do
     sessions = load_sessions(agent_id)
 
     if old = socket.assigns.current_session do
@@ -193,11 +213,12 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   end
 
   defp agent_model_ready?(%{
-         kind: :voice,
+         kind: kind,
          provider: provider,
          voice_model: model,
          enabled: enabled
-       }),
+       })
+       when kind in [:voice, :host_voice],
        do: enabled and is_binary(provider) and provider != "" and is_binary(model) and model != ""
 
   defp agent_model_ready?(%{provider: provider}) when provider in [nil, ""], do: false
@@ -248,6 +269,9 @@ defmodule SynapsisWeb.AgentLive.Sessions do
       not ChatBridge.valid_scope?(socket, params) or is_nil(socket.assigns.current_session) ->
         {:reply, %{status: "error", message: "Conversation changed"}, socket}
 
+      event != "chat.sync" and host_history?(socket.assigns) ->
+        {:reply, %{status: "error", message: "Device Voice Agent history is read-only"}, socket}
+
       not is_nil(request_id) and
           (not is_binary(request_id) or byte_size(request_id) > 128) ->
         {:reply, %{status: "error", message: "Invalid request ID"}, socket}
@@ -266,8 +290,13 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   end
 
   def handle_event(event, params, socket) do
-    {:noreply, socket} = handle_session_event(event, params, socket)
-    {:noreply, sync_chat(socket)}
+    if host_history?(socket.assigns) and
+         event not in ~w(toggle_sidebar switch_session create_session cancel_delete_session) do
+      {:noreply, put_flash(socket, :error, "Device Voice Agent history is read-only")}
+    else
+      {:noreply, socket} = handle_session_event(event, params, socket)
+      {:noreply, sync_chat(socket)}
+    end
   end
 
   defp chat_event("chat.sync", _params, socket) do
@@ -689,7 +718,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
     case result do
       {:ok, session} ->
-        sessions = [session | socket.assigns.sessions]
+        sessions = [session | Enum.reject(socket.assigns.sessions, &(&1.id == session.id))]
 
         {:noreply,
          socket
@@ -1311,12 +1340,13 @@ defmodule SynapsisWeb.AgentLive.Sessions do
             </div>
           </div>
 
-          <%= if @provider_configured do %>
+          <%= if @provider_configured and @agent_config.kind != :host_voice do %>
             <.dm_btn variant="primary" class="w-full mt-3" phx-click="create_session">
               <.dm_mdi name="plus" class="w-4 h-4" /> New Session
             </.dm_btn>
           <% else %>
             <.dm_tooltip
+              :if={@agent_config.kind != :host_voice}
               content="Configure an available model in agent settings"
               position="bottom"
               color="warning"
@@ -1338,6 +1368,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
             :for={session <- @sessions}
             session={session}
             active={@current_session != nil && session.id == @current_session.id}
+            deletable={@agent_config.kind != :host_voice and not Sessions.host_voice?(session)}
           />
           <.empty_state
             :if={@sessions == []}
@@ -1372,7 +1403,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               </div>
             </div>
             <div
-              :if={!Sessions.voice?(@current_session)}
+              :if={!Sessions.voice?(@current_session) and not host_history?(assigns)}
               class="flex min-w-0 flex-wrap items-center gap-2"
             >
               <.session_model_selector
@@ -1403,15 +1434,29 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
           <.subagents_panel
             :if={
-              @subagent_roster.agents != [] ||
-                @runtime_permissions != [] || subagents_need_attention?(@subagent_roster)
+              not host_history?(assigns) and
+                (@subagent_roster.agents != [] ||
+                   @runtime_permissions != [] || subagents_need_attention?(@subagent_roster))
             }
             roster={@subagent_roster}
             permissions={@runtime_permissions}
           />
 
+          <p
+            :if={host_history?(assigns)}
+            class="px-5 py-3 text-sm text-on-surface-variant"
+            data-host-history
+          >
+            This is read-only history.
+            <.dm_link navigate={~p"/agent/agents/#{@agent_id}/sessions"}>
+              {if @agent_config.kind == :host_voice,
+                do: "Open the Device Voice Agent conversation",
+                else: "Open current Agent sessions"}
+            </.dm_link>
+          </p>
+
           <.voice_controls
-            :if={Sessions.voice?(@current_session)}
+            :if={Sessions.voice?(@current_session) and not host_history?(assigns)}
             session={@current_session}
             agent={@agent_config}
           />
@@ -1524,7 +1569,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
           phx-mounted={JS.ignore_attributes(["data-active", "data-ready"])}
           data-session={@session.id}
           data-token={SynapsisServer.VoiceChannel.token(@session.id)}
-          data-mode={@agent[:audio_mode] || "browser"}
+          data-mode={if Sessions.host_voice?(@session), do: "host", else: "browser"}
           data-host={to_string(:net_adm.localhost())}
           data-active="false"
           data-ready="false"
@@ -1536,15 +1581,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               <p data-voice-playback class="mt-1 text-sm text-on-surface-variant" hidden></p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-              <.dm_select
-                id={"voice-endpoint-#{@session.id}"}
-                name="voice_endpoint"
-                aria-label="Call audio endpoint"
-                data-voice-endpoint
-                size="sm"
-                value={@agent[:audio_mode] || "browser"}
-                options={[{"browser", "Web audio"}, {"host", "Host audio"}]}
-              />
               <button
                 type="button"
                 class="btn btn-primary btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1584,7 +1620,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
             </.dm_btn>
           </div>
           <p data-voice-devices class="text-xs text-on-surface-variant break-words">
-            {if @agent[:audio_mode] == "host",
+            {if Sessions.host_voice?(@session),
               do: "Host audio on #{:net_adm.localhost()}.",
               else: "Web audio in this browser."}
           </p>
@@ -1657,6 +1693,9 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   catch
     :exit, _ -> {:error, :question_not_pending}
   end
+
+  defp host_history?(assigns),
+    do: Sessions.host_history?(assigns.current_session, assigns.agent_config)
 
   defp load_sessions(agent_name) do
     {:ok, sessions} = Sessions.list(agent_name, limit: 50)

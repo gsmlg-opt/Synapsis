@@ -266,8 +266,8 @@ defmodule Synapsis.VoiceSession do
 
   def handle_call({:start, options}, {owner, _}, %{phase: phase} = state)
       when phase in [:offline, :error] do
-    with {:ok, context, connection} <- prepare_context(state),
-         {:ok, options} <- saved_endpoint_options(state.session.agent, options),
+    with {:ok, options} <- saved_endpoint_options(state.session, options),
+         {:ok, context, connection} <- prepare_context(state),
          {:ok, socket} <- Connection.open(connection, context.agent.voice_model) do
       generation = Ecto.UUID.generate()
       Process.send_after(self(), {:setup_timeout, generation}, @setup_timeout)
@@ -451,7 +451,7 @@ defmodule Synapsis.VoiceSession do
 
   defp control({:switch, options}, %{session_ready: true, phase: phase, flush: nil} = state)
        when phase in [:listening, :responding] do
-    with {:ok, options} <- saved_endpoint_options(state.session.agent, options) do
+    with {:ok, options} <- saved_endpoint_options(state.session, options) do
       next = interrupt(%{state | phase: :switching}, "audio_endpoint_changed")
       wire(next, Protocol.clear())
 
@@ -691,7 +691,7 @@ defmodule Synapsis.VoiceSession do
   end
 
   defp prepare_context(%{session: session}) do
-    with {:ok, %{kind: :voice} = agent} <-
+    with {:ok, %{kind: kind} = agent} when kind in [:voice, :host_voice] <-
            Resolver.resolve_configured(session.agent, session.config),
          {:ok, agent} <- MCPSources.refresh(agent),
          {:ok, config} <- Providers.runtime_config(agent.provider),
@@ -730,11 +730,24 @@ defmodule Synapsis.VoiceSession do
     end
   end
 
-  defp saved_endpoint_options(agent_name, opts) when is_list(opts) do
-    case AgentConfigs.get_by_name(agent_name) do
-      %AgentConfig{enabled: true, kind: :voice} = agent ->
-        mode = Keyword.get(opts, :mode, agent.audio_mode)
-        endpoint_options(AgentConfig.audio_profiles(agent), mode, opts)
+  defp saved_endpoint_options(session, opts) when is_list(opts) do
+    case AgentConfigs.get_by_name(session.agent) do
+      %AgentConfig{enabled: true, kind: kind} = agent when kind in [:voice, :host_voice] ->
+        mode = agent.audio_mode
+
+        cond do
+          kind == :host_voice and Sessions.host_history?(session, agent) ->
+            {:error, :fixed_host_session}
+
+          Sessions.host_voice?(session) and kind != :host_voice ->
+            {:error, :agent_unavailable}
+
+          Keyword.get(opts, :mode, mode) != mode ->
+            {:error, :invalid_audio_endpoint}
+
+          true ->
+            endpoint_options(AgentConfig.audio_profiles(agent), mode, opts)
+        end
 
       _ ->
         {:error, :agent_unavailable}

@@ -2368,7 +2368,8 @@ defmodule Synapsis.Agent.Runtime.SessionAdapter do
   defp canonical_history(%{native_history: history}), do: {:ok, history}
   defp canonical_history(context), do: ProviderMessages.from_host(context.messages)
 
-  defp select_child_configuration(request, %{agent: %{kind: :voice}} = context) do
+  defp select_child_configuration(request, %{agent: %{kind: kind}} = context)
+       when kind in [:voice, :host_voice] do
     opts = request.options
 
     target =

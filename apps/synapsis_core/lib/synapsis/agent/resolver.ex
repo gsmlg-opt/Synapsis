@@ -44,7 +44,7 @@ defmodule Synapsis.Agent.Resolver do
           not agent.enabled ->
             {:error, :agent_unavailable}
 
-          agent.kind == :voice and not valid_saved?(raw) ->
+          agent.kind in [:voice, :host_voice] and not valid_saved?(raw) ->
             {:error, :invalid_voice_configuration}
 
           Map.has_key?(agent, :skill_discovery_error) ->

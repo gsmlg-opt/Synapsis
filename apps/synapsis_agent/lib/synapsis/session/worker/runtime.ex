@@ -48,7 +48,8 @@ defmodule Synapsis.Session.Worker.Runtime do
     with :ok <- validate_prompt_context(pending_input, data.session_id),
          :ok <- Synapsis.Agent.Daemon.NativeSelection.validate_association(data.session),
          {:ok, data} <- Config.refresh_agent_defaults(data),
-         true <- data.agent[:kind] != :voice or {:error, :voice_session_required},
+         true <-
+           data.agent[:kind] not in [:voice, :host_voice] or {:error, :voice_session_required},
          {:ok, data} <- ensure_adapter(data) do
       task =
         Task.Supervisor.async_nolink(Synapsis.Tool.TaskSupervisor, fn ->

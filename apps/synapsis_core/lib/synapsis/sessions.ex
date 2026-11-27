@@ -19,12 +19,14 @@ defmodule Synapsis.Sessions do
     agent = opts[:agent] || agent_name || "main"
     agent_config = Synapsis.Agent.Resolver.resolve(agent)
     config = opts[:config] || %{}
-    voice? = agent_config.kind == :voice
+    voice? = agent_config.kind in [:voice, :host_voice]
 
     {provider, model, config} =
       if voice? do
         {agent_config.provider, agent_config.voice_model,
-         config |> Map.drop(["provider_id", "model_id"]) |> Map.put("agent_kind", "voice")}
+         config
+         |> Map.drop(["provider_id", "model_id"])
+         |> Map.put("agent_kind", to_string(agent_config.kind))}
       else
         provider = opts[:provider] || agent_config.provider || default_provider(config, agent)
         model = opts[:model] || agent_config.model || default_model(config, provider, agent)
@@ -52,12 +54,66 @@ defmodule Synapsis.Sessions do
       session =
         changeset
         |> Ecto.Changeset.apply_changes()
-        |> then(&%{&1 | id: &1.id || Ecto.UUID.generate(), inserted_at: now, updated_at: now})
+        |> then(&%{&1 | inserted_at: now, updated_at: now})
 
-      session_runtime = opts[:session_runtime] || Synapsis.Session.DynamicSupervisor
-      persist_and_start_session(session, agent, session_runtime)
+      if agent_config.kind == :host_voice do
+        open_host_session(%{session | id: agent_config.id}, agent_config.permission_mode)
+      else
+        session_runtime = opts[:session_runtime] || Synapsis.Session.DynamicSupervisor
+        persist_and_start_session(%{session | id: Ecto.UUID.generate()}, agent, session_runtime)
+      end
     else
       if changeset.valid?, do: {:error, :model_unavailable}, else: {:error, changeset}
+    end
+  end
+
+  # The Agent's immutable UUID is also its session key. The transaction only
+  # initializes a fresh key, even when two callers arrive together.
+  defp open_host_session(session, permission_mode) do
+    case Store.get_meta(session.id) do
+      {:ok, meta} ->
+        existing_host_session(session, meta)
+
+      {:error, :not_found} ->
+        attrs =
+          Synapsis.Tool.Permission.config_for_mode(permission_mode,
+            interactive: interactive?(session)
+          )
+
+        permission =
+          struct!(
+            Synapsis.SessionPermission,
+            Map.merge(attrs, %{session_id: session.id, tool_contract_version: 1})
+          )
+
+        case Store.initialize_session(
+               session.id,
+               Session.to_meta(session),
+               Map.from_struct(permission)
+             ) do
+          :ok ->
+            {:ok, session}
+
+          {:error, :already_exists} ->
+            with {:ok, meta} <- Store.get_meta(session.id),
+                 do: existing_host_session(session, meta)
+
+          error ->
+            error
+        end
+
+      error ->
+        error
+    end
+  end
+
+  defp existing_host_session(session, meta) do
+    existing = Session.from_meta(meta)
+
+    if host_voice?(existing) and existing.agent == session.agent do
+      {:ok, with_messages(existing)}
+    else
+      {:error, :session_identity_conflict}
     end
   end
 
@@ -152,10 +208,11 @@ defmodule Synapsis.Sessions do
         {:error, :not_found} ->
           {:error, :not_found}
 
-        {:ok, _meta} ->
-          case Store.delete_session(session_id) do
-            :ok -> {:ok, session_id}
-            {:error, reason} -> {:error, reason}
+        {:ok, meta} ->
+          if host_voice?(Session.from_meta(meta)) do
+            {:error, :fixed_host_session}
+          else
+            with :ok <- Store.delete_session(session_id), do: {:ok, session_id}
           end
 
         {:error, reason} ->
@@ -232,8 +289,17 @@ defmodule Synapsis.Sessions do
     end
   end
 
-  def voice?(%Session{config: %{"agent_kind" => "voice"}}), do: true
+  def voice?(%Session{config: %{"agent_kind" => kind}}), do: kind in ["voice", "host_voice"]
   def voice?(_), do: false
+
+  def host_voice?(%Session{config: %{"agent_kind" => "host_voice"}}), do: true
+  def host_voice?(_), do: false
+
+  @doc "Whether a former conversation can only be viewed under the current Agent configuration."
+  def host_history?(%Session{id: session_id} = session, %{kind: :host_voice, id: agent_id}),
+    do: session_id != agent_id or not host_voice?(session)
+
+  def host_history?(session, _agent), do: host_voice?(session)
 
   defp start_session_runtime(session, runtime) do
     if voice?(session) do
