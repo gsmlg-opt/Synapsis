@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Chat } from '@duskmoon-dev/components/chat'
+import { Chat, ComposerSettings } from '@duskmoon-dev/components/chat'
 import { Markdown } from '@duskmoon-dev/components/markdown'
 import { Button } from '@duskmoon-dev/components/button'
 import { Form } from '@duskmoon-dev/components/form'
@@ -331,6 +331,82 @@ function Status({ runtime, metadata, admission, active, bridge, connected, synch
   </>
 }
 
+const contextIcons = {
+  agent: 'M4 7h5l2 2h9v10H4z',
+  session: 'M4 4h16v12H4z M2 20h20',
+  access: 'm12 3 8 4v5c0 5-8 9-8 9s-8-4-8-9V7z M12 8v5 M12 16h.01',
+}
+
+function ContextIcon({ kind }: { kind: keyof typeof contextIcons }) {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d={contextIcons[kind]} />
+  </svg>
+}
+
+function SessionContext({ metadata, connected, synchronizing, runtime }: ChatProps) {
+  const phase = metadata.voiceCall ? runtime.phase : undefined
+  const online = connected && (!phase || phase === 'listening' || phase === 'responding')
+  const connecting = synchronizing || (connected && (phase === 'connecting' || phase === 'reconnecting' || phase === 'switching'))
+  const state = connecting ? 'connecting' : online ? 'connected' : 'disconnected'
+  const label = synchronizing ? 'Synchronizing' : !connected ? 'Disconnected' :
+    phase ? ({ offline: 'Call offline', listening: 'Listening', responding: 'Responding', connecting: 'Connecting',
+      reconnecting: 'Reconnecting', switching: 'Switching', ending: 'Ending call', error: 'Call error' }[phase as string] ?? phase) : 'Connected'
+
+  return <Chat.ComposerContext>
+    <Chat.ComposerContextItem icon={<ContextIcon kind="agent" />} title={metadata.assistantLabel}>{metadata.assistantLabel}</Chat.ComposerContextItem>
+    <Chat.ComposerContextItem icon={<ContextIcon kind="session" />}>{metadata.sessionKind}</Chat.ComposerContextItem>
+    <Chat.ComposerContextEnd>
+      {metadata.host && <Chat.ComposerContextItem title={metadata.host}>{metadata.host}</Chat.ComposerContextItem>}
+      <Chat.ComposerConnection state={state} label={label} />
+    </Chat.ComposerContextEnd>
+  </Chat.ComposerContext>
+}
+
+type ModelChoice = { id: string; name: string; provider: string; context_window: number }
+type SessionModel = { value?: string; label: string; disabled?: boolean; choices?: ModelChoice[] }
+
+function SessionSettings({ props, onError }: { props: ChatProps; onError: (message: string) => void }) {
+  const { metadata, bridge, connected, synchronizing, state } = props
+  const model: SessionModel = metadata.model
+  const access: string = metadata.access
+  const choices = (model.choices || []).map(choice => ({
+    value: choice.id, label: choice.name, description: `${choice.provider} · ${choice.context_window} context tokens`,
+  }))
+  const accessDescription: Record<string, string> = {
+    'Full access': 'Session permissions allow read, write, execute and destructive tool calls.',
+    'Configured access': 'Tool calls follow the permission rules configured for this session.',
+    'Read only': 'The agent is configured for read-only work.',
+    'Read-only history': 'This conversation is available for reading.',
+  }
+  return <ComposerSettings variant="menu" scopeKey={state.conversationId} revision={0}
+    groups={[
+      { id: 'access', label: 'Access', settingIds: ['access'], appearance: 'access', icon: <ContextIcon kind="access" /> },
+      { id: 'model', label: 'Session model', settingIds: ['model'], appearance: 'model' },
+    ]}
+    settings={[
+      { id: 'access', label: 'Access', value: access, choices: [{ value: access, label: access,
+        description: accessDescription[access], tone: access === 'Full access' ? 'warning' : undefined }] },
+      { id: 'model', label: 'Model', value: model.value || '', choices: model.value ? choices :
+        [{ value: '', label: model.label, unavailableReason: 'Current model' }, ...choices],
+        unavailableReason: !model.choices || model.disabled || !connected || synchronizing ? 'Model selection is unavailable' : undefined },
+    ]}
+    onRequest={async request => {
+      const result = { ...request, revision: request.expectedRevision }
+      try {
+        await bridge.send('action', { action: 'switch_model', model_id: request.value })
+        onError('')
+        return { ...result, outcome: 'accepted', value: request.value }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to switch session model'
+        onError(message)
+        return { ...result, outcome: 'rejected', message }
+      }
+    }}
+    onAcknowledged={() => { /* The LiveView snapshot supplies the selected model. */ }}
+  />
+}
+
 export function createSynapsisReactChat(factory: any) {
   function Composer(props: ChatProps) {
     const { state, bridge, connected, synchronizing, active, canSubmit, metadata, admission } = props
@@ -353,8 +429,21 @@ export function createSynapsisReactChat(factory: any) {
       setLocalNotice(error)
       if (!error) setFiles(next)
     }
+    const stop = metadata.canStop === false ? undefined :
+      () => bridge.send('stop', {}).catch(error => setLocalNotice(error.message))
+    async function steer() {
+      const text = value
+      setSteering(true)
+      setLocalNotice('')
+      try { await bridge.send('action', { action: 'steer', text }); setValue(current => current === text ? '' : current) }
+      catch (error) { setLocalNotice(error instanceof Error ? error.message : 'Could not steer session') }
+      finally { setSteering(false) }
+    }
+
     return <Chat.Composer
-      className="synapsis-chat-composer"
+      className={metadata.kind === 'agent' ? 'synapsis-session-composer chat-composer-ghost' : undefined}
+      context={metadata.kind === 'agent' && <SessionContext {...props} />}
+      compact={metadata.kind === 'agent'}
       scope={{ contextKey: 'synapsis-agent-session', conversationId: state.conversationId }}
       value={value}
       onValueChange={setValue}
@@ -366,12 +455,19 @@ export function createSynapsisReactChat(factory: any) {
       canSubmit={canSubmit}
       busy={busy || steering}
       generating={active}
-      minRows={1}
+      minRows={metadata.kind === 'agent' ? 2 : 1}
       maxRows={8}
       error={localNotice || notice || undefined}
       sendLabel={admission.sendLabel || (active && attachmentsAllowed ? 'Queue' : 'Send')}
       stopLabel="Stop"
-      attachLabel="Attach images"
+      attachLabel={admission.canSteer ? 'Add files or manage turn' : 'Attach images'}
+      addMenu={metadata.kind === 'agent' && active && stop && <>
+        {admission.canSteer && <button type="button" className="popover-menu-item"
+          disabled={!canSubmit || busy || steering || !value.trim() || files.length > 0}
+          onClick={event => { event.currentTarget.closest<HTMLElement>('[popover]')?.hidePopover(); void steer() }}>Steer</button>}
+        <button type="button" className="popover-menu-item" disabled={!connected || synchronizing}
+          onClick={event => { event.currentTarget.closest<HTMLElement>('[popover]')?.hidePopover(); void stop() }}>Stop</button>
+      </>}
       textareaProps={{ name: 'content', 'aria-label': 'Message', placeholder: voiceCall && !admission.canSubmit ? 'Start a call to send a message…' : 'Write a message…', title: 'Send with Ctrl/Cmd+Enter', onPaste: event => {
         if (!attachmentsAllowed) return
         const pasted = Array.from(event.clipboardData.files).filter(file => file.type.startsWith('image/'))
@@ -392,16 +488,9 @@ export function createSynapsisReactChat(factory: any) {
           return false
         }
       }}
-      onStop={metadata.canStop === false ? undefined : () => bridge.send('stop', {}).catch(error => setLocalNotice(error.message))}
+      onStop={stop}
     >
-      {admission.canSteer && <Button size="sm" appearance="ghost" disabled={!canSubmit || busy || steering || !value.trim() || files.length > 0} onClick={async () => {
-        const text = value
-        setSteering(true)
-        setLocalNotice('')
-        try { await bridge.send('action', { action: 'steer', text }); setValue(current => current === text ? '' : current) }
-        catch (error) { setLocalNotice(error instanceof Error ? error.message : 'Could not steer session') }
-        finally { setSteering(false) }
-      }}>Steer</Button>}
+      {metadata.kind === 'agent' && <SessionSettings props={props} onError={setLocalNotice} />}
     </Chat.Composer>
   }
   return factory({ Composer, renderMessage: Message, renderStatus: Status })

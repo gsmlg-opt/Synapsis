@@ -68,15 +68,6 @@
     overflow-y: auto;
   }
 
-  #session-model-form .form-group-disabled {
-    opacity: 1;
-  }
-
-  #session-model-selector:disabled {
-    color: var(--color-on-surface-variant);
-    opacity: 1;
-  }
-
   .synapsis-react-chat {
     --chat-thread-width: 52rem;
   }
@@ -118,6 +109,23 @@
     padding: 0.625rem 0.75rem;
     border-color: var(--color-outline-variant);
     background: var(--color-surface-container-low);
+  }
+
+  .synapsis-react-chat .synapsis-session-composer {
+    padding: var(--chat-composer-inset);
+    border-color: transparent;
+    border-radius: 1.5rem;
+    background: var(--color-surface-container);
+  }
+
+  .synapsis-session-composer .chat-composer-access {
+    flex-shrink: 0;
+    max-inline-size: 48%;
+  }
+
+  .synapsis-session-composer .chat-composer-editor {
+    max-height: max(2lh, 22dvh);
+    overflow-y: auto !important;
   }
 
   .synapsis-react-chat .synapsis-chat-queue {

@@ -71,6 +71,10 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
           Enum.map(Enum.sort(assigns.code_agent_sessions), &code_agent_message/1),
       metadata: %{
         kind: "agent",
+        host: assigns.composer_host,
+        access: access_label(assigns, host_history?),
+        sessionKind: if(voice?, do: "Voice", else: "Chat"),
+        model: composer_model(assigns, voice?, host_history?),
         assistantLabel: label,
         assistantAvatar: assistant_avatar(assigns.agent_config),
         attachmentsAllowed: not host_history?,
@@ -104,6 +108,56 @@ defmodule SynapsisWeb.AgentLive.SessionChat do
           not host_history? and not voice? and assigns.session_status == "error" and
             not subagents?
       }
+    }
+  end
+
+  defp access_label(_assigns, true), do: "Read-only history"
+  defp access_label(%{agent_config: %{read_only: true}}, _), do: "Read only"
+
+  defp access_label(
+         %{
+           session_access: %{
+             allow_read: :allow,
+             allow_write: :allow,
+             allow_execute: :allow,
+             allow_destructive: :allow,
+             overrides: []
+           }
+         },
+         _
+       ),
+       do: "Full access"
+
+  defp access_label(_assigns, _), do: "Configured access"
+
+  defp composer_model(%{current_session: session}, _, true), do: %{label: session.model}
+  defp composer_model(%{agent_config: agent}, true, false), do: %{label: agent.voice_model}
+
+  defp composer_model(assigns, false, false) do
+    session = assigns.current_session
+    saved_id = (session.config || %{})["model_id"]
+
+    selected =
+      Enum.find(assigns.configured_models, fn model ->
+        if saved_id,
+          do: model.id == saved_id,
+          else: model.provider == session.provider and model.model == session.model
+      end)
+
+    %{
+      value: if(selected, do: selected.id, else: ""),
+      label:
+        if(selected,
+          do: selected.name,
+          else: "#{session.provider}/#{session.model} (unavailable)"
+        ),
+      disabled:
+        assigns.awaiting_session_idle or assigns.session_status in ~w(streaming tool_executing),
+      choices:
+        Enum.map(
+          assigns.configured_models,
+          &Map.take(&1, [:id, :provider, :name, :context_window])
+        )
     }
   end
 

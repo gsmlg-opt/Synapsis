@@ -247,18 +247,15 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       {:ok, view, _} = live(conn, ~p"/agent/agents/#{agent.name}/sessions/#{session.id}")
 
-      assert has_element?(
-               view,
-               "#session-model-selector optgroup[label='session-models'] option[value='#{second.id}']",
-               "second"
-             )
+      assert %{provider: "session-models", name: "second", context_window: 4096} =
+               Enum.find(chat_snapshot(view).metadata.model.choices, &(&1.id == second.id))
 
-      view |> form("#session-model-form", %{"model_id" => second.id}) |> render_change()
+      assert %{status: "ok"} = choose_model(view, second.id)
       assert {:ok, updated} = Sessions.get(session.id)
       assert updated.model == second.model
       assert updated.provider == provider.name
       assert AgentConfigs.get_by_name(agent.name).model == first.model
-      assert has_element?(view, "#session-model-selector option[value='#{second.id}'][selected]")
+      assert chat_snapshot(view).metadata.model.value == second.id
     end
 
     test "unavailable current model remains visible and stale choices are rejected", %{conn: conn} do
@@ -284,11 +281,13 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
         })
 
       {:ok, _} = Synapsis.Models.update(model, %{enabled: false})
-      {:ok, view, html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
-      assert html =~ "Current model unavailable"
-      assert has_element?(view, "#session-model-selector option[selected]", "disabled")
-      render_hook(view, "switch_model", %{"model_id" => model.id})
-      assert render(view) =~ "Selected model is unavailable"
+      {:ok, view, _} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      assert chat_snapshot(view).metadata.model.value == ""
+      assert chat_snapshot(view).metadata.model.label =~ "disabled (unavailable)"
+
+      assert %{status: "error", message: "Selected model is unavailable"} =
+               choose_model(view, model.id)
+
       assert {:ok, unchanged} = Sessions.get(session.id)
       assert unchanged.model == model.model
     end
@@ -314,10 +313,10 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
       {:ok, view, _} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
       assert {:ok, _} = Synapsis.Providers.delete(provider.id)
-      assert has_element?(view, "#session-model-selector option[value=''][selected][disabled]")
+      assert_eventually(fn -> chat_snapshot(view).metadata.model.value == "" end)
 
-      assert render_hook(view, "switch_model", %{"_target" => ["model_id"]}) =~
-               "Selected model is unavailable"
+      assert %{status: "error", message: "Selected model is unavailable"} =
+               choose_model(view, nil)
 
       assert Process.alive?(view.pid)
       assert {:ok, unchanged} = Sessions.get(session.id)
@@ -359,28 +358,16 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
           context_window: 8192
         })
 
-      {:ok, view, html} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
-      assert html =~ "Current model unavailable"
+      {:ok, view, _} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
+      assert chat_snapshot(view).metadata.model.value == ""
 
-      assert has_element?(
-               view,
-               "#session-model-selector option[value=''][selected][disabled]",
-               "same-name"
-             )
+      assert chat_snapshot(view).metadata.model.label =~ "same-name (unavailable)"
+      assert Enum.any?(chat_snapshot(view).metadata.model.choices, &(&1.id == replacement.id))
 
-      refute has_element?(
-               view,
-               "#session-model-selector option[value='#{replacement.id}'][selected]"
-             )
-
-      view |> form("#session-model-form", %{"model_id" => replacement.id}) |> render_change()
+      assert %{status: "ok"} = choose_model(view, replacement.id)
       assert {:ok, updated} = Sessions.get(session.id)
       assert updated.config["model_id"] == replacement.id
-
-      assert has_element?(
-               view,
-               "#session-model-selector option[value='#{replacement.id}'][selected]"
-             )
+      assert chat_snapshot(view).metadata.model.value == replacement.id
     end
 
     test "model selector waits for idle after done and rejects switches while busy", %{
@@ -409,19 +396,23 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
       {:ok, view, _} = live(conn, ~p"/agent/agents/main/sessions/#{session.id}")
       set_worker_running(session)
       send(view.pid, {"session_status", %{status: "streaming"}})
-      assert has_element?(view, "#session-model-selector[disabled]")
+      assert chat_snapshot(view).metadata.model.disabled
 
       send(view.pid, {"done", %{}})
-      assert has_element?(view, "#session-model-selector[disabled]")
+      assert chat_snapshot(view).metadata.model.disabled
 
-      render_hook(view, "switch_model", %{"model_id" => model.id})
-      assert render(view) =~ "Wait for the session to become idle"
+      assert %{
+               status: "error",
+               message: "Wait for the session to become idle before switching models"
+             } =
+               choose_model(view, model.id)
+
       assert {:ok, unchanged} = Sessions.get(session.id)
       assert unchanged.model == "current"
 
       assert :ok = Worker.cancel(session.id)
-      assert_eventually(fn -> has_element?(view, "#session-model-selector:not([disabled])") end)
-      view |> form("#session-model-form", %{"model_id" => model.id}) |> render_change()
+      assert_eventually(fn -> not chat_snapshot(view).metadata.model.disabled end)
+      assert %{status: "ok"} = choose_model(view, model.id)
       assert {:ok, %{model: "target"}} = Sessions.get(session.id)
     end
 
@@ -2489,6 +2480,13 @@ defmodule SynapsisWeb.AgentLive.SessionsTest do
 
   defp chat_snapshot(view), do: chat_socket(view).assigns.react_chat
   defp chat_json(view), do: Formata.JSON.encode!(chat_snapshot(view))
+
+  defp choose_model(view, model_id) do
+    request_id = Ecto.UUID.generate()
+    params = %{"action" => "switch_model", "model_id" => model_id, "request_id" => request_id}
+    render_hook(view, "chat.action", Map.merge(chat_scope(view), params))
+    chat_snapshot(view).requests[request_id]
+  end
 
   defp chat_scope(view) do
     chat = chat_snapshot(view)

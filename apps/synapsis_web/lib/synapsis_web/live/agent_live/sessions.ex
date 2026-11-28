@@ -25,6 +25,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
      assign(socket,
        page_title: "#{String.capitalize(agent_id)} Agent",
        agent_id: agent_id,
+       composer_host: to_string(:net_adm.localhost()),
        agent_config: agent_config,
        configured_models: Providers.configured_models(),
        provider_configured: provider_configured?,
@@ -98,6 +99,7 @@ defmodule SynapsisWeb.AgentLive.Sessions do
            agent_id: agent_id,
            sessions: sessions,
            current_session: session,
+           session_access: Synapsis.Tool.Permission.session_config(session.id),
            show_sidebar: false,
            configured_models: Providers.configured_models(),
            messages: messages,
@@ -336,6 +338,32 @@ defmodule SynapsisWeb.AgentLive.Sessions do
     end
   end
 
+  defp chat_event("chat.action", %{"action" => "switch_model"} = params, socket) do
+    session = socket.assigns.current_session
+    models = Providers.configured_models()
+    socket = assign(socket, :configured_models, models)
+
+    model = Enum.find(models, &(&1.id == params["model_id"]))
+
+    cond do
+      Sessions.voice?(session) ->
+        {%{status: "error", message: "Voice models are configured in agent settings"}, socket}
+
+      socket.assigns.awaiting_session_idle or
+          running_session_status?(socket.assigns.session_status) ->
+        model_switch_error(:session_busy, socket)
+
+      is_nil(model) ->
+        model_switch_error(:model_unavailable, socket)
+
+      true ->
+        case Sessions.switch_model(session.id, model.provider, model.model) do
+          :ok -> {%{status: "ok"}, maybe_refresh_current_session(socket)}
+          {:error, reason} -> model_switch_error(reason, socket)
+        end
+    end
+  end
+
   defp chat_event("chat.action", %{"action" => "steer", "text" => text}, socket)
        when is_binary(text) do
     text = String.trim(text)
@@ -494,6 +522,28 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   defp chat_event(_event, _params, socket),
     do: {%{status: "error", message: "Unsupported chat action"}, socket}
 
+  defp model_switch_error(reason, socket) do
+    message =
+      case reason do
+        :session_busy ->
+          "Wait for the session to become idle before switching models"
+
+        {:history_incompatible, _} ->
+          "Session history cannot be sent to this model"
+
+        :db_update_failed ->
+          "Failed to save the session model"
+
+        reason when reason in [:model_unavailable, :provider_unavailable] ->
+          "Selected model is unavailable"
+
+        _ ->
+          "Failed to switch session model"
+      end
+
+    {%{status: "error", message: message}, socket}
+  end
+
   defp operation_reply(:ok, socket), do: {%{status: "ok"}, socket}
   defp operation_reply({:ok, _result}, socket), do: {%{status: "ok"}, socket}
 
@@ -574,50 +624,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
 
       _ ->
         {%{status: "error", message: "Queued message action failed"}, socket}
-    end
-  end
-
-  defp handle_session_event("switch_model", params, socket) do
-    id = Map.get(params, "model_id")
-    models = Providers.configured_models()
-    socket = assign(socket, configured_models: models)
-    model = Enum.find(models, &(&1.id == id))
-
-    cond do
-      is_nil(socket.assigns.current_session) ->
-        {:noreply, put_flash(socket, :error, "Select a session first")}
-
-      is_nil(model) ->
-        {:noreply, put_flash(socket, :error, "Selected model is unavailable")}
-
-      true ->
-        case Sessions.switch_model(socket.assigns.current_session.id, model.provider, model.model) do
-          :ok ->
-            {:noreply,
-             socket
-             |> maybe_refresh_current_session()
-             |> put_flash(:info, "Session model updated")}
-
-          {:error, :session_busy} ->
-            {:noreply,
-             put_flash(
-               socket,
-               :error,
-               "Wait for the session to become idle before switching models"
-             )}
-
-          {:error, {:history_incompatible, _reason}} ->
-            {:noreply, put_flash(socket, :error, "Session history cannot be sent to this model")}
-
-          {:error, :db_update_failed} ->
-            {:noreply, put_flash(socket, :error, "Failed to save the session model")}
-
-          {:error, reason} when reason in [:model_unavailable, :provider_unavailable] ->
-            {:noreply, put_flash(socket, :error, "Selected model is unavailable")}
-
-          {:error, _reason} ->
-            {:noreply, put_flash(socket, :error, "Failed to switch session model")}
-        end
     end
   end
 
@@ -1417,11 +1423,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
               :if={!Sessions.voice?(@current_session) and not host_history?(assigns)}
               class="flex min-w-0 flex-wrap items-center gap-2"
             >
-              <.session_model_selector
-                session={@current_session}
-                models={@configured_models}
-                busy={@awaiting_session_idle or running_session_status?(@session_status)}
-              />
               <.dm_btn
                 id="session-subagents-toggle"
                 variant="ghost"
@@ -1818,57 +1819,6 @@ defmodule SynapsisWeb.AgentLive.Sessions do
   end
 
   defp fetch_current_session(_socket), do: {:error, :not_found}
-
-  attr(:session, :map, required: true)
-  attr(:models, :list, required: true)
-  attr(:busy, :boolean, required: true)
-
-  defp session_model_selector(assigns) do
-    saved_id = (assigns.session.config || %{})["model_id"]
-
-    selected =
-      Enum.find(assigns.models, fn model ->
-        if saved_id,
-          do: model.id == saved_id,
-          else:
-            model.provider == assigns.session.provider and model.model == assigns.session.model
-      end)
-
-    groups = assigns.models |> Enum.group_by(& &1.provider) |> Enum.sort_by(&elem(&1, 0))
-    assigns = assign(assigns, selected: selected, model_groups: groups)
-
-    ~H"""
-    <form id="session-model-form" phx-change="switch_model" class="min-w-0 max-w-full sm:max-w-52">
-      <.dm_select
-        id="session-model-selector"
-        name="model_id"
-        label="Session model"
-        label_class="sr-only"
-        select_class="max-w-full truncate"
-        size="xs"
-        disabled={@busy}
-        title={
-          if @selected,
-            do: "#{@selected.context_window} context tokens",
-            else: "Current model unavailable; select an available model"
-        }
-      >
-        <option :if={is_nil(@selected)} value="" selected disabled>
-          {@session.provider}/{@session.model} (unavailable)
-        </option>
-        <optgroup :for={{provider, models} <- @model_groups} label={provider}>
-          <option
-            :for={model <- models}
-            value={model.id}
-            selected={@selected && @selected.id == model.id}
-          >
-            {model.name}
-          </option>
-        </optgroup>
-      </.dm_select>
-    </form>
-    """
-  end
 
   defp running_session_status?(status), do: status in @running_statuses
 

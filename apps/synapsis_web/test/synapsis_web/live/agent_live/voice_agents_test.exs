@@ -391,6 +391,12 @@ defmodule SynapsisWeb.AgentLive.VoiceAgentsTest do
     refute has_element?(view, "[phx-click='create_session']")
     refute has_element?(view, "[phx-click='confirm_delete_session']")
     assert has_element?(view, "[phx-hook='SynapsisReactChat']")
+    chat = :sys.get_state(view.pid).socket.assigns.react_chat
+    assert chat.metadata.sessionKind == "Voice"
+    assert chat.metadata.model == %{label: agent.voice_model}
+    assert chat.runtime.phase == "offline"
+    refute chat.admission.canSubmit
+
     assert {:ok, %{phase: :offline}} = Synapsis.VoiceSession.status(session.id)
 
     generation = Ecto.UUID.generate()
